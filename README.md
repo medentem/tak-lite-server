@@ -1,6 +1,6 @@
 # TAK Lite Server
 
-A cloud-native backend server that bridges TAK Lite users across the internet, providing enhanced collaboration, real-time synchronization, and comprehensive monitoring capabilities.
+Cloud-native backend for TAK Lite. Provides internet bridging, authentication, real‑time sync, and a lightweight admin dashboard. This repository is published at [medentem/tak-lite-server](https://github.com/medentem/tak-lite-server).
 
 ## 🚀 Quick Start
 
@@ -10,25 +10,14 @@ A cloud-native backend server that bridges TAK Lite users across the internet, p
 docker compose up -d
 ```
 
-Then visit `http://localhost:3000/setup` and complete setup via API:
+Then visit `http://localhost:3000/setup` and complete the on‑page setup form (no env vars needed with Docker Compose). If you prefer the API, you can still POST to `/api/setup/complete` with the same fields.
 
-```bash
-curl -X POST http://localhost:3000/api/setup/complete \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "adminEmail": "you@example.com",
-    "adminPassword": "change-me-strong",
-    "orgName": "My Org",
-    "corsOrigin": "http://localhost:3000"
-  }'
-```
+Health: `GET /health` — Metrics: `GET /metrics` (public before setup; admin‑token required after setup)
 
-Health: `GET /health` — Metrics: `GET /metrics`
-
-Optional profiles:
+Optional profiles (examples):
 - Redis: `docker compose --profile redis up -d`
 - Nginx/TLS: `docker compose --profile nginx up -d`
-- Monitoring: `docker compose --profile monitoring up -d`
+- Monitoring: `docker compose --profile monitoring up -d` (requires adding your own Prometheus/Grafana configs)
 
 ### Docker Desktop (GUI)
 
@@ -48,6 +37,16 @@ Notes:
 - To view logs: open the `taklite-server` container in Docker Desktop → Logs.
 - To stop or restart, use the Docker Desktop controls on the stack/containers.
 
+### Admin Dashboard
+
+- URL: `http://localhost:3000/admin`
+- Sign in with the admin email/password you set during setup (no manual JWT pasting).
+- Panels included:
+  - Overview KPIs (users, teams, socket connections, uptime, load, memory)
+  - Configuration editor (organization name, CORS origin)
+  - Socket rooms summary
+  - Stats API: `GET /api/admin/stats` (requires admin token)
+
 ### REST API
 
 - POST `/api/setup/complete` — Complete first-run setup
@@ -56,6 +55,7 @@ Notes:
   - Body: `{ email, password }` → `{ token }`
 - GET `/api/admin/config` — Read config (admin)
 - PUT `/api/admin/config` — Update `{ orgName, corsOrigin }` (admin)
+- GET `/api/admin/stats` — Summary stats (admin)
 - POST `/api/sync/location` — Save location (auth)
   - Body: `{ teamId(uuid), latitude, longitude, altitude?, accuracy?, timestamp(ms) }`
 - POST `/api/sync/annotation` — Upsert annotation (auth)
@@ -78,6 +78,9 @@ Notes:
   - `location:update` → `{ userId, ...payload }`
   - `annotation:update` → annotation row
   - `message:received` → message row
+
+Rooms & membership:
+- Clients should call `team:join` with a valid `teamId` after authenticating. The server enforces team membership on all REST and WebSocket actions.
 
 ### Minimal client example (Node/Browser)
 
@@ -118,14 +121,16 @@ main();
 ### Manual Deployment
 
 ```bash
+# Prereqs: set DATABASE_URL (e.g., in a .env file). Example:
+# DATABASE_URL=postgresql://taklite:taklite@localhost:5432/taklite
+
 # Install dependencies
 npm install
 
-# Setup database
+# Run migrations (the server also runs migrations on startup)
 npm run db:migrate
-npm run db:seed
 
-# Start development server
+# Start development server (ts-node via nodemon)
 npm run dev
 
 # Build for production
@@ -135,16 +140,14 @@ npm start
 
 ## 🏗️ Architecture
 
-### Service Components
+### Implemented Components (v1)
 
-- **API Gateway**: Nginx-based reverse proxy with rate limiting and SSL termination
-- **Authentication Service**: JWT-based auth with OAuth2 support
-- **Sync Service**: Real-time data synchronization between TAK Lite clients
-- **WebRTC Gateway**: Audio/video communication bridge
-- **Analytics Service**: Data analysis and reporting
-- **Notification Service**: Push notifications and alerts
-- **Storage Service**: Data persistence and caching
-- **Monitoring Service**: System health and performance monitoring
+- **HTTP API**: Express.js endpoints
+- **Auth**: Email/password → JWT
+- **Sync Service**: Real-time data + Socket.IO gateway
+- **Database**: PostgreSQL + Knex migrations
+- **Setup Wizard**: First‑run configuration (`/setup`)
+- **Admin Dashboard**: Lightweight UI (`/admin`)
 
 ### Data Flow
 
@@ -158,44 +161,22 @@ TAK Lite Client ←→ WebSocket ←→ Sync Service ←→ Database
 
 ## 🔧 Configuration
 
-### Environment Variables
+### Environment Variables (bare‑metal)
 
 ```bash
-# Server Configuration
-SERVER_PORT=3000
-NODE_ENV=production
+# Required
+DATABASE_URL=postgresql://taklite:taklite@localhost:5432/taklite
+
+# Optional
 LOG_LEVEL=info
-
-# Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/taklite
-REDIS_URL=redis://localhost:6379
-
-# Authentication
-JWT_SECRET=your-jwt-secret
-JWT_EXPIRES_IN=7d
-OAUTH_CLIENT_ID=your-oauth-client-id
-OAUTH_CLIENT_SECRET=your-oauth-client-secret
-
-# WebRTC
-WEBRTC_ICE_SERVERS=stun:stun.l.google.com:19302
-
-# Monitoring
-PROMETHEUS_PORT=9090
-GRAFANA_PORT=3001
-
-# Security
-RATE_LIMIT_WINDOW=15m
-RATE_LIMIT_MAX_REQUESTS=100
 CORS_ORIGIN=https://your-domain.com
+PORT=3000
 ```
 
-### Docker Compose Services
+### Docker Compose Services (minimal)
 
 ```yaml
-version: '3.8'
-
 services:
-  # Main application
   taklite-server:
     build: .
     ports:
@@ -204,10 +185,7 @@ services:
       - NODE_ENV=production
     depends_on:
       - postgres
-      - redis
-      - rabbitmq
 
-  # Database
   postgres:
     image: postgres:15-alpine
     environment:
@@ -217,55 +195,18 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # Cache
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redis_data:/data
-
-  # Message Queue
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-
-  # Monitoring
-  prometheus:
-    image: prom/prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-
-  grafana:
-    image: grafana/grafana
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    volumes:
-      - grafana_data:/var/lib/grafana
-
 volumes:
   postgres_data:
-  redis_data:
-  grafana_data:
 ```
 
-## 📊 Features
+## 📊 Features (implemented)
 
-### Real-time Synchronization
-- **Location Data**: Bridge GPS coordinates across all connected users
-- **Annotations**: Sync POIs, lines, areas, and polygons in real-time
-- **Messages**: Relay text and audio communications
-- **State Management**: Handle conflicts and merge data from multiple sources
-
-### Web Dashboard
-- **User Management**: Administer users, teams, and permissions
-- **Real-time Monitoring**: Live view of connected users and system health
-- **Analytics**: Network usage, coverage analysis, and performance metrics
-- **Configuration**: Server settings and feature management
+- Real-time sync: locations, annotations, messages
+- Team membership enforcement for all actions
+- Socket rooms per team; `team:join`/`team:leave`
+- Admin Dashboard at `/admin`
+- Setup Wizard at `/setup`
+- Metrics endpoint at `/metrics` (admin‑protected after setup)
 
 ### Security
 - **End-to-end Encryption**: All data encrypted in transit and at rest
@@ -351,44 +292,21 @@ socket.emit('location:update', {
 
 ## 📈 Monitoring
 
-### Metrics Dashboard
-- **User Activity**: Active users, connections, and usage patterns
-- **System Performance**: CPU, memory, disk, and network utilization
-- **Database Performance**: Query times, connection pools, and cache hit rates
-- **Network Health**: Latency, packet loss, and connection quality
+- Prometheus‑style metrics at `/metrics`
+- Compose profile examples for Prometheus/Grafana are provided but require you to supply config files
 
-### Alerts
-- **High CPU/Memory Usage**: Automatic scaling triggers
-- **Database Connection Issues**: Connection pool exhaustion alerts
-- **Security Events**: Failed login attempts and suspicious activity
-- **Service Health**: Service availability and response time monitoring
+## 🔒 Security (current)
 
-## 🔒 Security
+- JWT auth; tokens verified in REST and Socket.IO
+- Admin‑only routes under `/api/admin`
+- Rate limiting on `/api/*`
+- CORS configurable via Admin UI
 
-### Data Protection
-- **Encryption at Rest**: All data encrypted using AES-256
-- **Encryption in Transit**: TLS 1.3 for all communications
-- **Key Management**: Secure key storage and rotation
-- **Data Retention**: Configurable data retention policies
+## 🚀 Deployment & Ops
 
-### Access Control
-- **Role-based Access**: Admin, user, and read-only roles
-- **Team-based Permissions**: Granular access control per team
-- **API Rate Limiting**: Prevent abuse and ensure fair usage
-- **Audit Logging**: Complete trail of all access and modifications
-
-## 🚀 Deployment
-
-### Production Checklist
-
-- [ ] SSL certificate configured
-- [ ] Environment variables set
-- [ ] Database migrations run
-- [ ] Monitoring configured
-- [ ] Backup strategy implemented
-- [ ] Security policies applied
-- [ ] Load balancer configured
-- [ ] CDN setup (optional)
+### Production notes
+- Behind a reverse proxy (Caddy/Nginx) is recommended for TLS
+- Socket.IO horizontal scaling requires a Redis adapter and sticky sessions (not bundled)
 
 ### Scaling
 
@@ -413,7 +331,7 @@ docker-compose logs -f taklite-server
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GPL‑3.0 License — see the [LICENSE](LICENSE) file for details.
 
 ## 🆘 Support
 
