@@ -335,7 +335,7 @@ This project is licensed under the GPL‑3.0 License — see the [LICENSE](LICEN
 
 ## 🆘 Support
 
-- **Documentation**: [docs.taklite.com](https://docs.taklite.com)
-- **Issues**: [GitHub Issues](https://github.com/your-org/tak-lite-server/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/tak-lite-server/discussions)
+- **Donate**: [Github Sponsors](https://github.com/sponsors/medentem)
+- **Issues**: [GitHub Issues](https://github.com/medentem/tak-lite-server/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/medentem/tak-lite-server/discussions)
 - **Email**: support@taklite.com
