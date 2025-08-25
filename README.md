@@ -36,6 +36,7 @@ Notes:
 - The server applies database migrations on first boot.
 - To view logs: open the `taklite-server` container in Docker Desktop → Logs.
 - To stop or restart, use the Docker Desktop controls on the stack/containers.
+- Redis profile: set `REDIS_PASSWORD` in a local `.env` file (not committed) before enabling `--profile redis`. An `.env.example` is provided.
 
 ### Admin Dashboard
 
@@ -339,3 +340,15 @@ This project is licensed under the GPL‑3.0 License — see the [LICENSE](LICEN
 - **Issues**: [GitHub Issues](https://github.com/medentem/tak-lite-server/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/medentem/tak-lite-server/discussions)
 - **Email**: support@taklite.com
+
+## 🔐 Secret exposure remediation
+
+If you accidentally committed a secret (e.g., Redis password):
+- Rotate it immediately (change the value wherever it’s used).
+- Remove it from Git history and force‑push:
+```bash
+git filter-repo --path docker-compose.yml --invert-paths --force || true
+git commit -am "Remove hardcoded secret"
+git push --force
+```
+Or use GitHub’s “Remove from history” guidance and re‑push. Then add the secret via environment variables or a `.env` file that’s ignored by Git.

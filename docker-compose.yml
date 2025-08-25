@@ -70,7 +70,10 @@ services:
     image: redis:7-alpine
     container_name: taklite-redis
     profiles: ["redis"]
-    command: redis-server --appendonly yes --requirepass taklite
+    # Set REDIS_PASSWORD in a local .env file; if unset, no password will be required
+    environment:
+      - REDIS_PASSWORD
+    command: sh -c "redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}"
     volumes:
       - redis_data:/data
     ports:
