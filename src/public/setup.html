@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TAK Lite Setup</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+      label { display:block; margin-top:12px; }
+      input { width:100%; padding:8px; margin-top:4px; }
+      button { margin-top:16px; padding:10px 16px; }
+      .card { border:1px solid #ddd; border-radius:8px; padding:16px; }
+    </style>
+  </head>
+  <body>
+    <h1>TAK Lite Server Setup</h1>
+    <div class="card">
+      <label>Email <input id="email" type="email" placeholder="admin@example.com" required /></label>
+      <label>Password <input id="password" type="password" placeholder="Strong password" required /></label>
+      <label>Organization Name <input id="org" type="text" placeholder="My Org" required /></label>
+      <label>CORS Origin (optional) <input id="cors" type="text" placeholder="http://localhost:3000" /></label>
+      <button id="submit">Complete Setup</button>
+      <div id="msg"></div>
+    </div>
+    <script>
+      document.getElementById('submit').onclick = async () => {
+        const payload = {
+          adminEmail: document.getElementById('email').value,
+          adminPassword: document.getElementById('password').value,
+          orgName: document.getElementById('org').value,
+          corsOrigin: document.getElementById('cors').value
+        };
+        const res = await fetch('/api/setup/complete', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
+        const msg = document.getElementById('msg');
+        if (res.ok) { msg.innerText = 'Setup complete. You can now log in via /api/auth/login.'; }
+        else { const e = await res.json().catch(()=>({error:'Failed'})); msg.innerText = 'Error: ' + (e.error || res.status); }
+      };
+    </script>
+  </body>
+  </html>
+
+

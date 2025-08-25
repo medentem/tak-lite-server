@@ -1,0 +1,149 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TAK Lite Admin</title>
+    <style>
+      :root { --bg:#0b1220; --panel:#111a2b; --text:#e6edf3; --muted:#8b97a7; --accent:#3b82f6; --ok:#22c55e; --bad:#ef4444; }
+      html,body { height:100%; }
+      body { margin:0; background:linear-gradient(180deg,#0b1220,#0a0f1a); color:var(--text); font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; }
+      .container { max-width:1100px; margin:0 auto; padding:24px; }
+      header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+      .brand { font-weight:700; letter-spacing:.3px; }
+      .card { background:var(--panel); border:1px solid #1f2a44; border-radius:12px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
+      .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:16px; }
+      input,button { height:40px; border-radius:8px; border:1px solid #233153; background:#0c1527; color:var(--text); padding:0 12px; }
+      input::placeholder { color:#6b7280; }
+      button { background:linear-gradient(180deg,#2563eb,#1d4ed8); border:0; cursor:pointer; font-weight:600; }
+      button.secondary { background:#0c1527; border:1px solid #223056; }
+      .row { display:flex; gap:8px; align-items:center; }
+      .section { margin-top:16px; }
+      h2 { margin:0 0 8px; font-size:18px; color:#cbd5e1; }
+      .kpi { display:flex; align-items:center; gap:8px; }
+      .kpi .value { font-size:22px; font-weight:700; }
+      table { width:100%; border-collapse:collapse; font-size:14px; }
+      th, td { border-bottom:1px solid #1f2a44; padding:10px; text-align:left; }
+      .muted { color:var(--muted); }
+      .pill { padding:2px 8px; border-radius:9999px; background:#0d1b34; border:1px solid #223056; font-size:12px; }
+      .spacer { height:16px; }
+      .right { text-align:right; }
+      .hidden { display:none; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div class="brand">TAK Lite Admin</div>
+        <div class="row">
+          <span id="who" class="muted hidden"></span>
+          <button id="logout" class="secondary hidden">Logout</button>
+        </div>
+      </header>
+
+      <div id="loginCard" class="card">
+        <h2>Sign in</h2>
+        <div class="row">
+          <input id="email" type="email" placeholder="admin@example.com" style="flex:1" />
+          <input id="password" type="password" placeholder="password" style="flex:1" />
+          <button id="login">Login</button>
+        </div>
+        <div id="loginMsg" class="section muted"></div>
+      </div>
+
+      <div id="dash" class="hidden">
+        <div class="grid">
+          <div class="card">
+            <h2>Overview</h2>
+            <div class="grid">
+              <div class="kpi"><span class="pill">Users</span><span id="k_users" class="value">-</span></div>
+              <div class="kpi"><span class="pill">Teams</span><span id="k_teams" class="value">-</span></div>
+              <div class="kpi"><span class="pill">Sockets</span><span id="k_sockets" class="value">-</span></div>
+              <div class="kpi"><span class="pill">Auth</span><span id="k_auth" class="value">-</span></div>
+            </div>
+            <div class="spacer"></div>
+            <table>
+              <tbody>
+                <tr><td class="muted">Uptime</td><td id="k_uptime" class="right">-</td></tr>
+                <tr><td class="muted">Node</td><td id="k_node" class="right">-</td></tr>
+                <tr><td class="muted">Load</td><td id="k_load" class="right">-</td></tr>
+                <tr><td class="muted">Memory</td><td id="k_mem" class="right">-</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <h2>Configuration</h2>
+            <div class="section row"><span class="muted" style="width:100px">Org</span><input id="org" style="flex:1" /></div>
+            <div class="section row"><span class="muted" style="width:100px">CORS</span><input id="cors" style="flex:1" /></div>
+            <div class="section row right"><button id="save" class="secondary">Save</button></div>
+            <div id="saveMsg" class="muted"></div>
+          </div>
+        </div>
+
+        <div class="section card">
+          <h2>Sockets</h2>
+          <pre id="rooms" class="muted" style="white-space:pre-wrap; margin:0"></pre>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let token = localStorage.getItem('taklite:token') || '';
+      const q = (s)=>document.querySelector(s);
+      function hdrs(add={}) { const h = { 'Content-Type':'application/json' }; if (token) h['Authorization'] = 'Bearer '+token; return Object.assign(h, add); }
+      async function jget(url, opts={}) {
+        const res = await fetch(url, Object.assign({ headers: hdrs() }, opts));
+        if (!res.ok) throw await res.json().catch(()=>({error:res.status}));
+        return res.json();
+      }
+      function showDash(show) {
+        q('#loginCard').classList.toggle('hidden', show);
+        q('#dash').classList.toggle('hidden', !show);
+        q('#logout').classList.toggle('hidden', !show);
+        q('#who').classList.toggle('hidden', !show);
+      }
+      async function refresh() {
+        if (!token) return;
+        try {
+          const [cfg, stats] = await Promise.all([
+            jget('/api/admin/config'),
+            jget('/api/admin/stats')
+          ]);
+          q('#org').value = cfg.orgName || '';
+          q('#cors').value = cfg.corsOrigin || '';
+          q('#k_users').textContent = stats.db.users ?? '-';
+          q('#k_teams').textContent = stats.db.teams ?? '-';
+          q('#k_sockets').textContent = stats.sockets.totalConnections ?? 0;
+          q('#k_auth').textContent = stats.sockets.authenticatedConnections ?? 0;
+          q('#k_uptime').textContent = stats.server.uptimeSec + 's';
+          q('#k_node').textContent = stats.server.node;
+          q('#k_load').textContent = (stats.server.loadavg||[]).map(n=>n.toFixed(2)).join(' / ');
+          q('#k_mem').textContent = (stats.server.memory.heapUsed/1048576).toFixed(1)+' MB';
+          q('#rooms').textContent = JSON.stringify(stats.sockets.rooms, null, 2);
+        } catch (e) { console.error(e); }
+      }
+
+      q('#login').onclick = async () => {
+        try {
+          const res = await fetch('/api/auth/login', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email:q('#email').value, password:q('#password').value }) });
+        if (!res.ok) throw await res.json().catch(()=>({error:res.status}));
+          const data = await res.json();
+          token = data.token; localStorage.setItem('taklite:token', token);
+          q('#who').textContent = q('#email').value;
+          showDash(true);
+          refresh();
+        } catch (e) { q('#loginMsg').textContent = 'Login failed'; }
+      };
+      q('#logout').onclick = () => { token=''; localStorage.removeItem('taklite:token'); showDash(false); };
+      q('#save').onclick = async () => {
+        try { await fetch('/api/admin/config', { method:'PUT', headers: hdrs(), body: JSON.stringify({ orgName:q('#org').value, corsOrigin:q('#cors').value }) }); q('#saveMsg').textContent='Saved'; }
+        catch { q('#saveMsg').textContent='Save failed'; }
+      };
+
+      if (token) { showDash(true); refresh(); }
+    </script>
+  </body>
+</html>
+
+
