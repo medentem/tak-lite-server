@@ -2,11 +2,11 @@
   "name": "tak-lite-server",
   "version": "1.0.0",
   "description": "Cloud-native backend server for TAK Lite situational awareness platform",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "scripts": {
     "dev": "nodemon src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node dist/src/index.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.ts",
@@ -26,7 +26,7 @@
     "location-tracking"
   ],
   "author": "TAK Lite Team",
-  "license": "MIT",
+  "license": "GPL-3.0",
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.7.2",

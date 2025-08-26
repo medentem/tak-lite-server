@@ -72,6 +72,12 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Simple request logging using built-in middleware
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  logger.info(`${req.method} ${req.path}`);
+  next();
+});
+
 // Metrics middleware
 app.use(metricsMiddleware);
 app.get('/metrics', async (req: Request, res: Response, next: NextFunction) => {

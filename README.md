@@ -1,6 +1,6 @@
 # TAK Lite Server
 
-Cloud-native backend for TAK Lite. Provides internet bridging, authentication, real‑time sync, and a lightweight admin dashboard. This repository is published at [medentem/tak-lite-server](https://github.com/medentem/tak-lite-server).
+Cloud-native backend for TAK Lite. Purpose-built to bridge disconnected meshes and provide online visibility for teams using the TAK Lite app. Includes first‑run setup, authentication, real‑time sync, and a lightweight admin dashboard. This repository is published at [medentem/tak-lite-server](https://github.com/medentem/tak-lite-server).
 
 ## 🚀 Quick Start
 
@@ -48,12 +48,13 @@ Notes:
   - Socket rooms summary
   - Stats API: `GET /api/admin/stats` (requires admin token)
 
-### REST API
+### REST API (current)
 
 - POST `/api/setup/complete` — Complete first-run setup
   - Body: `{ adminEmail, adminPassword, orgName, corsOrigin? }`
-- POST `/api/auth/login` — Obtain JWT
+- POST `/api/auth/login` — Obtain JWT (per-user credentials)
   - Body: `{ email, password }` → `{ token }`
+- GET `/api/auth/whoami` — Validate token and return identity
 - GET `/api/admin/config` — Read config (admin)
 - PUT `/api/admin/config` — Update `{ orgName, corsOrigin }` (admin)
 - GET `/api/admin/stats` — Summary stats (admin)
@@ -64,7 +65,7 @@ Notes:
 - POST `/api/sync/message` — Create message (auth)
   - Body: `{ teamId(uuid), messageType('text'), content }`
 
-### Socket.IO Events
+### Socket.IO Events (current)
 
 - `authenticate` — Provide JWT to bind user to the socket
   - Payload: `token`
@@ -141,7 +142,7 @@ npm start
 
 ## 🏗️ Architecture
 
-### Implemented Components (v1)
+### Implemented Components (current)
 
 - **HTTP API**: Express.js endpoints
 - **Auth**: Email/password → JWT
@@ -209,19 +210,15 @@ volumes:
 - Setup Wizard at `/setup`
 - Metrics endpoint at `/metrics` (admin‑protected after setup)
 
-### Security
-- **End-to-end Encryption**: All data encrypted in transit and at rest
-- **Authentication**: JWT-based auth with optional OAuth2 integration
-- **Rate Limiting**: Protect against abuse and DDoS attacks
-- **Audit Logging**: Complete trail of all user actions and system events
+### Security (current)
+- JWT-based authentication (email/password → JWT)
+- Rate limiting on `/api/*` and dedicated limiter on `/api/auth/login`
+- Admin-only routes and metrics after setup
 
-### Scalability
-- **Horizontal Scaling**: Add more instances behind a load balancer
-- **Database Sharding**: Distribute data across multiple database instances
-- **Caching**: Redis-based caching for improved performance
-- **Message Queues**: Asynchronous processing for high-throughput operations
+### Scalability (notes)
+- Horizontal scaling requires a Socket.IO Redis adapter and sticky sessions (not bundled)
 
-## 🔌 API Reference
+## 🔌 API Reference (selected)
 
 ### Authentication
 
@@ -229,17 +226,13 @@ volumes:
 # Login
 POST /api/auth/login
 {
-  "username": "user@example.com",
+  "email": "user@example.com",
   "password": "password"
 }
 
-# Register
-POST /api/auth/register
-{
-  "username": "user@example.com",
-  "password": "password",
-  "nickname": "User Nickname"
-}
+# Who am I
+GET /api/auth/whoami
+Authorization: Bearer <token>
 ```
 
 ### Data Synchronization
@@ -296,11 +289,11 @@ socket.emit('location:update', {
 - Prometheus‑style metrics at `/metrics`
 - Compose profile examples for Prometheus/Grafana are provided but require you to supply config files
 
-## 🔒 Security (current)
+## 🔒 Security (summary)
 
-- JWT auth; tokens verified in REST and Socket.IO
+- JWT tokens verified in REST and Socket.IO
 - Admin‑only routes under `/api/admin`
-- Rate limiting on `/api/*`
+- Rate limiting on `/api/*` and login endpoint
 - CORS configurable via Admin UI
 
 ## 🚀 Deployment & Ops

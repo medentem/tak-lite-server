@@ -85,6 +85,35 @@
           <h2>Sockets</h2>
           <pre id="rooms" class="muted" style="white-space:pre-wrap; margin:0"></pre>
         </div>
+
+        <div class="section grid">
+          <div class="card">
+            <h2>Users</h2>
+            <div class="row">
+              <input id="u_email" type="email" placeholder="user@example.com" style="flex:1" />
+              <input id="u_name" type="text" placeholder="Name" style="flex:1" />
+              <label class="row" style="gap:6px"><input id="u_admin" type="checkbox" /> Admin</label>
+              <button id="u_create">Create</button>
+            </div>
+            <div id="u_msg" class="muted"></div>
+            <table id="u_table"><thead><tr><th>Email</th><th>Name</th><th>Admin</th><th>Actions</th></tr></thead><tbody></tbody></table>
+          </div>
+
+          <div class="card">
+            <h2>Teams</h2>
+            <div class="row">
+              <input id="t_name" type="text" placeholder="Team name" style="flex:1" />
+              <button id="t_create">Create</button>
+            </div>
+            <div class="row section">
+              <select id="t_select" style="flex:1"></select>
+              <select id="t_user_select" style="flex:1"></select>
+              <button id="t_add_member">Add member</button>
+            </div>
+            <div id="t_msg" class="muted"></div>
+            <table id="t_table"><thead><tr><th>User</th><th>Email</th><th>Actions</th></tr></thead><tbody></tbody></table>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -106,9 +135,11 @@
       async function refresh() {
         if (!token) return;
         try {
-          const [cfg, stats] = await Promise.all([
+          const [cfg, stats, teams, users] = await Promise.all([
             jget('/api/admin/config'),
-            jget('/api/admin/stats')
+            jget('/api/admin/stats'),
+            jget('/api/admin/teams'),
+            jget('/api/admin/users')
           ]);
           q('#org').value = cfg.orgName || '';
           q('#cors').value = cfg.corsOrigin || '';
@@ -121,7 +152,37 @@
           q('#k_load').textContent = (stats.server.loadavg||[]).map(n=>n.toFixed(2)).join(' / ');
           q('#k_mem').textContent = (stats.server.memory.heapUsed/1048576).toFixed(1)+' MB';
           q('#rooms').textContent = JSON.stringify(stats.sockets.rooms, null, 2);
+
+          // Populate users table
+          const utb = q('#u_table tbody'); utb.innerHTML='';
+          users.forEach(u=>{
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${u.email}</td><td>${u.name||''}</td><td>${u.is_admin?'Yes':'No'}</td><td>
+              <button data-act="reset" data-id="${u.id}" class="secondary">Reset PW</button>
+              <button data-act="del" data-id="${u.id}" class="secondary">Delete</button>
+            </td>`;
+            utb.appendChild(tr);
+          });
+
+          // Populate teams select and table
+          const tsel = q('#t_select'); tsel.innerHTML='';
+          teams.forEach(t=>{ const o=document.createElement('option'); o.value=t.id; o.textContent=t.name; tsel.appendChild(o); });
+          const usel = q('#t_user_select'); usel.innerHTML='';
+          users.forEach(u=>{ const o=document.createElement('option'); o.value=u.id; o.textContent=`${u.name||''} <${u.email}>`; usel.appendChild(o); });
+          if (teams[0]) await loadTeamMembers(teams[0].id);
         } catch (e) { console.error(e); }
+      }
+
+      async function loadTeamMembers(teamId){
+        const members = await jget(`/api/admin/teams/${teamId}/members`);
+        const tb = q('#t_table tbody'); tb.innerHTML='';
+        members.forEach(m=>{
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${m.name||''}</td><td>${m.email}</td><td>
+            <button data-act="kick" data-uid="${m.id}" class="secondary">Remove</button>
+          </td>`;
+          tb.appendChild(tr);
+        });
       }
 
       q('#login').onclick = async () => {
@@ -140,6 +201,43 @@
         try { await fetch('/api/admin/config', { method:'PUT', headers: hdrs(), body: JSON.stringify({ orgName:q('#org').value, corsOrigin:q('#cors').value }) }); q('#saveMsg').textContent='Saved'; }
         catch { q('#saveMsg').textContent='Save failed'; }
       };
+
+      // Users create
+      q('#u_create').onclick = async () => {
+        try {
+          const body = { email:q('#u_email').value, name:q('#u_name').value, is_admin:q('#u_admin').checked };
+          const res = await fetch('/api/admin/users', { method:'POST', headers: hdrs(), body: JSON.stringify(body) });
+          const data = await res.json(); if(!res.ok) throw data;
+          q('#u_msg').textContent = `Created. Temporary password: ${data.password}`;
+          await refresh();
+        } catch(e){ q('#u_msg').textContent = 'Create failed'; }
+      };
+
+      // Delegate table actions for users
+      q('#u_table').onclick = async (ev)=>{
+        const btn = ev.target.closest('button'); if(!btn) return;
+        const id = btn.getAttribute('data-id'); const act = btn.getAttribute('data-act');
+        if (act==='reset') {
+          const res = await fetch(`/api/admin/users/${id}/reset-password`, { method:'POST', headers: hdrs() });
+          const data = await res.json(); if(!res.ok) return alert('Reset failed');
+          alert('New password: '+data.password);
+        } else if (act==='del') {
+          await fetch(`/api/admin/users/${id}`, { method:'DELETE', headers: hdrs() });
+          await refresh();
+        }
+      };
+
+      // Teams create and membership
+      q('#t_create').onclick = async ()=>{
+        try { const res = await fetch('/api/admin/teams', { method:'POST', headers: hdrs(), body: JSON.stringify({ name:q('#t_name').value }) }); if(!res.ok) throw 0; await refresh(); }
+        catch { q('#t_msg').textContent='Create failed'; }
+      };
+      q('#t_add_member').onclick = async ()=>{
+        const teamId = q('#t_select').value; const userId = q('#t_user_select').value;
+        try { const res = await fetch(`/api/admin/teams/${teamId}/members`, { method:'POST', headers: hdrs(), body: JSON.stringify({ userId }) }); if(!res.ok) throw 0; await loadTeamMembers(teamId); }
+        catch { q('#t_msg').textContent='Add failed'; }
+      };
+      q('#t_select').onchange = ()=> loadTeamMembers(q('#t_select').value);
 
       if (token) { showDash(true); refresh(); }
     </script>
