@@ -1,10 +1,15 @@
 import { Router } from 'express';
 import { SyncService } from '../services/sync';
+import rateLimit from 'express-rate-limit';
+import Joi from 'joi';
 
 export function createSyncRouter(sync: SyncService) {
   const router = Router();
 
-  router.post('/location', async (req, res, next) => {
+  // Limit sync write requests per IP to reduce abuse; tune as needed
+  const writeLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false });
+
+  router.post('/location', writeLimiter, async (req, res, next) => {
     try {
       if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
       await sync.handleLocationUpdate(req.user.sub, req.body);
@@ -12,7 +17,7 @@ export function createSyncRouter(sync: SyncService) {
     } catch (err) { next(err); }
   });
 
-  router.post('/annotation', async (req, res, next) => {
+  router.post('/annotation', writeLimiter, async (req, res, next) => {
     try {
       if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
       const annotation = await sync.handleAnnotationUpdate(req.user.sub, req.body);
@@ -20,7 +25,7 @@ export function createSyncRouter(sync: SyncService) {
     } catch (err) { next(err); }
   });
 
-  router.post('/message', async (req, res, next) => {
+  router.post('/message', writeLimiter, async (req, res, next) => {
     try {
       if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
       const message = await sync.handleMessage(req.user.sub, req.body);
@@ -32,8 +37,8 @@ export function createSyncRouter(sync: SyncService) {
   router.get('/locations/last', async (req, res, next) => {
     try {
       if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-      const teamId = String(req.query.teamId || '');
-      if (!teamId) return res.status(400).json({ error: 'teamId is required' });
+      const qSchema = Joi.object({ teamId: Joi.string().uuid().required() });
+      const { teamId } = await qSchema.validateAsync({ teamId: req.query.teamId });
       // delegate to DB via sync service patterns later; do direct query for P0
       const db = (sync as any).db as import('../services/database').DatabaseService;
       await sync.assertTeamMembership(req.user.sub, teamId);
@@ -54,8 +59,8 @@ export function createSyncRouter(sync: SyncService) {
   router.get('/annotations', async (req, res, next) => {
     try {
       if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-      const teamId = String(req.query.teamId || '');
-      if (!teamId) return res.status(400).json({ error: 'teamId is required' });
+      const qSchema = Joi.object({ teamId: Joi.string().uuid().required() });
+      const { teamId } = await qSchema.validateAsync({ teamId: req.query.teamId });
       const db = (sync as any).db as import('../services/database').DatabaseService;
       await sync.assertTeamMembership(req.user.sub, teamId);
       const rows = await db.client('annotations').where({ team_id: teamId }).orderBy('updated_at', 'desc');
@@ -67,10 +72,16 @@ export function createSyncRouter(sync: SyncService) {
   router.get('/messages', async (req, res, next) => {
     try {
       if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-      const teamId = String(req.query.teamId || '');
-      if (!teamId) return res.status(400).json({ error: 'teamId is required' });
-      const limit = Math.min(Number(req.query.limit || 50), 200);
-      const before = req.query.before ? new Date(String(req.query.before)) : null;
+      const qSchema = Joi.object({
+        teamId: Joi.string().uuid().required(),
+        limit: Joi.number().integer().min(1).max(200).default(50),
+        before: Joi.date().optional()
+      });
+      const { teamId, limit, before } = await qSchema.validateAsync({
+        teamId: req.query.teamId,
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+        before: req.query.before
+      });
       const db = (sync as any).db as import('../services/database').DatabaseService;
       await sync.assertTeamMembership(req.user.sub, teamId);
       let q = db.client('messages').where({ team_id: teamId }).orderBy('created_at', 'desc').limit(limit);

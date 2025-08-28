@@ -1,11 +1,12 @@
-import express, { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express-serve-static-core';
+const express = require('express');
 import path from 'path';
 import fs from 'fs';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
-import compression from 'compression';
+const compression = require('compression');
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
@@ -21,7 +22,9 @@ import { createAuthMiddleware } from './middleware/auth';
 import { SyncService } from './services/sync';
 import { createSyncRouter } from './routes/sync';
 import { SocketGateway } from './services/sockets';
-import jwt from 'jsonwebtoken';
+import { RetentionService } from './services/retention';
+import { AuditService } from './services/audit';
+import { SecurityService } from './services/security';
 
 // Placeholder imports for future optional services/routes
 // import { RedisService } from './services/redis';
@@ -35,26 +38,58 @@ dotenv.config();
 
 const app = express();
 const server = createServer(app);
+// Build socket CORS allowlist from environment only (runtime config is handled per-HTTP request)
+const envCors = process.env.CORS_ORIGIN || '';
+const allowedSocketOrigins = envCors
+  .split(',')
+  .map((s) => s.trim())
+  .filter((s) => s.length > 0 && s !== '*');
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || '*',
-    methods: ['GET', 'POST']
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      if (!origin) return callback(null, true);
+      const allowed = allowedSocketOrigins.length === 0 ? false : allowedSocketOrigins.includes(origin);
+      return callback(allowed ? null : new Error('Not allowed by CORS'), allowed);
+    },
+    methods: ['GET', 'POST'],
+    credentials: false
   }
 });
 
 // Initialize services
 const databaseService = new DatabaseService();
 const configService = new ConfigService(databaseService);
+const securityService = new SecurityService(configService);
 const syncService = new SyncService(io, databaseService);
+const auditService = new AuditService(databaseService);
+const retentionService = new RetentionService(databaseService, configService);
 
 // Security middleware
 app.use(helmet());
-// Dynamic CORS with cached config: read once per TTL
+// Dynamic CORS with strict allowlist: prefer configured origins; fallback to env; never allow '*'
 app.use(async (req: Request, res: Response, next: NextFunction) => {
   const completed = await configService.get<boolean>('setup.completed');
   const cfgOrigin = completed ? await configService.get<string>('security.cors_origin') : undefined;
-  const origin = cfgOrigin && cfgOrigin.length > 0 ? cfgOrigin : process.env.CORS_ORIGIN || '*';
-  return cors({ origin, credentials: true })(req, res, next);
+  const parseOrigins = (val?: string): string[] =>
+    (val || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0 && s !== '*');
+  const configured = parseOrigins(cfgOrigin);
+  const fromEnv = parseOrigins(process.env.CORS_ORIGIN);
+  const allowlist = configured.length > 0 ? configured : fromEnv;
+  const originFn = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin) return callback(null, true);
+    const allowed = allowlist.includes(origin);
+    return callback(allowed ? null : new Error('Not allowed by CORS'), allowed);
+  };
+  return cors({
+    origin: originFn,
+    credentials: false,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  })(req, res, next);
 });
 
 // Rate limiting
@@ -68,9 +103,9 @@ app.use('/api/', limiter);
 // Compression
 app.use(compression());
 
-// Body parsing
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+// Body parsing with conservative defaults; larger uploads should use dedicated endpoints
+app.use(express.json({ limit: '512kb' }));
+app.use(express.urlencoded({ extended: true, limit: '256kb' }));
 
 // Simple request logging using built-in middleware
 app.use((req: Request, _res: Response, next: NextFunction) => {
@@ -80,6 +115,15 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 
 // Metrics middleware
 app.use(metricsMiddleware);
+// Serve static assets for public files (admin/setup scripts, styles)
+const staticPrimary = path.resolve(__dirname, 'public');
+const staticFallback = path.resolve(__dirname, '..', 'public');
+if (fs.existsSync(staticPrimary)) {
+  app.use('/public', express.static(staticPrimary));
+} else if (fs.existsSync(staticFallback)) {
+  app.use('/public', express.static(staticFallback));
+}
+
 app.get('/metrics', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const completed = await configService.get<boolean>('setup.completed');
@@ -87,9 +131,7 @@ app.get('/metrics', async (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization || '';
     const [, token] = authHeader.split(' ');
     if (!token) return res.status(401).json({ error: 'Missing token' });
-    const secret = (await configService.get<string>('security.jwt_secret')) || '';
-    if (!secret) return res.status(500).json({ error: 'Server not configured' });
-    const payload = jwt.verify(token, secret) as { is_admin?: boolean };
+    const payload = await securityService.verifyJwt<{ is_admin?: boolean }>(token);
     if (!payload.is_admin) return res.status(403).json({ error: 'Admin required' });
     return metricsHandler(req, res);
   } catch (err) {
@@ -98,7 +140,7 @@ app.get('/metrics', async (req: Request, res: Response, next: NextFunction) => {
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (req: Request, res: Response) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -111,10 +153,10 @@ app.get('/health', (req, res) => {
 app.use('/api/setup', createSetupRouter(databaseService, configService));
 
 // Serve interactive setup page
-app.get('/setup', (_req, res) => {
+app.get('/setup', (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/html');
-  // Relax CSP for inline scripts/styles used by the simple setup page
-  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'");
+  // Strict CSP now that setup uses external JS
+  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'");
   const primary = path.resolve(__dirname, 'public', 'setup.html');
   const fallback = path.resolve(__dirname, '..', 'public', 'setup.html');
   const file = fs.existsSync(primary) ? primary : fallback;
@@ -122,7 +164,7 @@ app.get('/setup', (_req, res) => {
 });
 
 // Gate other routes until setup is complete
-app.use(async (req, res, next) => {
+app.use(async (req: Request, res: Response, next: NextFunction) => {
   const completed = await configService.get<boolean>('setup.completed');
   if (!completed && !req.path.startsWith('/api/setup')) {
     return res.status(428).json({ error: 'Setup required', setupPath: '/setup' });
@@ -141,10 +183,10 @@ app.use('/api/admin', auth.authenticate, auth.adminOnly, createAdminRouter(confi
 app.use('/api/sync', auth.authenticate, createSyncRouter(syncService));
 
 // Serve admin UI
-app.get('/admin', (_req, res) => {
+app.get('/admin', (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/html');
-  // Relax CSP for inline scripts/styles used by the simple admin page
-  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'");
+  // Strict CSP for admin: external scripts only; allow inline styles for now
+  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'");
   const primary = path.resolve(__dirname, 'public', 'admin.html');
   const fallback = path.resolve(__dirname, '..', 'public', 'admin.html');
   const file = fs.existsSync(primary) ? primary : fallback;
@@ -155,6 +197,9 @@ app.get('/admin', (_req, res) => {
 
 // WebSocket connection handling (basic placeholders)
 new SocketGateway(io, configService, syncService).bind();
+
+// Background services
+retentionService.start();
 
 // Error handling middleware
 app.use(errorHandler);

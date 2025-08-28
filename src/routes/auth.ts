@@ -1,28 +1,86 @@
-import { Router } from 'express';
+import type { Request, Response, NextFunction } from 'express-serve-static-core';
+const { Router } = require('express');
 import rateLimit from 'express-rate-limit';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+const bcrypt = require('bcryptjs');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const jwt = require('jsonwebtoken');
 import Joi from 'joi';
 import { DatabaseService } from '../services/database';
 import { ConfigService } from '../services/config';
+import { SecurityService } from '../services/security';
+import { TokenService } from '../services/tokens';
+
+function parseExpires(val: string | undefined): number {
+  if (!val) return 15 * 60;
+  if (/^\d+$/.test(val)) return Number(val);
+  const m = val.match(/^(\d+)([smhd])$/i);
+  if (!m) return 15 * 60;
+  const n = Number(m[1]);
+  const unit = m[2].toLowerCase();
+  if (unit === 's') return n;
+  if (unit === 'm') return n * 60;
+  if (unit === 'h') return n * 3600;
+  if (unit === 'd') return n * 86400;
+  return 15 * 60;
+}
 
 export function createAuthRouter(db: DatabaseService, config: ConfigService) {
   const router = Router();
+  const security = new SecurityService(config);
+  const tokens = new TokenService(db);
 
   // Per-route limiter to protect login from brute force
   const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50, standardHeaders: true, legacyHeaders: false });
 
-  router.post('/login', loginLimiter, async (req, res, next) => {
+  router.post('/login', loginLimiter, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const schema = Joi.object({ email: Joi.string().email().required(), password: Joi.string().required() });
       const { email, password } = await schema.validateAsync(req.body);
       const user = await db.client('users').where({ email }).first();
       if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-      const ok = await bcrypt.compare(password, user.password_hash);
-      if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-      const secret = (await config.get<string>('security.jwt_secret')) || '';
-      if (!secret) return res.status(500).json({ error: 'JWT not configured' });
-      const token = jwt.sign({ sub: user.id, is_admin: user.is_admin }, secret, { expiresIn: '7d' });
+      const v = await security.verifyPassword(password, user.password_hash);
+      if (!v.ok) return res.status(401).json({ error: 'Invalid credentials' });
+      if (v.needsRehash) {
+        try {
+          const newHash = await security.hashPassword(password);
+          await db.client('users').where({ id: user.id }).update({ password_hash: newHash, updated_at: db.client.fn.now() });
+        } catch {}
+      }
+      const parseExpires = (val: string | undefined): number => {
+        if (!val) return 15 * 60; // 15m default
+        if (/^\d+$/.test(val)) return Number(val);
+        const m = val.match(/^(\d+)([smhd])$/i);
+        if (!m) return 15 * 60;
+        const n = Number(m[1]);
+        const unit = m[2].toLowerCase();
+        if (unit === 's') return n;
+        if (unit === 'm') return n * 60;
+        if (unit === 'h') return n * 3600;
+        if (unit === 'd') return n * 86400;
+        return 15 * 60;
+      };
+      const expiresIn = parseExpires(process.env.JWT_EXPIRES_IN);
+      const token = await security.signJwt({ sub: user.id, is_admin: user.is_admin }, { expiresIn });
+      const { jti, token: refresh } = await tokens.rotate(user.id, null, null);
+      // Set HttpOnly cookie for browser-based admin UI; clients may still use bearer token from body
+      const useCookie = String(req.query.cookie || '1') === '1';
+      if (useCookie) {
+        const isProd = (process.env.NODE_ENV || 'production') === 'production';
+        res.cookie('taklite_token', token, {
+          httpOnly: true,
+          secure: isProd,
+          sameSite: 'strict',
+          maxAge: 1000 * 60 * 60, // ~1h; cookie expiry independent of JWT exp
+          path: '/'
+        });
+        res.cookie('taklite_refresh', `${jti}.${refresh}`, {
+          httpOnly: true,
+          secure: isProd,
+          sameSite: 'strict',
+          maxAge: 1000 * 60 * 60 * 24 * 14,
+          path: '/api/auth'
+        });
+      }
       res.json({ token });
     } catch (err) {
       next(err);
@@ -30,17 +88,61 @@ export function createAuthRouter(db: DatabaseService, config: ConfigService) {
   });
 
   // Who am I (validate token and return subject and admin flag)
-  router.get('/whoami', async (req, res) => {
+  router.get('/whoami', async (req: Request, res: Response) => {
     const auth = req.headers.authorization || '';
-    const [, token] = auth.split(' ');
+    const [, bearer] = auth.split(' ');
+    const cookieHeader = req.headers.cookie || '';
+    const cookies = Object.fromEntries(
+      cookieHeader
+        .split(';')
+        .map((c: string) => c.trim())
+        .filter((c: string) => c.includes('='))
+        .map((c: string) => {
+          const idx = c.indexOf('=');
+          return [decodeURIComponent(c.slice(0, idx)), decodeURIComponent(c.slice(idx + 1))];
+        })
+    );
+    const token = bearer || cookies['taklite_token'];
     if (!token) return res.status(401).json({ error: 'Missing token' });
-    const secret = (await config.get<string>('security.jwt_secret')) || '';
-    if (!secret) return res.status(500).json({ error: 'Server not configured' });
     try {
-      const payload = jwt.verify(token, secret) as { sub: string; is_admin?: boolean };
+      const payload = await security.verifyJwt<{ sub: string; is_admin?: boolean }>(token);
       res.json({ userId: payload.sub, isAdmin: !!payload.is_admin });
     } catch {
       res.status(401).json({ error: 'Invalid token' });
+    }
+  });
+
+  // Logout: clear cookie (does not revoke JWTs used outside browser)
+  router.post('/logout', (_req: Request, res: Response) => {
+    res.clearCookie('taklite_token', { path: '/' });
+    res.clearCookie('taklite_refresh', { path: '/api/auth' });
+    res.json({ success: true });
+  });
+
+  // Refresh endpoint (cookie-based)
+  router.post('/refresh', async (req: Request, res: Response) => {
+    try {
+      const cookieHeader = req.headers.cookie || '';
+      const cookies = Object.fromEntries(
+        cookieHeader
+          .split(';')
+          .map((c: string) => c.trim())
+          .filter((c: string) => c.includes('='))
+          .map((c: string) => { const i=c.indexOf('='); return [decodeURIComponent(c.slice(0,i)), decodeURIComponent(c.slice(i+1))]; })
+      );
+      const compound = cookies['taklite_refresh'] || '';
+      const [jti, refresh] = compound.split('.');
+      if (!jti || !refresh) return res.status(401).json({ error: 'Missing refresh' });
+      const row = await tokens.verify(jti, refresh);
+      if (!row) return res.status(401).json({ error: 'Invalid refresh' });
+      const access = await security.signJwt({ sub: row.userId }, { expiresIn: parseExpires(process.env.JWT_EXPIRES_IN) });
+      const { jti: newJti, token: newRefresh } = await tokens.rotate(row.userId, jti, refresh);
+      const isProd = (process.env.NODE_ENV || 'production') === 'production';
+      res.cookie('taklite_token', access, { httpOnly: true, secure: isProd, sameSite: 'strict', maxAge: 1000*60*60, path: '/' });
+      res.cookie('taklite_refresh', `${newJti}.${newRefresh}`, { httpOnly: true, secure: isProd, sameSite: 'strict', maxAge: 1000*60*60*24*14, path: '/api/auth' });
+      res.json({ token: access });
+    } catch {
+      res.status(401).json({ error: 'Refresh failed' });
     }
   });
 

@@ -5,7 +5,8 @@ type ConfigKey =
   | 'security.jwt_secret'
   | 'security.cors_origin'
   | 'org.name'
-  | 'features.redis_enabled';
+  | 'features.redis_enabled'
+  | 'features.retention_days';
 
 export class ConfigService {
   constructor(private db: DatabaseService) {}

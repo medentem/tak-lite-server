@@ -1,42 +1,56 @@
-import { Router } from 'express';
+import type { Request, Response, NextFunction } from 'express-serve-static-core';
+const { Router } = require('express');
 import os from 'os';
 import { Server } from 'socket.io';
 import { DatabaseService } from '../services/database';
 import Joi from 'joi';
 import { ConfigService } from '../services/config';
-import bcrypt from 'bcryptjs';
+import { AuditService } from '../services/audit';
+const bcrypt = require('bcryptjs');
 import { v4 as uuidv4 } from 'uuid';
 
 export function createAdminRouter(config: ConfigService, db?: DatabaseService, io?: Server) {
   const router = Router();
+  const audit = db ? new AuditService(db) : null;
 
-  router.get('/config', async (_req, res) => {
+  router.get('/config', async (_req: Request, res: Response) => {
     const corsOrigin = await config.get<string>('security.cors_origin');
     const orgName = await config.get<string>('org.name');
-    res.json({ corsOrigin: corsOrigin || '', orgName: orgName || '' });
+    const retention = await config.get<number>('features.retention_days');
+    res.json({ corsOrigin: corsOrigin || '', orgName: orgName || '', retentionDays: retention || 0 });
   });
 
-  router.put('/config', async (req, res, next) => {
+  router.put('/config', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const schema = Joi.object({
-        corsOrigin: Joi.string().allow('').required(),
-        orgName: Joi.string().min(2).required()
+        corsOrigin: Joi.string().custom((value, helpers) => {
+          const list = String(value || '')
+            .split(',')
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+          if (list.includes('*')) return helpers.error('any.invalid');
+          return list.join(',');
+        }).allow('').required(),
+        orgName: Joi.string().min(2).required(),
+        retentionDays: Joi.number().integer().min(0).max(365).default(0)
       });
-      const { corsOrigin, orgName } = await schema.validateAsync(req.body);
+      const { corsOrigin, orgName, retentionDays } = await schema.validateAsync(req.body);
       await config.set('security.cors_origin', corsOrigin);
       await config.set('org.name', orgName);
+      await config.set('features.retention_days', retentionDays);
+      if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'config.update', resourceType: 'config', metadata: { corsOrigin, orgName, retentionDays } });
       res.json({ success: true });
     } catch (err) {
       next(err);
     }
   });
 
-  router.get('/status', async (_req, res) => {
+  router.get('/status', async (_req: Request, res: Response) => {
     res.json({ setupCompleted: !!(await config.get('setup.completed')) });
   });
 
   // Lightweight team/user reads to support visibility and credential distribution
-  router.get('/teams', async (_req, res, next) => {
+  router.get('/teams', async (_req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.json([]);
       const teams = await db.client('teams').select(['id', 'name', 'created_at']).orderBy('name');
@@ -44,7 +58,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
     } catch (err) { next(err); }
   });
 
-  router.get('/teams/:teamId/members', async (req, res, next) => {
+  router.get('/teams/:teamId/members', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.json([]);
       const members = await db
@@ -57,7 +71,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
   });
 
   // Operational stats for the Admin Dashboard
-  router.get('/stats', async (_req, res, next) => {
+  router.get('/stats', async (_req: Request, res: Response, next: NextFunction) => {
     try {
       const [users, teams, annotations, messages, locations] = db
         ? await Promise.all([
@@ -110,7 +124,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
   });
 
   // --- Users management (admin) ---
-  router.get('/users', async (_req, res, next) => {
+  router.get('/users', async (_req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.json([]);
       const users = await db.client('users').select(['id', 'email', 'name', 'is_admin', 'created_at']).orderBy('created_at', 'desc');
@@ -118,7 +132,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
     } catch (err) { next(err); }
   });
 
-  router.post('/users', async (req, res, next) => {
+  router.post('/users', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
       const schema = Joi.object({ email: Joi.string().email().required(), name: Joi.string().min(1).default(''), is_admin: Joi.boolean().default(false) });
@@ -129,11 +143,12 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       const password = uuidv4().replace(/-/g, '').slice(0, 14);
       const password_hash = await bcrypt.hash(password, 10);
       await db.client('users').insert({ id, email, name: name || email, is_admin, password_hash });
+      if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'user.create', resourceType: 'user', resourceId: id, metadata: { email, is_admin } });
       res.json({ user: { id, email, name: name || email, is_admin }, password });
     } catch (err) { next(err); }
   });
 
-  router.put('/users/:userId', async (req, res, next) => {
+  router.put('/users/:userId', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
       const schema = Joi.object({ name: Joi.string().min(1).optional(), is_admin: Joi.boolean().optional() });
@@ -141,11 +156,12 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       await db.client('users').where({ id: req.params.userId }).update({ ...data, updated_at: db.client.fn.now() });
       const user = await db.client('users').where({ id: req.params.userId }).first(['id', 'email', 'name', 'is_admin', 'created_at']);
       if (!user) return res.status(404).json({ error: 'Not found' });
+      if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'user.update', resourceType: 'user', resourceId: req.params.userId, metadata: data });
       res.json(user);
     } catch (err) { next(err); }
   });
 
-  router.post('/users/:userId/reset-password', async (req, res, next) => {
+  router.post('/users/:userId/reset-password', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
       const user = await db.client('users').where({ id: req.params.userId }).first();
@@ -153,31 +169,34 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       const password = uuidv4().replace(/-/g, '').slice(0, 14);
       const password_hash = await bcrypt.hash(password, 10);
       await db.client('users').where({ id: req.params.userId }).update({ password_hash, updated_at: db.client.fn.now() });
+      if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'user.reset_password', resourceType: 'user', resourceId: req.params.userId });
       res.json({ password });
     } catch (err) { next(err); }
   });
 
-  router.delete('/users/:userId', async (req, res, next) => {
+  router.delete('/users/:userId', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
       await db.client('users').where({ id: req.params.userId }).delete();
+      if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'user.delete', resourceType: 'user', resourceId: req.params.userId });
       res.json({ success: true });
     } catch (err) { next(err); }
   });
 
   // --- Teams management (admin) ---
-  router.post('/teams', async (req, res, next) => {
+  router.post('/teams', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
       const schema = Joi.object({ name: Joi.string().min(2).required() });
       const { name } = await schema.validateAsync(req.body);
       const id = uuidv4();
       await db.client('teams').insert({ id, name });
+      if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'team.create', resourceType: 'team', resourceId: id, metadata: { name } });
       res.json({ id, name });
     } catch (err) { next(err); }
   });
 
-  router.put('/teams/:teamId', async (req, res, next) => {
+  router.put('/teams/:teamId', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
       const schema = Joi.object({ name: Joi.string().min(2).required() });
@@ -185,19 +204,21 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       await db.client('teams').where({ id: req.params.teamId }).update({ name });
       const team = await db.client('teams').where({ id: req.params.teamId }).first();
       if (!team) return res.status(404).json({ error: 'Not found' });
+      if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'team.update', resourceType: 'team', resourceId: req.params.teamId, metadata: { name } });
       res.json(team);
     } catch (err) { next(err); }
   });
 
-  router.delete('/teams/:teamId', async (req, res, next) => {
+  router.delete('/teams/:teamId', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
       await db.client('teams').where({ id: req.params.teamId }).delete();
+      if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'team.delete', resourceType: 'team', resourceId: req.params.teamId });
       res.json({ success: true });
     } catch (err) { next(err); }
   });
 
-  router.post('/teams/:teamId/members', async (req, res, next) => {
+  router.post('/teams/:teamId/members', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
       const schema = Joi.object({ userId: Joi.string().uuid().required() });
@@ -205,15 +226,17 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       const exists = await db.client('team_memberships').where({ user_id: userId, team_id: req.params.teamId }).first();
       if (!exists) {
         await db.client('team_memberships').insert({ user_id: userId, team_id: req.params.teamId });
+        if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'team.add_member', resourceType: 'team', resourceId: req.params.teamId, metadata: { userId } });
       }
       res.json({ success: true });
     } catch (err) { next(err); }
   });
 
-  router.delete('/teams/:teamId/members/:userId', async (req, res, next) => {
+  router.delete('/teams/:teamId/members/:userId', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
       await db.client('team_memberships').where({ user_id: req.params.userId, team_id: req.params.teamId }).delete();
+      if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'team.remove_member', resourceType: 'team', resourceId: req.params.teamId, metadata: { userId: req.params.userId } });
       res.json({ success: true });
     } catch (err) { next(err); }
   });

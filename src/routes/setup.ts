@@ -4,9 +4,11 @@ import { v4 as uuidv4 } from 'uuid';
 import Joi from 'joi';
 import { DatabaseService } from '../services/database';
 import { ConfigService } from '../services/config';
+import { SecurityService } from '../services/security';
 
 export function createSetupRouter(db: DatabaseService, config: ConfigService) {
   const router = Router();
+  const security = new SecurityService(config);
 
   router.get('/status', async (_req, res) => {
     const completed = await config.get<boolean>('setup.completed');
@@ -54,7 +56,7 @@ export function createSetupRouter(db: DatabaseService, config: ConfigService) {
         }
       });
 
-      const jwtSecret = uuidv4() + uuidv4();
+      const jwtSecret = SecurityService.generateStrongSecret();
       await config.set('security.jwt_secret', jwtSecret);
       await config.set('security.cors_origin', corsOrigin || '');
       await config.set('org.name', orgName);

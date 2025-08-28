@@ -36,6 +36,7 @@
     "express-rate-limit": "^6.7.0",
     "express-validator": "^7.0.1",
     "bcryptjs": "^2.4.3",
+    "argon2": "^0.31.2",
     "jsonwebtoken": "^9.0.2",
     "passport": "^0.6.0",
     "passport-jwt": "^4.0.1",
