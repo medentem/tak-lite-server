@@ -78,12 +78,50 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
       .filter((s) => s.length > 0 && s !== '*');
   const configured = parseOrigins(cfgOrigin);
   const fromEnv = parseOrigins(process.env.CORS_ORIGIN);
-  const allowlist = configured.length > 0 ? configured : fromEnv;
+  
+  // Build allowlist with sensible defaults
+  let allowlist: string[];
+  if (!completed) {
+    // Setup phase: allow same-origin and common development origins
+    allowlist = ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:8080', 'http://127.0.0.1:8080'];
+    // Also include any configured environment origins
+    allowlist = [...allowlist, ...fromEnv];
+    logger.info('CORS setup phase - allowing origins:', { allowlist, completed });
+  } else {
+    // After setup: use configured origins, fallback to env, or use development defaults if nothing configured
+    allowlist = configured.length > 0 ? configured : fromEnv;
+    
+    // If still no origins configured, fall back to development defaults for safety
+    if (allowlist.length === 0) {
+      allowlist = ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:8080', 'http://127.0.0.1:8080'];
+      logger.warn('CORS: No origins configured, falling back to development defaults:', { allowlist });
+    }
+    
+    logger.info('CORS post-setup - using origins:', { allowlist, configured, fromEnv, completed });
+  }
+  
   const originFn = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    if (!origin) return callback(null, true);
+    if (!origin) {
+      logger.debug('CORS: No origin header, allowing (same-origin request)');
+      return callback(null, true); // Allow requests without origin (same-origin)
+    }
+    
+    // Always allow same-origin requests (when origin matches the request's host)
+    const requestHost = `${req.protocol}://${req.get('host')}`;
+    if (origin === requestHost) {
+      logger.debug('CORS: Same-origin request, allowing:', { origin, requestHost });
+      return callback(null, true);
+    }
+    
     const allowed = allowlist.includes(origin);
+    if (!allowed) {
+      logger.warn('CORS: Origin blocked', { origin, requestHost, allowlist, path: req.path });
+    } else {
+      logger.debug('CORS: Origin allowed:', { origin, path: req.path });
+    }
     return callback(allowed ? null : new Error('Not allowed by CORS'), allowed);
   };
+  
   return cors({
     origin: originFn,
     credentials: false,
@@ -147,6 +185,11 @@ app.get('/health', (req: Request, res: Response) => {
     uptime: process.uptime(),
     version: process.env.npm_package_version || '1.0.0'
   });
+});
+
+// Favicon endpoint to prevent 404 errors
+app.get('/favicon.ico', (_req: Request, res: Response) => {
+  res.status(204).end(); // No content, but no error
 });
 
 // First-run setup

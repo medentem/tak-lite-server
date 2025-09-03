@@ -20,8 +20,9 @@
       .row { display:flex; gap:8px; align-items:center; }
       .section { margin-top:16px; }
       h2 { margin:0 0 8px; font-size:18px; color:#cbd5e1; }
-      .kpi { display:flex; align-items:center; gap:8px; }
-      .kpi .value { font-size:22px; font-weight:700; }
+      .kpi { display:flex; flex-direction: column; align-items:center; text-align: center; gap:8px; }
+      .kpi .value { font-size:32px; font-weight:700; color: var(--accent); line-height: 1; }
+      .kpi .label { font-size:12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
       table { width:100%; border-collapse:collapse; font-size:14px; }
       th, td { border-bottom:1px solid #1f2a44; padding:10px; text-align:left; }
       .muted { color:var(--muted); }
@@ -29,6 +30,151 @@
       .spacer { height:16px; }
       .right { text-align:right; }
       .hidden { display:none; }
+      
+      /* New styles for improved UX */
+      .field-group { margin-bottom: 20px; }
+      .field-group label { display: block; margin-bottom: 8px; font-weight: 500; color: #cbd5e1; }
+      .help-text { 
+        background: #0d1b34; 
+        border: 1px solid #223056; 
+        border-radius: 6px; 
+        padding: 12px; 
+        margin-top: 8px; 
+        font-size: 13px; 
+        line-height: 1.4; 
+        color: var(--muted);
+      }
+      .help-text strong { color: var(--text); }
+      .message { 
+        padding: 12px; 
+        border-radius: 6px; 
+        margin: 12px 0; 
+        font-weight: 500;
+        transition: opacity 0.3s ease;
+      }
+      .message-success { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #22c55e; }
+      .message-error { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; }
+      .message-info { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: #3b82f6; }
+      .message.fade-out { opacity: 0; }
+      .loading { opacity: 0.6; pointer-events: none; }
+      .loading::after { content: '...'; }
+      
+      /* Improved Overview section */
+      .overview-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+      
+      .overview-stats {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+        margin-top: 16px;
+      }
+      
+      .overview-stats .stat-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #1f2a44;
+      }
+      
+      .overview-stats .stat-row:last-child {
+        border-bottom: none;
+      }
+      
+      .overview-stats .stat-label {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      
+      .overview-stats .stat-value {
+        color: var(--text);
+        font-weight: 500;
+        font-family: 'Courier New', monospace;
+      }
+      
+      /* Fixed input widths */
+      .field-group input {
+        width: 100%;
+        box-sizing: border-box;
+        max-width: 100%;
+      }
+      
+      .row input {
+        flex: 1;
+        min-width: 0; /* Prevents flex items from overflowing */
+      }
+      
+      /* Better spacing for configuration panel */
+      .config-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      
+      .config-row label {
+        min-width: 120px;
+        margin-bottom: 0;
+        font-size: 14px;
+      }
+      
+      .config-row input {
+        flex: 1;
+        min-width: 0;
+      }
+      
+      /* Improved button styling */
+      .save-button {
+        margin-top: 20px;
+        width: auto;
+        padding: 10px 20px;
+        float: right;
+      }
+      
+      /* Better table styling */
+      .users-table, .teams-table {
+        margin-top: 16px;
+        background: #0c1527;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      
+      .users-table th, .teams-table th {
+        background: #0d1b34;
+        font-weight: 600;
+        color: #cbd5e1;
+        padding: 12px;
+      }
+      
+      .users-table td, .teams-table td {
+        padding: 12px;
+        border-bottom: 1px solid #1f2a44;
+      }
+      
+      /* Responsive improvements */
+      @media (max-width: 768px) {
+        .overview-grid {
+          grid-template-columns: 1fr;
+        }
+        
+        .overview-stats {
+          grid-template-columns: 1fr;
+        }
+        
+        .config-row {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        
+        .config-row label {
+          min-width: auto;
+        }
+      }
     </style>
   </head>
   <body>
@@ -48,71 +194,129 @@
           <input id="password" type="password" placeholder="password" style="flex:1" />
           <button id="login">Login</button>
         </div>
-        <div id="loginMsg" class="section muted"></div>
+        <div id="loginMsg" class="message message-error hidden"></div>
       </div>
 
       <div id="dash" class="hidden">
+        <!-- Global message area -->
+        <div id="globalMessage" class="message hidden"></div>
+        
         <div class="grid">
           <div class="card">
             <h2>Overview</h2>
-            <div class="grid">
-              <div class="kpi"><span class="pill">Users</span><span id="k_users" class="value">-</span></div>
-              <div class="kpi"><span class="pill">Teams</span><span id="k_teams" class="value">-</span></div>
-              <div class="kpi"><span class="pill">Sockets</span><span id="k_sockets" class="value">-</span></div>
-              <div class="kpi"><span class="pill">Auth</span><span id="k_auth" class="value">-</span></div>
+            <div class="overview-grid">
+              <div class="kpi">
+                <span class="value" id="k_users">-</span>
+                <span class="label">Users</span>
+              </div>
+              <div class="kpi">
+                <span class="value" id="k_teams">-</span>
+                <span class="label">Teams</span>
+              </div>
+              <div class="kpi">
+                <span class="value" id="k_sockets">-</span>
+                <span class="label">Sockets</span>
+              </div>
+              <div class="kpi">
+                <span class="value" id="k_auth">-</span>
+                <span class="label">Auth</span>
+              </div>
             </div>
-            <div class="spacer"></div>
-            <table>
-              <tbody>
-                <tr><td class="muted">Uptime</td><td id="k_uptime" class="right">-</td></tr>
-                <tr><td class="muted">Node</td><td id="k_node" class="right">-</td></tr>
-                <tr><td class="muted">Load</td><td id="k_load" class="right">-</td></tr>
-                <tr><td class="muted">Memory</td><td id="k_mem" class="right">-</td></tr>
-              </tbody>
-            </table>
+            
+            <div class="overview-stats">
+              <div class="stat-row">
+                <span class="stat-label">Uptime</span>
+                <span class="stat-value" id="k_uptime">-</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label">Node</span>
+                <span class="stat-value" id="k_node">-</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label">Load</span>
+                <span class="stat-value" id="k_load">-</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label">Memory</span>
+                <span class="stat-value" id="k_mem">-</span>
+              </div>
+            </div>
           </div>
 
           <div class="card">
             <h2>Configuration</h2>
-            <div class="section row"><span class="muted" style="width:100px">Org</span><input id="org" style="flex:1" /></div>
-            <div class="section row"><span class="muted" style="width:100px">CORS</span><input id="cors" style="flex:1" /></div>
-            <div class="section row"><span class="muted" style="width:100px">Retention (days)</span><input id="retention" type="number" min="0" max="365" style="flex:1" /></div>
-            <div class="section row right"><button id="save" class="secondary">Save</button></div>
-            <div id="saveMsg" class="muted"></div>
+            <div class="field-group">
+              <label for="org">Organization Name</label>
+              <input id="org" />
+              <div class="help-text">
+                <strong>Display name</strong> for your organization that appears in the TAK Lite app
+              </div>
+            </div>
+            
+            <div class="field-group">
+              <label for="cors">Allowed Websites (CORS)</label>
+              <input id="cors" placeholder="http://localhost:3000" />
+              <div class="help-text">
+                <strong>What is this?</strong> Controls which websites can connect to your server.<br>
+                <strong>Leave blank</strong> if you're only using the TAK Lite mobile app.<br>
+                <strong>Example:</strong> http://localhost:3000, https://myapp.com
+              </div>
+            </div>
+            
+            <div class="field-group">
+              <label for="retention">Data Retention Period (days)</label>
+              <input id="retention" type="number" min="0" max="365" />
+              <div class="help-text">
+                <strong>How long to keep:</strong> Location history, messages, and annotations<br>
+                <strong>0 days:</strong> Keep everything forever (uses more storage)<br>
+                <strong>30 days:</strong> Good balance for most teams<br>
+                <strong>90+ days:</strong> For compliance or long-term projects
+              </div>
+            </div>
+            
+            <button id="save" class="secondary save-button">Save Changes</button>
+            <div id="saveMsg" class="message hidden"></div>
           </div>
         </div>
 
         <div class="section card">
-          <h2>Sockets</h2>
-          <pre id="rooms" class="muted" style="white-space:pre-wrap; margin:0"></pre>
+          <h2>Active Connections</h2>
+          <div class="help-text">
+            <strong>Real-time status</strong> of connected TAK Lite devices and their team assignments
+          </div>
+          <pre id="rooms" class="muted" style="white-space:pre-wrap; margin:12px 0 0 0; background: #0c1527; padding: 12px; border-radius: 6px; max-height: 200px; overflow-y: auto;"></pre>
         </div>
 
         <div class="section grid">
           <div class="card">
             <h2>Users</h2>
             <div class="row">
-              <input id="u_email" type="email" placeholder="user@example.com" style="flex:1" />
-              <input id="u_name" type="text" placeholder="Name" style="flex:1" />
+              <input id="u_email" type="email" placeholder="user@example.com" />
+              <input id="u_name" type="text" placeholder="Name" />
               <label class="row" style="gap:6px"><input id="u_admin" type="checkbox" /> Admin</label>
-              <button id="u_create">Create</button>
+              <button id="u_create">Create User</button>
             </div>
-            <div id="u_msg" class="muted"></div>
-            <table id="u_table"><thead><tr><th>Email</th><th>Name</th><th>Admin</th><th>Actions</th></tr></thead><tbody></tbody></table>
+            <div id="u_msg" class="message hidden"></div>
+            <div class="users-table">
+              <table id="u_table"><thead><tr><th>Email</th><th>Name</th><th>Admin</th><th>Actions</th></tr></thead><tbody></tbody></table>
+            </div>
           </div>
 
           <div class="card">
             <h2>Teams</h2>
             <div class="row">
-              <input id="t_name" type="text" placeholder="Team name" style="flex:1" />
-              <button id="t_create">Create</button>
+              <input id="t_name" type="text" placeholder="Team name" />
+              <button id="t_create">Create Team</button>
             </div>
             <div class="row section">
               <select id="t_select" style="flex:1"></select>
               <select id="t_user_select" style="flex:1"></select>
-              <button id="t_add_member">Add member</button>
+              <button id="t_add_member">Add Member</button>
             </div>
-            <div id="t_msg" class="muted"></div>
-            <table id="t_table"><thead><tr><th>User</th><th>Email</th><th>Actions</th></tr></thead><tbody></tbody></table>
+            <div id="t_msg" class="message hidden"></div>
+            <div class="teams-table">
+              <table id="t_table"><thead><tr><th>User</th><th>Email</th><th>Actions</th></tr></thead><tbody></tbody></table>
+            </div>
           </div>
         </div>
       </div>

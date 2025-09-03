@@ -62,7 +62,35 @@ export function createSetupRouter(db: DatabaseService, config: ConfigService) {
       await config.set('org.name', orgName);
       await config.set('setup.completed', true);
 
-      res.json({ success: true });
+      // Auto-login the user after setup completion
+      const user = await db.client('users').where({ email: adminEmail }).first();
+      if (user) {
+        // Generate JWT token
+        const token = await security.signJwt({ sub: user.id, is_admin: user.is_admin }, { expiresIn: '7d' });
+        
+        // Set authentication cookies
+        const isProd = (process.env.NODE_ENV || 'production') === 'production';
+        res.cookie('taklite_token', token, {
+          httpOnly: true,
+          secure: isProd,
+          sameSite: 'strict',
+          maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+          path: '/'
+        });
+        
+        // Return success with user info
+        res.json({ 
+          success: true, 
+          user: {
+            email: user.email,
+            name: user.name,
+            isAdmin: user.is_admin
+          },
+          token: token
+        });
+      } else {
+        res.json({ success: true });
+      }
     } catch (err) {
       next(err);
     }

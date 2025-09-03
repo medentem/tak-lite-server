@@ -106,7 +106,19 @@ export function createAuthRouter(db: DatabaseService, config: ConfigService) {
     if (!token) return res.status(401).json({ error: 'Missing token' });
     try {
       const payload = await security.verifyJwt<{ sub: string; is_admin?: boolean }>(token);
-      res.json({ userId: payload.sub, isAdmin: !!payload.is_admin });
+      
+      // Get user details from database
+      const user = await db.client('users').where({ id: payload.sub }).select(['id', 'email', 'name', 'is_admin']).first();
+      if (!user) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+      
+      res.json({ 
+        userId: user.id, 
+        email: user.email,
+        name: user.name,
+        isAdmin: !!user.is_admin 
+      });
     } catch {
       res.status(401).json({ error: 'Invalid token' });
     }

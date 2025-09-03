@@ -3,27 +3,62 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>TAK Lite Setup</title>
-    <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
-      label { display:block; margin-top:12px; }
-      input { width:100%; padding:8px; margin-top:4px; }
-      button { margin-top:16px; padding:10px 16px; }
-      .card { border:1px solid #ddd; border-radius:8px; padding:16px; }
-    </style>
+    <link rel="stylesheet" href="/public/css/setup.css" />
   </head>
   <body>
-    <h1>TAK Lite Server Setup</h1>
-    <div class="card">
-      <label>Email <input id="email" type="email" placeholder="admin@example.com" required /></label>
-      <label>Password <input id="password" type="password" placeholder="Strong password" required /></label>
-      <label>Organization Name <input id="org" type="text" placeholder="My Org" required /></label>
-      <label>CORS Origin (optional) <input id="cors" type="text" placeholder="http://localhost:3000" /></label>
-      <button id="submit">Complete Setup</button>
-      <div id="msg"></div>
+    <div class="container">
+      <h1>TAK Lite Server Setup</h1>
+      
+      <div class="setup-info">
+        <strong>Welcome!</strong> This wizard will help you configure your TAK Lite server for the first time.
+        <br>You'll be able to access the admin panel once setup is complete.
+      </div>
+      
+      <div class="card">
+        <div class="field-group">
+          <label for="email">Admin Email Address</label>
+          <input id="email" type="email" placeholder="admin@example.com" required />
+          <div class="help-text">
+            <strong>Primary administrator account</strong> that will have full access to manage users, teams, and settings
+          </div>
+        </div>
+        
+        <div class="field-group">
+          <label for="password">Admin Password</label>
+          <input id="password" type="password" placeholder="Create a strong password (min 10 characters)" required />
+          <div class="help-text">
+            <strong>Minimum 10 characters</strong> - Use a combination of letters, numbers, and symbols for security
+          </div>
+        </div>
+        
+        <div class="field-group">
+          <label for="org">Organization Name</label>
+          <input id="org" type="text" placeholder="My Organization" required />
+          <div class="help-text">
+            <strong>Display name</strong> for your organization that will appear in the TAK Lite mobile app
+          </div>
+        </div>
+        
+        <div class="field-group">
+          <label for="cors">Allowed Websites (Optional)</label>
+          <input id="cors" type="text" placeholder="http://localhost:3000" />
+          <div class="help-text">
+            <strong>What is this?</strong> Controls which websites can connect to your server.<br>
+            <strong>Leave blank</strong> if you're only using the TAK Lite mobile app.<br>
+            <strong>Example:</strong> http://localhost:3000, https://myapp.com
+          </div>
+        </div>
+        
+        <button id="submit">Complete Setup</button>
+        <div id="msg" class="message hidden"></div>
+      </div>
     </div>
-    <script src="/public/js/setup.js"></script>
+    <script src="/public/js/setup.js?v=2"></script>
   </body>
-  </html>
+</html>
 
 
