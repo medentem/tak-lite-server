@@ -296,16 +296,299 @@ socket.emit('location:update', {
 - Rate limiting on `/api/*` and login endpoint
 - CORS configurable via Admin UI
 
-## 🚀 Deployment & Ops
+## 🚀 Deployment
+
+### Quick Start (Recommended for Most Users)
+
+**🤔 Not sure which method to choose?** → [Deployment Decision Guide](DEPLOYMENT-DECISION.md)
+
+**📖 [Simple Deployment Guide](DEPLOYMENT-SIMPLE.md)** - Step-by-step instructions for non-technical users
+
+### Choose Your Deployment Method
+
+**🎯 For Most Users**: [App Platform](#app-platform) - Just connect your GitHub repo and deploy!
+
+**⚙️ For Technical Users**: [Droplet with Docker](#droplet-docker) - Full control over your server
+
+**🏢 For Large Organizations**: [Kubernetes](#kubernetes) - Enterprise-grade scaling
+
+---
+
+## 📱 App Platform (Easiest - 5 minutes)
+
+**Perfect for**: Small teams, quick setup, no server management needed
+
+### Step 1: Prepare Your Code
+1. Make sure your code is on GitHub
+2. Note your repository URL (e.g., `https://github.com/yourusername/tak-lite-server`)
+
+### Step 2: Deploy on DigitalOcean
+1. Go to [DigitalOcean App Platform](https://cloud.digitalocean.com/apps)
+2. Click **"Create App"**
+3. Connect your **GitHub** account
+4. Select your `tak-lite-server` repository
+5. Click **"Next"**
+
+### Step 3: Configure Your App
+1. **App Name**: `tak-lite-server` (or whatever you prefer)
+2. **Region**: Choose closest to your users
+3. **Plan**: Start with **Basic** ($5/month)
+4. Click **"Next"**
+
+### Step 4: Add Database
+1. Click **"Add Database"**
+2. Choose **PostgreSQL**
+3. Select **Basic** plan ($15/month)
+4. Click **"Next"**
+
+### Step 5: Set Environment Variables
+Add these in the **Environment Variables** section:
+- `NODE_ENV` = `production`
+- `JWT_SECRET` = `your-secret-key-here` (generate a random string)
+- `CORS_ORIGIN` = `https://your-domain.com` (if you have a custom domain)
+
+### Step 6: Deploy!
+1. Click **"Create Resources"**
+2. Wait 5-10 minutes for deployment
+3. Your app will be available at: `https://your-app-name-123456.ondigitalocean.app`
+
+### Step 7: Complete Setup
+1. Visit your app URL + `/setup` (e.g., `https://your-app-name-123456.ondigitalocean.app/setup`)
+2. Fill out the setup form with:
+   - Admin email
+   - Admin password
+   - Organization name
+3. Click **"Complete Setup"**
+
+**🎉 Done!** Your TAK Lite Server is now running!
+
+### Optional: Custom Domain
+1. In App Platform, go to **Settings** → **Domains**
+2. Add your domain (e.g., `api.yourdomain.com`)
+3. Follow the DNS instructions provided
+4. Update `CORS_ORIGIN` environment variable to match your domain
+
+---
+
+## ⚙️ Droplet with Docker (Technical Users)
+
+**Perfect for**: Technical teams who want full control and cost optimization
+
+### Prerequisites
+- Basic command line knowledge
+- A domain name (optional but recommended)
+- DigitalOcean account
+
+1. **Create a Droplet**:
+   ```bash
+   # Create a new droplet (Ubuntu 22.04 LTS recommended)
+   # Minimum specs: 2GB RAM, 1 vCPU, 50GB SSD
+   # Recommended: 4GB RAM, 2 vCPU, 80GB SSD
+   ```
+
+2. **Configure DNS** (before running setup script):
+   - Point your domain's A record to the droplet's IP address
+   - Example DNS records:
+     ```
+     A     @           your-droplet-ip
+     A     api         your-droplet-ip
+     CNAME www         your-domain.com
+     ```
+   - Wait for DNS propagation (can take up to 48 hours)
+
+3. **Initial server setup**:
+   ```bash
+   # SSH into your droplet
+   ssh root@your-droplet-ip
+   
+   # Update system
+   apt update && apt upgrade -y
+   
+   # Install Docker
+   curl -fsSL https://get.docker.com -o get-docker.sh
+   sh get-docker.sh
+   
+   # Install Docker Compose
+   apt install docker-compose-plugin -y
+   
+   # Create app user
+   adduser taklite
+   usermod -aG docker taklite
+   ```
+
+4. **Deploy the application**:
+   ```bash
+   # Switch to taklite user
+   su - taklite
+   
+   # Clone repository
+   git clone https://github.com/your-username/tak-lite-server.git
+   cd tak-lite-server
+   
+   # Create environment file
+   cat > .env << EOF
+   NODE_ENV=production
+   JWT_SECRET=$(openssl rand -base64 32)
+   CORS_ORIGIN=https://your-domain.com
+   LOG_LEVEL=info
+   REDIS_PASSWORD=$(openssl rand -base64 16)
+   EOF
+   
+   # Start services
+   docker compose up -d
+   
+   # Check status
+   docker compose ps
+   docker compose logs -f taklite-server
+   ```
+
+5. **Set up reverse proxy with Nginx**:
+   ```bash
+   # Install Nginx
+   sudo apt install nginx -y
+   
+   # Create Nginx configuration
+   sudo tee /etc/nginx/sites-available/tak-lite << EOF
+   server {
+       listen 80;
+       server_name your-domain.com;
+       
+       location / {
+           proxy_pass http://localhost:3000;
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade \$http_upgrade;
+           proxy_set_header Connection 'upgrade';
+           proxy_set_header Host \$host;
+           proxy_set_header X-Real-IP \$remote_addr;
+           proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto \$scheme;
+           proxy_cache_bypass \$http_upgrade;
+       }
+   }
+   EOF
+   
+   # Enable site
+   sudo ln -s /etc/nginx/sites-available/tak-lite /etc/nginx/sites-enabled/
+   sudo nginx -t
+   sudo systemctl restart nginx
+   ```
+
+6. **Set up SSL with Let's Encrypt**:
+   ```bash
+   # Install Certbot
+   sudo apt install certbot python3-certbot-nginx -y
+   
+   # Get SSL certificate
+   sudo certbot --nginx -d your-domain.com
+   
+   # Test auto-renewal
+   sudo certbot renew --dry-run
+   ```
+
+7. **Set up monitoring and backups**:
+   ```bash
+   # Create backup script
+   cat > backup.sh << EOF
+   #!/bin/bash
+   BACKUP_DIR="/home/taklite/backups"
+   DATE=\$(date +%Y%m%d_%H%M%S)
+   
+   mkdir -p \$BACKUP_DIR
+   
+   # Backup database
+   docker compose exec -T postgres pg_dump -U taklite taklite > \$BACKUP_DIR/db_\$DATE.sql
+   
+   # Backup uploads
+   tar -czf \$BACKUP_DIR/uploads_\$DATE.tar.gz uploads/
+   
+   # Keep only last 7 days of backups
+   find \$BACKUP_DIR -name "*.sql" -mtime +7 -delete
+   find \$BACKUP_DIR -name "*.tar.gz" -mtime +7 -delete
+   EOF
+   
+   chmod +x backup.sh
+   
+   # Add to crontab
+   (crontab -l 2>/dev/null; echo "0 2 * * * /home/taklite/backup.sh") | crontab -
+   ```
+
+#### Option 3: DigitalOcean Kubernetes (For advanced users)
+
+**Pros**: High availability, auto-scaling, container orchestration  
+**Cons**: Complex setup, requires Kubernetes knowledge  
+**Best for**: Large-scale deployments, microservices architecture
+
+1. **Create a Kubernetes cluster**:
+   ```bash
+   # Using doctl CLI
+   doctl kubernetes cluster create tak-lite-cluster \
+     --region nyc1 \
+     --version 1.28.2-do.0 \
+     --node-pool "name=worker-pool;size=s-2vcpu-4gb;count=2"
+   ```
+
+2. **Deploy with Helm**:
+   ```bash
+   # Install Helm
+   curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+   
+   # Create values.yaml
+   cat > values.yaml << EOF
+   replicaCount: 2
+   
+   image:
+     repository: your-registry/tak-lite-server
+     tag: latest
+     pullPolicy: IfNotPresent
+   
+   service:
+     type: ClusterIP
+     port: 3000
+   
+   ingress:
+     enabled: true
+     className: nginx
+     annotations:
+       cert-manager.io/cluster-issuer: letsencrypt-prod
+     hosts:
+       - host: your-domain.com
+         paths:
+           - path: /
+             pathType: Prefix
+     tls:
+       - secretName: tak-lite-tls
+         hosts:
+           - your-domain.com
+   
+   postgresql:
+     enabled: true
+     auth:
+       postgresPassword: "secure-password"
+       database: "taklite"
+   
+   redis:
+     enabled: true
+     auth:
+       enabled: true
+       password: "secure-redis-password"
+   EOF
+   
+   # Deploy
+   helm install tak-lite ./helm-chart -f values.yaml
+   ```
 
 ### Production notes
 - Behind a reverse proxy (Caddy/Nginx) is recommended for TLS
 - Socket.IO horizontal scaling requires a Redis adapter and sticky sessions (not bundled)
+- Use managed databases (DigitalOcean Managed PostgreSQL) for production
+- Set up monitoring with DigitalOcean Monitoring or external services
+- Configure log rotation and retention policies
+- Use secrets management for sensitive environment variables
 
 ### Scaling
 
 ```bash
-# Scale horizontally
+# Scale horizontally (Droplet deployment)
 docker-compose up -d --scale taklite-server=3
 
 # Add load balancer
@@ -313,7 +596,29 @@ docker-compose up -d nginx
 
 # Monitor scaling
 docker-compose logs -f taklite-server
+
+# Kubernetes scaling
+kubectl scale deployment tak-lite-server --replicas=5
 ```
+
+## 📚 Advanced Configuration
+
+### Custom Domains
+For detailed DNS setup and SSL configuration, see the [Advanced Deployment Guide](deploy/README.md#custom-domains).
+
+### Environment Variables Reference
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `NODE_ENV` | Yes | `development` | Environment mode |
+| `DATABASE_URL` | Yes | - | PostgreSQL connection string |
+| `JWT_SECRET` | Yes | - | Secret for JWT token signing |
+| `JWT_EXPIRES_IN` | No | `7d` | JWT token expiration |
+| `CORS_ORIGIN` | No | `*` | Allowed CORS origins |
+| `LOG_LEVEL` | No | `info` | Logging level |
+| `PORT` | No | `3000` | Server port |
+| `REDIS_URL` | No | - | Redis connection string |
+| `RABBITMQ_URL` | No | - | RabbitMQ connection string |
 
 ## 🤝 Contributing
 

@@ -158,6 +158,41 @@ export function createAuthRouter(db: DatabaseService, config: ConfigService) {
     }
   });
 
+  // Get user's teams (requires authentication)
+  router.get('/user/teams', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const auth = req.headers.authorization || '';
+      const [, bearer] = auth.split(' ');
+      const cookieHeader = req.headers.cookie || '';
+      const cookies = Object.fromEntries(
+        cookieHeader
+          .split(';')
+          .map((c: string) => c.trim())
+          .filter((c: string) => c.includes('='))
+          .map((c: string) => {
+            const idx = c.indexOf('=');
+            return [decodeURIComponent(c.slice(0, idx)), decodeURIComponent(c.slice(idx + 1))];
+          })
+      );
+      const token = bearer || cookies['taklite_token'];
+      if (!token) return res.status(401).json({ error: 'Missing token' });
+      
+      const payload = await security.verifyJwt<{ sub: string; is_admin?: boolean }>(token);
+      const userId = payload.sub;
+      
+      // Get teams the user is a member of
+      const teams = await db.client('team_members')
+        .join('teams', 'team_members.team_id', 'teams.id')
+        .where('team_members.user_id', userId)
+        .select('teams.id', 'teams.name', 'teams.created_at')
+        .orderBy('teams.name');
+      
+      res.json(teams);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   return router;
 }
 

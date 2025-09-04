@@ -1,0 +1,132 @@
+# DigitalOcean App Platform Configuration
+# This file configures the TAK Lite Server for deployment on DigitalOcean App Platform
+
+name: tak-lite-server
+region: nyc
+
+# Main application service
+services:
+  - name: api
+    source_dir: /
+    github:
+      repo: your-username/tak-lite-server
+      branch: main
+      deploy_on_push: true
+    run_command: npm start
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 3000
+    
+    # Environment variables
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: DATABASE_URL
+        value: ${db.DATABASE_URL}
+      - key: JWT_SECRET
+        value: ${JWT_SECRET}
+      - key: JWT_EXPIRES_IN
+        value: "7d"
+      - key: CORS_ORIGIN
+        value: ${CORS_ORIGIN}
+      - key: LOG_LEVEL
+        value: info
+      - key: REDIS_URL
+        value: ${redis.REDIS_URL}
+        type: SECRET
+    
+    # Health check
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 10
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+    
+    # Auto-scaling (optional)
+    # min_instance_count: 1
+    # max_instance_count: 3
+    
+    # Resource limits
+    # instance_size_slug: basic-xxs  # 0.25 vCPU, 512MB RAM
+    # instance_size_slug: basic-xs   # 0.5 vCPU, 1GB RAM
+    # instance_size_slug: basic-s    # 1 vCPU, 2GB RAM
+
+# Database service
+databases:
+  - name: db
+    engine: PG
+    version: "15"
+    size: db-s-dev-database
+    num_nodes: 1
+    
+    # Production database sizes:
+    # db-s-1vcpu-1gb    # 1 vCPU, 1GB RAM, 10GB storage
+    # db-s-1vcpu-2gb    # 1 vCPU, 2GB RAM, 25GB storage
+    # db-s-2vcpu-4gb    # 2 vCPU, 4GB RAM, 60GB storage
+    # db-s-4vcpu-8gb    # 4 vCPU, 8GB RAM, 115GB storage
+
+# Redis cache (optional)
+databases:
+  - name: redis
+    engine: REDIS
+    version: "7"
+    size: db-s-1vcpu-1gb
+    num_nodes: 1
+
+# Static site for documentation (optional)
+static_sites:
+  - name: docs
+    source_dir: /docs
+    github:
+      repo: your-username/tak-lite-server
+      branch: main
+    build_command: npm run build:docs
+    output_dir: /dist
+    index_document: index.html
+    error_document: 404.html
+    routes:
+      - path: /docs
+
+# Environment variables (global)
+envs:
+  - key: CORS_ORIGIN
+    value: https://your-domain.com
+  - key: JWT_SECRET
+    value: your-secure-jwt-secret-here
+    type: SECRET
+
+# Alerts (optional)
+alerts:
+  - rule: CPU_UTILIZATION
+    disabled: false
+    type: UNSPECIFIED_ALERT_TYPE
+    window: UNSPECIFIED_WINDOW
+    entities:
+      - api
+    tags:
+      - production
+      - tak-lite
+
+  - rule: MEM_UTILIZATION
+    disabled: false
+    type: UNSPECIFIED_ALERT_TYPE
+    window: UNSPECIFIED_WINDOW
+    entities:
+      - api
+    tags:
+      - production
+      - tak-lite
+
+# Domains (configure after deployment)
+# domains:
+#   - domain: your-domain.com
+#     type: PRIMARY
+#     zone: your-domain.com
+#   - domain: api.your-domain.com
+#     type: PRIMARY
+#     zone: your-domain.com
