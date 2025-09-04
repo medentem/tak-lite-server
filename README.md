@@ -319,7 +319,7 @@ socket.emit('location:update', {
 **Perfect for**: Small teams, quick setup, no server management needed
 
 ### Step 1: Prepare Your Code
-1. Make sure your code is on GitHub
+1. Fork this repository
 2. Note your repository URL (e.g., `https://github.com/yourusername/tak-lite-server`)
 
 ### Step 2: Deploy on DigitalOcean
