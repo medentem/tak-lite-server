@@ -178,7 +178,7 @@ cat > $APP_DIR/deploy.sh << 'EOF'
 set -e
 
 APP_DIR="/home/taklite/tak-lite-server"
-REPO_URL="https://github.com/your-username/tak-lite-server.git"
+REPO_URL="https://github.com/medentem/tak-lite-server.git"
 
 log_info() {
     echo -e "\033[0;34m[INFO]\033[0m $1"
@@ -326,7 +326,7 @@ log_success "DigitalOcean setup completed!"
 echo ""
 log_info "Next steps:"
 echo "1. Clone your repository:"
-echo "   sudo -u $APP_USER git clone https://github.com/your-username/tak-lite-server.git $APP_DIR"
+echo "   sudo -u $APP_USER git clone https://github.com/medenetem/tak-lite-server.git $APP_DIR"
 echo ""
 echo "2. Configure environment:"
 echo "   sudo -u $APP_USER cp $APP_DIR/.env.template $APP_DIR/.env"

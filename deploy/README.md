@@ -53,10 +53,10 @@ deploy/
 2. **Run the setup script**:
    ```bash
    # Download and run the setup script
-   curl -fsSL https://raw.githubusercontent.com/your-username/tak-lite-server/main/deploy/digitalocean-setup.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/medentem/tak-lite-server/main/deploy/digitalocean-setup.sh | bash
    
    # Or download and run manually
-   wget https://raw.githubusercontent.com/your-username/tak-lite-server/main/deploy/digitalocean-setup.sh
+   wget https://raw.githubusercontent.com/medentem/tak-lite-server/main/deploy/digitalocean-setup.sh
    chmod +x digitalocean-setup.sh
    sudo ./digitalocean-setup.sh
    ```
@@ -223,8 +223,8 @@ kubectl scale deployment tak-lite-server --replicas=3
 ### Support
 
 - **Documentation**: [README.md](../README.md)
-- **Issues**: [GitHub Issues](https://github.com/your-username/tak-lite-server/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-username/tak-lite-server/discussions)
+- **Issues**: [GitHub Issues](https://github.com/medentem/tak-lite-server/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/medentem/tak-lite-server/discussions)
 
 ## 📝 Customization
 

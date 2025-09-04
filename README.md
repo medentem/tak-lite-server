@@ -422,7 +422,7 @@ Add these in the **Environment Variables** section:
    su - taklite
    
    # Clone repository
-   git clone https://github.com/your-username/tak-lite-server.git
+   git clone https://github.com/medentem/tak-lite-server.git
    cd tak-lite-server
    
    # Create environment file

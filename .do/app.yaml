@@ -9,7 +9,7 @@ services:
   - name: api
     source_dir: /
     github:
-      repo: your-username/tak-lite-server
+      repo: medentem/tak-lite-server
       branch: main
       deploy_on_push: true
     run_command: npm start
@@ -83,7 +83,7 @@ static_sites:
   - name: docs
     source_dir: /docs
     github:
-      repo: your-username/tak-lite-server
+      repo: medentem/tak-lite-server
       branch: main
     build_command: npm run build:docs
     output_dir: /dist

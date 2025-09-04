@@ -92,7 +92,7 @@ Add these in the **Environment Variables** section:
 1. SSH into your droplet: `ssh root@your-droplet-ip`
 2. Download and run the setup script:
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/your-username/tak-lite-server/main/deploy/digitalocean-setup.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/medentem/tak-lite-server/main/deploy/digitalocean-setup.sh | bash
    ```
 3. Enter your domain name when prompted
 4. Enter your email for SSL certificates
@@ -101,7 +101,7 @@ Add these in the **Environment Variables** section:
 ### Step 4: Deploy Your App
 1. Clone your repository:
    ```bash
-   sudo -u taklite git clone https://github.com/your-username/tak-lite-server.git /home/taklite/tak-lite-server
+   sudo -u taklite git clone https://github.com/medentem/tak-lite-server.git /home/taklite/tak-lite-server
    ```
 2. Configure environment:
    ```bash
@@ -167,14 +167,14 @@ Add these in the **Environment Variables** section:
 
 **General Issues:**
 - Check the [Troubleshooting Guide](deploy/README.md#troubleshooting)
-- Visit the [GitHub Issues](https://github.com/your-username/tak-lite-server/issues)
-- Join the [Discussions](https://github.com/your-username/tak-lite-server/discussions)
+- Visit the [GitHub Issues](https://github.com/medentem/tak-lite-server/issues)
+- Join the [Discussions](https://github.com/medentem/tak-lite-server/discussions)
 
 ### Getting Support
 
 - **Documentation**: [Full README](README.md)
-- **Issues**: [GitHub Issues](https://github.com/your-username/tak-lite-server/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-username/tak-lite-server/discussions)
+- **Issues**: [GitHub Issues](https://github.com/medentem/tak-lite-server/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/medentem/tak-lite-server/discussions)
 - **Email**: support@taklite.com
 
 ---

@@ -77,7 +77,7 @@
 ### Need Help Deciding?
 - Check the [Simple Deployment Guide](DEPLOYMENT-SIMPLE.md)
 - Read the [Advanced Deployment Guide](deploy/README.md)
-- Ask in [GitHub Discussions](https://github.com/your-username/tak-lite-server/discussions)
+- Ask in [GitHub Discussions](https://github.com/medentem/tak-lite-server/discussions)
 
 ---
 
