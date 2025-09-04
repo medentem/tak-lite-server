@@ -1,8 +1,8 @@
 # TAK Lite Server
 
-Cloud-native backend for TAK Lite. Purpose-built to bridge disconnected meshes and provide online visibility for teams using the TAK Lite app. Includes first‑run setup, authentication, real‑time sync, and a lightweight admin dashboard. This repository is published at [medentem/tak-lite-server](https://github.com/medentem/tak-lite-server).
+Cloud-native backend for TAK Lite. Purpose-built to bridge disconnected meshes and provide online visibility for teams using the TAK Lite app. Includes first‑run setup, authentication, real‑time sync, and a lightweight admin dashboard.
 
-## 🚀 Quick Start
+## 🚀 Quick Start Running Locally
 
 ### One-liner (default minimal stack)
 
