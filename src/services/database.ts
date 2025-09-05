@@ -28,9 +28,14 @@ export class DatabaseService {
     
     logger.info('SSL Config Applied', { sslConfig, nodeEnv: process.env.NODE_ENV });
     
-    // Log connection string (without password for security)
-    const connectionForLog = connection.replace(/password=[^&]*/, 'password=***');
-    logger.info('Database Connection', { connectionString: connectionForLog });
+    // Log connection string (redacted) and presence of CA
+    const connectionForLog = connection
+      .replace(/(password=)([^&]+)/, '$1***')
+      .replace(/(:)([^:@]+)(@)/, '$1***$3');
+    logger.info('Database Connection', {
+      connectionString: connectionForLog,
+      hasCaFromEnv: !!process.env.DATABASE_CA_CERT
+    });
 
     this.knexInstance = knex({
       client: 'pg',

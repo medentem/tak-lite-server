@@ -25,8 +25,9 @@ RUN mkdir -p dist/public && \
 # Production stage
 FROM node:18-alpine AS production
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init curl python3 make g++
+# Install dumb-init and system CA bundle for TLS
+RUN apk add --no-cache dumb-init curl python3 make g++ ca-certificates && \
+    update-ca-certificates
 
 # Create app user
 RUN addgroup -g 1001 -S nodejs
