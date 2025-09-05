@@ -20,9 +20,10 @@ export class DatabaseService {
       databaseUrl: connection ? 'SET' : 'NOT_SET'
     });
     
-    // Configure SSL for DigitalOcean managed DB - always disable certificate validation
+    // Configure SSL using DO-injected CA, enforce validation
     const sslConfig = {
-      rejectUnauthorized: false // Disable certificate validation for DigitalOcean managed DB
+      rejectUnauthorized: true,
+      ca: process.env.DATABASE_CA_CERT
     };
     
     logger.info('SSL Config Applied', { sslConfig, nodeEnv: process.env.NODE_ENV });

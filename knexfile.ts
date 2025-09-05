@@ -12,8 +12,9 @@ const config: { [key: string]: Knex.Config } = {
     client: 'pg',
     connection: {
       connectionString: process.env.DATABASE_URL,
-      ssl: { 
-        rejectUnauthorized: false // Disable certificate validation for DigitalOcean managed DB
+      ssl: {
+        rejectUnauthorized: true,
+        ca: process.env.DATABASE_CA_CERT
       }
     },
     migrations: {
@@ -25,8 +26,9 @@ const config: { [key: string]: Knex.Config } = {
     client: 'pg',
     connection: {
       connectionString: process.env.DATABASE_URL,
-      ssl: { 
-        rejectUnauthorized: false // Disable certificate validation for DigitalOcean managed DB
+      ssl: {
+        rejectUnauthorized: true,
+        ca: process.env.DATABASE_CA_CERT
       }
     },
     migrations: {
