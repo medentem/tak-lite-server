@@ -41,7 +41,6 @@ RUN npm ci --omit=dev
 
 # Copy built application from builder stage
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nodejs:nodejs /app/dist/public ./dist/public || true
 
 # Create necessary directories
 RUN mkdir -p /app/logs /app/uploads /app/temp && \
