@@ -1,0 +1,53 @@
+# Docker Compose configuration for DigitalOcean App Platform
+# This file is specifically designed for App Platform deployment
+
+version: '3.8'
+
+services:
+  # Main TAK Lite Server Application
+  taklite-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taklite-server
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://taklite:taklite@postgres:5432/taklite
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=7d
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=${CORS_ORIGIN}
+    depends_on:
+      - postgres
+    volumes:
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+    networks:
+      - taklite-network
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: taklite-postgres
+    environment:
+      POSTGRES_DB: taklite
+      POSTGRES_USER: taklite
+      POSTGRES_PASSWORD: taklite
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    networks:
+      - taklite-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  taklite-network:
+    driver: bridge

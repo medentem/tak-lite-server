@@ -40,14 +40,20 @@ Add these in the **Environment Variables** section:
 - `JWT_SECRET` = `your-secret-key-here` (generate a random string)
 - `CORS_ORIGIN` = `https://your-domain.com` (if you have a custom domain)
 
-**Note**: Your Docker setup includes PostgreSQL, so no separate database needed!
+**Note**: You'll also need to add a PostgreSQL database in the next step.
 
-### Step 5: Deploy!
+### Step 5: Add Database
+1. Click **"Add Database"**
+2. Choose **PostgreSQL**
+3. Select **Basic** plan ($15/month)
+4. Click **"Next"**
+
+### Step 6: Deploy!
 1. Click **"Create Resources"**
 2. Wait 5-10 minutes for deployment
 3. Your app will be available at: `https://your-app-name-123456.ondigitalocean.app`
 
-### Step 6: Complete Setup
+### Step 7: Complete Setup
 1. Visit your app URL + `/setup` (e.g., `https://your-app-name-123456.ondigitalocean.app/setup`)
 2. Fill out the setup form with:
    - Admin email
@@ -57,7 +63,7 @@ Add these in the **Environment Variables** section:
 
 **🎉 Done!** Your TAK Lite Server is now running!
 
-### Step 7: Custom Domain (Optional)
+### Step 8: Custom Domain (Optional)
 1. In App Platform, go to **Settings** → **Domains**
 2. Add your domain (e.g., `api.yourdomain.com`)
 3. Follow the DNS instructions provided
@@ -144,7 +150,7 @@ Add these in the **Environment Variables** section:
 
 | Method | Monthly Cost | Setup Time | Technical Level |
 |--------|-------------|------------|-----------------|
-| **App Platform** | $20/month | 5 minutes | Beginner |
+| **App Platform** | $27/month | 5 minutes | Beginner |
 | **Droplet** | $12/month | 30 minutes | Intermediate |
 | **Kubernetes** | $50+/month | 2+ hours | Advanced |
 

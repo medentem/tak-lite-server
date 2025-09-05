@@ -22,7 +22,7 @@
 |---------|-------------|---------|------------|
 | **Setup Time** | 5 minutes | 30 minutes | 2+ hours |
 | **Technical Level** | Beginner | Intermediate | Advanced |
-| **Monthly Cost** | $12 | $12 | $50+ |
+| **Monthly Cost** | $27 | $12 | $50+ |
 | **Server Management** | None | Full | Full |
 | **Auto-scaling** | Yes | No | Yes |
 | **SSL Certificates** | Automatic | Manual setup | Manual setup |
@@ -37,16 +37,16 @@
 
 ### 🏠 **Small Team/Personal Use**
 **Recommended**: App Platform
-- **Why**: Easiest setup, no server management, lowest cost
-- **Cost**: $12/month
+- **Why**: Easiest setup, no server management
+- **Cost**: $27/month
 - **Time**: 5 minutes
-- **Database**: PostgreSQL runs in your Docker container
+- **Database**: Managed PostgreSQL database
 
 ### 🏢 **Small Business**
 **Recommended**: App Platform or Droplet
 - **App Platform**: If you want to focus on your business, not servers
 - **Droplet**: If you have technical staff and want to save money
-- **Cost**: $12/month (both options)
+- **Cost**: $27/month (App Platform) or $12/month (Droplet)
 
 ### 🏭 **Enterprise/Large Organization**
 **Recommended**: Kubernetes

@@ -1,13 +1,13 @@
 # DigitalOcean App Platform Configuration
-# Uses Dockerfile build strategy - deploys your complete Docker stack
-# Cost: $12/month (includes PostgreSQL database in container)
+# Uses Dockerfile build strategy with managed database
+# Cost: $27/month ($12 app + $15 database)
 
 name: tak-lite-server
 region: nyc
 
-# Main application service with containerized database
+# Main application service
 services:
-  - name: tak-lite-stack
+  - name: api
     source_dir: /
     github:
       repo: medentem/tak-lite-server
@@ -15,7 +15,7 @@ services:
       deploy_on_push: true
     dockerfile_path: Dockerfile
     instance_count: 1
-    instance_size_slug: basic-s  # 1GB RAM for database
+    instance_size_slug: basic-xxs  # 0.5GB RAM (no database in container)
     http_port: 3000
     
     # Environment variables
@@ -25,7 +25,7 @@ services:
       - key: PORT
         value: "3000"
       - key: DATABASE_URL
-        value: postgresql://taklite:taklite@postgres:5432/taklite
+        value: ${db.DATABASE_URL}
       - key: JWT_SECRET
         value: ${JWT_SECRET}
       - key: JWT_EXPIRES_IN
@@ -38,7 +38,7 @@ services:
     # Health check
     health_check:
       http_path: /health
-      initial_delay_seconds: 30  # Give database time to start
+      initial_delay_seconds: 10
       period_seconds: 10
       timeout_seconds: 5
       success_threshold: 1
@@ -46,12 +46,26 @@ services:
     
     # Auto-scaling (optional)
     # min_instance_count: 1
-    # max_instance_count: 2  # Limited by database in container
+    # max_instance_count: 3
     
     # Resource limits
-    # instance_size_slug: basic-s    # 1 vCPU, 1GB RAM (minimum for database)
-    # instance_size_slug: basic-m    # 1 vCPU, 2GB RAM (recommended)
-    # instance_size_slug: basic-l    # 2 vCPU, 4GB RAM (for higher load)
+    # instance_size_slug: basic-xxs  # 0.25 vCPU, 512MB RAM
+    # instance_size_slug: basic-xs   # 0.5 vCPU, 1GB RAM
+    # instance_size_slug: basic-s    # 1 vCPU, 2GB RAM
+
+# Database service
+databases:
+  - name: db
+    engine: PG
+    version: "15"
+    size: db-s-dev-database
+    num_nodes: 1
+    
+    # Production database sizes:
+    # db-s-1vcpu-1gb    # 1 vCPU, 1GB RAM, 10GB storage
+    # db-s-1vcpu-2gb    # 1 vCPU, 2GB RAM, 25GB storage
+    # db-s-2vcpu-4gb    # 2 vCPU, 4GB RAM, 60GB storage
+    # db-s-4vcpu-8gb    # 4 vCPU, 8GB RAM, 115GB storage
 
 # Environment variables (global)
 envs:
@@ -68,7 +82,7 @@ alerts:
     type: UNSPECIFIED_ALERT_TYPE
     window: UNSPECIFIED_WINDOW
     entities:
-      - tak-lite-stack
+      - api
     tags:
       - production
       - tak-lite
@@ -78,7 +92,7 @@ alerts:
     type: UNSPECIFIED_ALERT_TYPE
     window: UNSPECIFIED_WINDOW
     entities:
-      - tak-lite-stack
+      - api
     tags:
       - production
       - tak-lite
