@@ -34,7 +34,14 @@
 4. **Plan**: Start with **Basic** ($5/month)
 5. Click **"Next"**
 
-### Step 4: Add Database
+### Step 4: Choose Database Option
+
+**Option A: Use Containerized Database (Recommended for most users)**
+- **Cost**: $0 extra (database runs in your app container)
+- **Setup**: Skip this step - your Docker setup includes PostgreSQL
+- **Best for**: Small teams, development, cost-conscious users
+
+**Option B: Use Managed Database (For production)**
 1. Click **"Add Database"**
 2. Choose **PostgreSQL**
 3. Select **Basic** plan ($15/month)
@@ -42,9 +49,17 @@
 
 ### Step 5: Set Environment Variables
 Add these in the **Environment Variables** section:
+
+**For Containerized Database (Option A):**
 - `NODE_ENV` = `production`
 - `JWT_SECRET` = `your-secret-key-here` (generate a random string)
 - `CORS_ORIGIN` = `https://your-domain.com` (if you have a custom domain)
+
+**For Managed Database (Option B):**
+- `NODE_ENV` = `production`
+- `JWT_SECRET` = `your-secret-key-here` (generate a random string)
+- `CORS_ORIGIN` = `https://your-domain.com` (if you have a custom domain)
+- `DATABASE_URL` = `${db.DATABASE_URL}` (App Platform will fill this automatically)
 
 ### Step 6: Deploy!
 1. Click **"Create Resources"**
