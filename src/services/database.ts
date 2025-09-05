@@ -10,14 +10,27 @@ export class DatabaseService {
     if (!connection) {
       throw new Error('DATABASE_URL is required');
     }
+    
+    // Debug logging for SSL configuration
+    logger.info('Database SSL Configuration', {
+      nodeEnv: process.env.NODE_ENV,
+      hasDatabaseCaCert: !!process.env.DATABASE_CA_CERT,
+      pgsslmode: process.env.PGSSLMODE,
+      databaseUrl: connection ? 'SET' : 'NOT_SET'
+    });
+    
+    // Configure SSL for production
+    const sslConfig = process.env.NODE_ENV === 'production' ? {
+      rejectUnauthorized: false, // Temporarily disable for DigitalOcean managed DB
+      // If DATABASE_CA_CERT is available, use it
+      ...(process.env.DATABASE_CA_CERT && { ca: process.env.DATABASE_CA_CERT })
+    } : false;
+
     this.knexInstance = knex({
       client: 'pg',
       connection: {
         connectionString: connection,
-        ssl: process.env.NODE_ENV === 'production' ? { 
-          rejectUnauthorized: true,
-          ca: process.env.DATABASE_CA_CERT
-        } : false
+        ssl: sslConfig
       },
       migrations: {
         // When compiled, this file lives at dist/src/services, so go up to dist/migrations
