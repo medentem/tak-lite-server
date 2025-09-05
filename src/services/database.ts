@@ -14,7 +14,10 @@ export class DatabaseService {
       client: 'pg',
       connection: {
         connectionString: connection,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+        ssl: process.env.NODE_ENV === 'production' ? { 
+          rejectUnauthorized: true,
+          ca: process.env.NODE_EXTRA_CA_CERTS 
+        } : false
       },
       migrations: {
         // When compiled, this file lives at dist/src/services, so go up to dist/migrations

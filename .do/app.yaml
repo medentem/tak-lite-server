@@ -36,7 +36,10 @@ services:
         value: info
       # SSL configuration for managed database
       - key: PGSSLMODE
-        value: "require"
+        value: "verify-full"
+      # DigitalOcean CA certificate for secure SSL
+      - key: NODE_EXTRA_CA_CERTS
+        value: "/etc/ssl/certs/ca-certificates.crt"
       # Fallback for debugging
       - key: DEBUG
         value: "true"
