@@ -13,9 +13,7 @@ const config: { [key: string]: Knex.Config } = {
     connection: {
       connectionString: process.env.DATABASE_URL,
       ssl: { 
-        rejectUnauthorized: false, // Temporarily disable for DigitalOcean managed DB
-        // If DATABASE_CA_CERT is available, use it
-        ...(process.env.DATABASE_CA_CERT && { ca: process.env.DATABASE_CA_CERT })
+        rejectUnauthorized: false // Disable certificate validation for DigitalOcean managed DB
       }
     },
     migrations: {

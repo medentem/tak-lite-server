@@ -19,11 +19,9 @@ export class DatabaseService {
       databaseUrl: connection ? 'SET' : 'NOT_SET'
     });
     
-    // Configure SSL for production
+    // Configure SSL for production - DigitalOcean managed DB doesn't inject CA cert
     const sslConfig = process.env.NODE_ENV === 'production' ? {
-      rejectUnauthorized: false, // Temporarily disable for DigitalOcean managed DB
-      // If DATABASE_CA_CERT is available, use it
-      ...(process.env.DATABASE_CA_CERT && { ca: process.env.DATABASE_CA_CERT })
+      rejectUnauthorized: false // Disable certificate validation for DigitalOcean managed DB
     } : false;
 
     this.knexInstance = knex({

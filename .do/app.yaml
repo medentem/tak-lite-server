@@ -37,6 +37,9 @@ services:
       # SSL configuration for managed database
       - key: PGSSLMODE
         value: "require"
+      # Disable Node.js SSL certificate validation for DigitalOcean managed DB
+      - key: NODE_TLS_REJECT_UNAUTHORIZED
+        value: "0"
       # Fallback for debugging
       - key: DEBUG
         value: "true"
