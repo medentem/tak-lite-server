@@ -10,7 +10,7 @@
     "outDir": "dist",
     "resolveJsonModule": true
   },
-  "include": ["src/**/*.ts", "migrations/**/*.ts"],
+  "include": ["src/**/*.ts", "migrations/**/*.ts", "knexfile.ts"],
   "exclude": ["node_modules", "dist"]
 }
 

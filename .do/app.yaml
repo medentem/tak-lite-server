@@ -3,114 +3,87 @@
 # Cost: $27/month ($12 app + $15 database)
 
 name: tak-lite-server
-region: nyc1
+region: nyc  # Or your preferred region (e.g., fra for Europe)
 
-# Main application service
 services:
   - name: api
+    dockerfile_path: Dockerfile
     source_dir: /
     github:
-      repo: medentem/tak-lite-server
       branch: main
       deploy_on_push: true
-    dockerfile_path: Dockerfile
-    instance_count: 1
-    instance_size_slug: basic-xs  # 0.5GB RAM (no database in container)
+      repo: medentem/tak-lite-server  # Update to your actual repo
     http_port: 3000
-    databases:
-      - name: tak-lite-server-db
-    
-    # Environment variables
+    instance_count: 1
+    instance_size_slug: basic-xs  # Start small; scale to basic-s if needed
     envs:
       - key: NODE_ENV
+        scope: RUN_TIME
         value: production
-      - key: PORT
-        value: "3000"
       - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
         value: ${tak-lite-server-db.DATABASE_URL}
-      - key: JWT_SECRET
-        value: ${JWT_SECRET}
-      - key: JWT_EXPIRES_IN
-        value: "7d"
-      - key: CORS_ORIGIN
-        value: ${CORS_ORIGIN}
-      - key: LOG_LEVEL
-        value: info
-      # SSL configuration for managed database
-      - key: PGSSLMODE
-        value: "require"
       - key: DATABASE_CA_CERT
-        value: ${tak-lite-server-db.DATABASE_CA_CERT}
-    
-    # Health check
+        scope: RUN_AND_BUILD_TIME
+        value: ${tak-lite-server-db.CA_CERT}  # Corrected to DigitalOcean's injected variable
+      - key: PGSSLMODE
+        scope: RUN_AND_BUILD_TIME
+        value: require
+      - key: JWT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: JWT_EXPIRES_IN
+        scope: RUN_TIME
+        value: 7d
+      - key: CORS_ORIGIN
+        scope: RUN_TIME
+        value: "*"  # Update to your domain for production
+      - key: LOG_LEVEL
+        scope: RUN_TIME
+        value: info
     health_check:
       http_path: /health
-      initial_delay_seconds: 10
-      period_seconds: 10
-      timeout_seconds: 5
-      success_threshold: 1
-      failure_threshold: 3
-    
-    # Auto-scaling (optional)
-    # min_instance_count: 1
-    # max_instance_count: 3
-    
-    # Resource limits
-    # instance_size_slug: basic-xxs  # 0.25 vCPU, 512MB RAM
-    # instance_size_slug: basic-xs   # 0.5 vCPU, 1GB RAM (current)
-    # instance_size_slug: basic-s    # 1 vCPU, 2GB RAM
+      initial_delay_seconds: 30  # Give time for migrations
+    routes:
+      - path: /
 
-# Database service
+jobs:
+  - name: migrate
+    kind: PRE_DEPLOY  # Runs before service deploy
+    dockerfile_path: Dockerfile
+    source_dir: /
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: medentem/tak-lite-server
+    envs:  # Same as service, plus any migration-specific
+      - key: DATABASE_URL
+        value: ${tak-lite-server-db.DATABASE_URL}
+      - key: DATABASE_CA_CERT
+        value: ${tak-lite-server-db.CA_CERT}
+    run_command: sh -c "cd dist && npm run db:migrate"  # Run migrations from dist directory where compiled files are
+
 databases:
-  - name: tak-lite-server-db
+  - cluster_name: tak-lite-server-db
     engine: PG
-    version: "15"
-    size: db-s-dev-database
+    name: tak-lite-server-db
     num_nodes: 1
-    # Ensure database is created before app starts
-    production: true
-    
-    # Production database sizes:
-    # db-s-1vcpu-1gb    # 1 vCPU, 1GB RAM, 10GB storage
-    # db-s-1vcpu-2gb    # 1 vCPU, 2GB RAM, 25GB storage
-    # db-s-2vcpu-4gb    # 2 vCPU, 4GB RAM, 60GB storage
-    # db-s-4vcpu-8gb    # 4 vCPU, 8GB RAM, 115GB storage
+    size: db-s-dev-database  # Dev size; upgrade to db-s-1vcpu-1gb for prod
+    version: "15"
+    production: false  # Set to true for prod with backups
 
-# Environment variables (global)
-envs:
-  - key: CORS_ORIGIN
-    value: https://your-domain.com
-  - key: JWT_SECRET
-    value: your-secure-jwt-secret-here
-    type: SECRET
-
-# Alerts (optional)
 alerts:
+  - rule: DEPLOYMENT_FAILED
+    value: 1
+    window: 5m
   - rule: CPU_UTILIZATION
-    disabled: false
-    type: UNSPECIFIED_ALERT_TYPE
-    window: UNSPECIFIED_WINDOW
-    entities:
-      - api
-    tags:
-      - production
-      - tak-lite
+    value: 80
+    window: 5m
 
-  - rule: MEM_UTILIZATION
-    disabled: false
-    type: UNSPECIFIED_ALERT_TYPE
-    window: UNSPECIFIED_WINDOW
-    entities:
-      - api
-    tags:
-      - production
-      - tak-lite
-
-# Domains (configure after deployment)
-# domains:
-#   - domain: your-domain.com
-#     type: PRIMARY
-#     zone: your-domain.com
-#   - domain: api.your-domain.com
-#     type: PRIMARY
-#     zone: your-domain.com
+ingress:
+  rules:
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /

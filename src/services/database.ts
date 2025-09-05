@@ -28,6 +28,13 @@ export class DatabaseService {
     
     logger.info('SSL Config Applied', { sslConfig, nodeEnv: process.env.NODE_ENV });
     
+    // Log the first 20 chars of the CA cert for verification (secure, no full cert)
+    if (process.env.DATABASE_CA_CERT) {
+      logger.info('CA Cert Preview', { caStart: process.env.DATABASE_CA_CERT.substring(0, 20) + '...' });
+    } else {
+      logger.warn('CA Cert Missing');
+    }
+
     // Log connection string (redacted) and presence of CA
     const connectionForLog = connection
       .replace(/(password=)([^&]+)/, '$1***')
