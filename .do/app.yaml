@@ -12,8 +12,7 @@ services:
       repo: medentem/tak-lite-server
       branch: main
       deploy_on_push: true
-    run_command: npm start
-    environment_slug: node-js
+    dockerfile_path: Dockerfile
     instance_count: 1
     instance_size_slug: basic-xxs
     http_port: 3000

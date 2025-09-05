@@ -14,6 +14,8 @@
 
 **Perfect for**: Small teams, quick setup, no server management needed
 
+**✅ Uses your existing Docker setup** - App Platform will build and deploy using your `Dockerfile` and `docker-compose.yml` configuration!
+
 ### Step 1: Prepare Your Code
 1. Fork this repository
 2. Note your repository URL (e.g., `https://github.com/yourusername/tak-lite-server`)
@@ -28,8 +30,9 @@
 ### Step 3: Configure Your App
 1. **App Name**: `tak-lite-server` (or whatever you prefer)
 2. **Region**: Choose closest to your users
-3. **Plan**: Start with **Basic** ($5/month)
-4. Click **"Next"**
+3. **Build Method**: **Dockerfile** (this uses your existing Docker setup!)
+4. **Plan**: Start with **Basic** ($5/month)
+5. Click **"Next"**
 
 ### Step 4: Add Database
 1. Click **"Add Database"**
