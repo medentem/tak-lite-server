@@ -35,7 +35,7 @@ services:
   - name: api
     source_dir: /
     github:
-      repo: your-username/tak-lite-server
+      repo: medentem/tak-lite-server
       branch: main
     dockerfile_path: Dockerfile  # ← This is the key!
     instance_count: 1
