@@ -7,12 +7,12 @@ region: nyc  # Or your preferred region (e.g., fra for Europe)
 
 services:
   - name: api
-    dockerfile_path: Dockerfile
+    dockerfile_path: Dockerfile  # This forces Docker build, overriding Node.js buildpack detection
     source_dir: /
     github:
       branch: main
       deploy_on_push: true
-      repo: medentem/tak-lite-server  # Update to your actual repo
+      repo: medentem/tak-lite-server  # Update to your actual GitHub repo (owner/repo format)
     http_port: 3000
     instance_count: 1
     instance_size_slug: basic-xs  # Start small; scale to basic-s if needed
@@ -37,7 +37,7 @@ services:
         value: 7d
       - key: CORS_ORIGIN
         scope: RUN_TIME
-        value: "*"  # Update to your domain for production
+        value: "*"  # Update to your domain (e.g., https://your-app.com) for production security
       - key: LOG_LEVEL
         scope: RUN_TIME
         value: info
@@ -49,28 +49,30 @@ services:
 
 jobs:
   - name: migrate
-    kind: PRE_DEPLOY  # Runs before service deploy
+    kind: PRE_DEPLOY  # Runs before service deploy to apply Knex migrations
     dockerfile_path: Dockerfile
     source_dir: /
     github:
       branch: main
       deploy_on_push: true
-      repo: medentem/tak-lite-server
-    envs:  # Same as service, plus any migration-specific
+      repo: medentem/tak-lite-server  # Match the service's repo
+    envs:
       - key: DATABASE_URL
         value: ${tak-lite-server-db.DATABASE_URL}
       - key: DATABASE_CA_CERT
         value: ${tak-lite-server-db.CA_CERT}
-    run_command: sh -c "cd dist && npm run db:migrate"  # Run migrations from dist directory where compiled files are
+      - key: PGSSLMODE
+        value: require
+    run_command: sh -c "cd dist && npm run db:migrate"  # Assumes "db:migrate": "knex migrate:latest" in package.json
 
 databases:
   - cluster_name: tak-lite-server-db
-    engine: PG
+    engine: PG  # PostgreSQL, required for tak-lite-server
     name: tak-lite-server-db
     num_nodes: 1
-    size: db-s-dev-database  # Dev size; upgrade to db-s-1vcpu-1gb for prod
+    size: db-s-1vcpu-1gb  # Basic production size (1 vCPU, 1GB RAM, 10GB storage); downgrade to db-s-dev-database for dev
     version: "15"
-    production: false  # Set to true for prod with backups
+    production: true  # Enables backups and high availability; set to false for non-prod
 
 alerts:
   - rule: DEPLOYMENT_FAILED
