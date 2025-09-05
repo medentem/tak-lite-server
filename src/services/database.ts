@@ -16,7 +16,7 @@ export class DatabaseService {
         connectionString: connection,
         ssl: process.env.NODE_ENV === 'production' ? { 
           rejectUnauthorized: true,
-          ca: process.env.NODE_EXTRA_CA_CERTS 
+          ca: process.env.DATABASE_CA_CERT
         } : false
       },
       migrations: {

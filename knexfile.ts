@@ -14,7 +14,7 @@ const config: { [key: string]: Knex.Config } = {
       connectionString: process.env.DATABASE_URL,
       ssl: { 
         rejectUnauthorized: true,
-        ca: process.env.NODE_EXTRA_CA_CERTS 
+        ca: process.env.DATABASE_CA_CERT
       }
     },
     migrations: {
