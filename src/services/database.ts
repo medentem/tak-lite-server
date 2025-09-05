@@ -16,6 +16,7 @@ export class DatabaseService {
       nodeEnv: process.env.NODE_ENV,
       hasDatabaseCaCert: !!process.env.DATABASE_CA_CERT,
       pgsslmode: process.env.PGSSLMODE,
+      nodeTlsRejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED,
       databaseUrl: connection ? 'SET' : 'NOT_SET'
     });
     
@@ -23,6 +24,12 @@ export class DatabaseService {
     const sslConfig = process.env.NODE_ENV === 'production' ? {
       rejectUnauthorized: false // Disable certificate validation for DigitalOcean managed DB
     } : false;
+    
+    logger.info('SSL Config Applied', { sslConfig, nodeEnv: process.env.NODE_ENV });
+    
+    // Log connection string (without password for security)
+    const connectionForLog = connection.replace(/password=[^&]*/, 'password=***');
+    logger.info('Database Connection', { connectionString: connectionForLog });
 
     this.knexInstance = knex({
       client: 'pg',
