@@ -17,6 +17,8 @@ services:
     instance_count: 1
     instance_size_slug: basic-xs  # 0.5GB RAM (no database in container)
     http_port: 3000
+    databases:
+      - name: tak-lite-server-db
     
     # Environment variables
     envs:
@@ -25,7 +27,7 @@ services:
       - key: PORT
         value: "3000"
       - key: DATABASE_URL
-        value: ${db.DATABASE_URL}
+        value: ${tak-lite-server-db.DATABASE_URL}
       - key: JWT_SECRET
         value: ${JWT_SECRET}
       - key: JWT_EXPIRES_IN
@@ -38,7 +40,7 @@ services:
       - key: PGSSLMODE
         value: "require"
       - key: DATABASE_CA_CERT
-        value: ${db.DATABASE_CA_CERT}
+        value: ${tak-lite-server-db.DATABASE_CA_CERT}
     
     # Health check
     health_check:
