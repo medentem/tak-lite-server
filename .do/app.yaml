@@ -3,7 +3,7 @@
 # Cost: $27/month ($12 app + $15 database)
 
 name: tak-lite-server
-region: nyc
+region: nyc1
 
 # Main application service
 services:
@@ -15,7 +15,7 @@ services:
       deploy_on_push: true
     dockerfile_path: Dockerfile
     instance_count: 1
-    instance_size_slug: basic-xxs  # 0.5GB RAM (no database in container)
+    instance_size_slug: basic-xs  # 0.5GB RAM (no database in container)
     http_port: 3000
     
     # Environment variables
@@ -50,7 +50,7 @@ services:
     
     # Resource limits
     # instance_size_slug: basic-xxs  # 0.25 vCPU, 512MB RAM
-    # instance_size_slug: basic-xs   # 0.5 vCPU, 1GB RAM
+    # instance_size_slug: basic-xs   # 0.5 vCPU, 1GB RAM (current)
     # instance_size_slug: basic-s    # 1 vCPU, 2GB RAM
 
 # Database service

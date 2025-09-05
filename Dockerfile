@@ -17,7 +17,10 @@ COPY . .
 RUN npm run build
 
 # Copy static public assets into dist
-RUN mkdir -p dist/public && cp -r src/public/* dist/public/ || true
+RUN mkdir -p dist/public && \
+    if [ -d "src/public" ] && [ "$(ls -A src/public)" ]; then \
+        cp -r src/public/* dist/public/; \
+    fi
 
 # Production stage
 FROM node:18-alpine AS production
@@ -38,7 +41,7 @@ RUN npm ci --omit=dev
 
 # Copy built application from builder stage
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nodejs:nodejs /app/dist/public ./dist/public
+COPY --from=builder --chown=nodejs:nodejs /app/dist/public ./dist/public || true
 
 # Create necessary directories
 RUN mkdir -p /app/logs /app/uploads /app/temp && \
