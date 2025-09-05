@@ -20,10 +20,10 @@ export class DatabaseService {
       databaseUrl: connection ? 'SET' : 'NOT_SET'
     });
     
-    // Configure SSL for production - DigitalOcean managed DB doesn't inject CA cert
-    const sslConfig = process.env.NODE_ENV === 'production' ? {
+    // Configure SSL for DigitalOcean managed DB - always disable certificate validation
+    const sslConfig = {
       rejectUnauthorized: false // Disable certificate validation for DigitalOcean managed DB
-    } : false;
+    };
     
     logger.info('SSL Config Applied', { sslConfig, nodeEnv: process.env.NODE_ENV });
     

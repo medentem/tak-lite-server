@@ -19,6 +19,19 @@ const config: { [key: string]: Knex.Config } = {
     migrations: {
       directory: './migrations'
     }
+  },
+  // Add a default configuration that always uses SSL with disabled certificate validation
+  default: {
+    client: 'pg',
+    connection: {
+      connectionString: process.env.DATABASE_URL,
+      ssl: { 
+        rejectUnauthorized: false // Disable certificate validation for DigitalOcean managed DB
+      }
+    },
+    migrations: {
+      directory: './migrations'
+    }
   }
 };
 
