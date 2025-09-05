@@ -12,7 +12,10 @@ export class DatabaseService {
     }
     this.knexInstance = knex({
       client: 'pg',
-      connection,
+      connection: {
+        connectionString: connection,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+      },
       migrations: {
         // When compiled, this file lives at dist/src/services, so go up to dist/migrations
         directory: path.resolve(__dirname, '..', '..', 'migrations')

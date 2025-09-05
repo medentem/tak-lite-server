@@ -34,6 +34,9 @@ services:
         value: ${CORS_ORIGIN}
       - key: LOG_LEVEL
         value: info
+      # SSL configuration for managed database
+      - key: PGSSLMODE
+        value: "require"
       # Fallback for debugging
       - key: DEBUG
         value: "true"
