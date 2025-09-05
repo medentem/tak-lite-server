@@ -1,21 +1,17 @@
-# DigitalOcean App Platform Configuration
-# Uses Dockerfile build strategy with managed database
-# Cost: $27/month ($12 app + $15 database)
-
 name: tak-lite-server
-region: nyc  # Or your preferred region (e.g., fra for Europe)
+region: nyc
 
 services:
   - name: api
-    dockerfile_path: Dockerfile  # This forces Docker build, overriding Node.js buildpack detection
+    dockerfile_path: Dockerfile
     source_dir: /
     github:
       branch: main
       deploy_on_push: true
-      repo: medentem/tak-lite-server  # Update to your actual GitHub repo (owner/repo format)
+      repo: medentem/tak-lite-server
     http_port: 3000
     instance_count: 1
-    instance_size_slug: basic-xs  # Start small; scale to basic-s if needed
+    instance_size_slug: basic-xs
     envs:
       - key: NODE_ENV
         scope: RUN_TIME
@@ -25,7 +21,7 @@ services:
         value: ${tak-lite-server-db.DATABASE_URL}
       - key: DATABASE_CA_CERT
         scope: RUN_AND_BUILD_TIME
-        value: ${tak-lite-server-db.CA_CERT}  # Corrected to DigitalOcean's injected variable
+        value: ${tak-lite-server-db.CA_CERT}
       - key: PGSSLMODE
         scope: RUN_AND_BUILD_TIME
         value: require
@@ -37,25 +33,25 @@ services:
         value: 7d
       - key: CORS_ORIGIN
         scope: RUN_TIME
-        value: "*"  # Update to your domain (e.g., https://your-app.com) for production security
+        value: "*"
       - key: LOG_LEVEL
         scope: RUN_TIME
         value: info
     health_check:
       http_path: /health
-      initial_delay_seconds: 30  # Give time for migrations
+      initial_delay_seconds: 30
     routes:
       - path: /
 
 jobs:
   - name: migrate
-    kind: PRE_DEPLOY  # Runs before service deploy to apply Knex migrations
+    kind: PRE_DEPLOY
     dockerfile_path: Dockerfile
     source_dir: /
     github:
       branch: main
       deploy_on_push: true
-      repo: medentem/tak-lite-server  # Match the service's repo
+      repo: medentem/tak-lite-server
     envs:
       - key: DATABASE_URL
         value: ${tak-lite-server-db.DATABASE_URL}
@@ -63,16 +59,16 @@ jobs:
         value: ${tak-lite-server-db.CA_CERT}
       - key: PGSSLMODE
         value: require
-    run_command: sh -c "cd dist && npm run db:migrate"  # Assumes "db:migrate": "knex migrate:latest" in package.json
+    run_command: sh -c "cd dist && npm run db:migrate"
 
 databases:
   - cluster_name: tak-lite-server-db
-    engine: PG  # PostgreSQL, required for tak-lite-server
+    engine: PG
     name: tak-lite-server-db
     num_nodes: 1
-    size: db-s-1vcpu-1gb  # Basic production size (1 vCPU, 1GB RAM, 10GB storage); downgrade to db-s-dev-database for dev
+    size: db-s-1vcpu-1gb
     version: "15"
-    production: true  # Enables backups and high availability; set to false for non-prod
+    production: true
 
 alerts:
   - rule: DEPLOYMENT_FAILED
