@@ -22,7 +22,7 @@
 |---------|-------------|---------|------------|
 | **Setup Time** | 5 minutes | 30 minutes | 2+ hours |
 | **Technical Level** | Beginner | Intermediate | Advanced |
-| **Monthly Cost** | $12 (containerized) / $27 (managed) | $12 | $50+ |
+| **Monthly Cost** | $12 | $12 | $50+ |
 | **Server Management** | None | Full | Full |
 | **Auto-scaling** | Yes | No | Yes |
 | **SSL Certificates** | Automatic | Manual setup | Manual setup |
@@ -36,17 +36,17 @@
 ## Recommendations by Use Case
 
 ### 🏠 **Small Team/Personal Use**
-**Recommended**: App Platform with Containerized Database
+**Recommended**: App Platform
 - **Why**: Easiest setup, no server management, lowest cost
 - **Cost**: $12/month
 - **Time**: 5 minutes
-- **Database**: PostgreSQL runs in your app container
+- **Database**: PostgreSQL runs in your Docker container
 
 ### 🏢 **Small Business**
-**Recommended**: App Platform (Managed DB) or Droplet
+**Recommended**: App Platform or Droplet
 - **App Platform**: If you want to focus on your business, not servers
 - **Droplet**: If you have technical staff and want to save money
-- **Cost**: $27/month (managed DB) or $12/month (droplet)
+- **Cost**: $12/month (both options)
 
 ### 🏭 **Enterprise/Large Organization**
 **Recommended**: Kubernetes

@@ -34,39 +34,20 @@
 4. **Plan**: Start with **Basic** ($5/month)
 5. Click **"Next"**
 
-### Step 4: Choose Database Option
-
-**Option A: Use Containerized Database (Recommended for most users)**
-- **Cost**: $0 extra (database runs in your app container)
-- **Setup**: Skip this step - your Docker setup includes PostgreSQL
-- **Best for**: Small teams, development, cost-conscious users
-
-**Option B: Use Managed Database (For production)**
-1. Click **"Add Database"**
-2. Choose **PostgreSQL**
-3. Select **Basic** plan ($15/month)
-4. Click **"Next"**
-
-### Step 5: Set Environment Variables
+### Step 4: Set Environment Variables
 Add these in the **Environment Variables** section:
-
-**For Containerized Database (Option A):**
 - `NODE_ENV` = `production`
 - `JWT_SECRET` = `your-secret-key-here` (generate a random string)
 - `CORS_ORIGIN` = `https://your-domain.com` (if you have a custom domain)
 
-**For Managed Database (Option B):**
-- `NODE_ENV` = `production`
-- `JWT_SECRET` = `your-secret-key-here` (generate a random string)
-- `CORS_ORIGIN` = `https://your-domain.com` (if you have a custom domain)
-- `DATABASE_URL` = `${db.DATABASE_URL}` (App Platform will fill this automatically)
+**Note**: Your Docker setup includes PostgreSQL, so no separate database needed!
 
-### Step 6: Deploy!
+### Step 5: Deploy!
 1. Click **"Create Resources"**
 2. Wait 5-10 minutes for deployment
 3. Your app will be available at: `https://your-app-name-123456.ondigitalocean.app`
 
-### Step 7: Complete Setup
+### Step 6: Complete Setup
 1. Visit your app URL + `/setup` (e.g., `https://your-app-name-123456.ondigitalocean.app/setup`)
 2. Fill out the setup form with:
    - Admin email
@@ -76,7 +57,7 @@ Add these in the **Environment Variables** section:
 
 **🎉 Done!** Your TAK Lite Server is now running!
 
-### Optional: Custom Domain
+### Step 7: Custom Domain (Optional)
 1. In App Platform, go to **Settings** → **Domains**
 2. Add your domain (e.g., `api.yourdomain.com`)
 3. Follow the DNS instructions provided
