@@ -34,9 +34,6 @@ spec:
         - key: JWT_EXPIRES_IN
           scope: RUN_TIME
           value: 7d
-        - key: CORS_ORIGIN
-          scope: RUN_TIME
-          value: "https://${app.name}.ondigitalocean.app"
         - key: DO_APP_URL
           scope: RUN_TIME
           value: "https://${app.name}.ondigitalocean.app"
