@@ -19,6 +19,12 @@ spec:
         - key: DATABASE_URL
           scope: RUN_AND_BUILD_TIME
           value: ${tak-lite-server-db.DATABASE_URL}
+        - key: DATABASE_CA_CERT
+          scope: RUN_AND_BUILD_TIME
+          value: ${tak-lite-server-db.CA_CERT}
+        - key: PGSSLMODE
+          scope: RUN_AND_BUILD_TIME
+          value: require
         - key: JWT_SECRET
           scope: RUN_TIME
           type: SECRET
