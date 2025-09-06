@@ -38,19 +38,19 @@ dotenv.config();
 
 const app = express();
 const server = createServer(app);
-// Build socket CORS allowlist from environment only (runtime config is handled per-HTTP request)
-const envCors = process.env.CORS_ORIGIN || '';
-const allowedSocketOrigins = envCors
-  .split(',')
-  .map((s) => s.trim())
-  .filter((s) => s.length > 0 && s !== '*');
-
+// WebSocket CORS will be configured dynamically in the socket service
 const io = new Server(server, {
   cors: {
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       if (!origin) return callback(null, true);
-      const allowed = allowedSocketOrigins.length === 0 ? false : allowedSocketOrigins.includes(origin);
-      return callback(allowed ? null : new Error('Not allowed by CORS'), allowed);
+      
+      // Auto-allow DigitalOcean app domains
+      if (origin.includes('.ondigitalocean.app')) {
+        return callback(null, true);
+      }
+      
+      // For now, allow all origins - this will be made more restrictive in the socket service
+      return callback(null, true);
     },
     methods: ['GET', 'POST'],
     credentials: false
