@@ -20,9 +20,9 @@ export class DatabaseService {
       databaseUrl: connection ? 'SET' : 'NOT_SET'
     });
     
-    // Configure SSL using DO-injected CA, enforce validation
+    // Configure SSL using DO-injected CA, allow self-signed certs for Dev Databases
     const sslConfig = {
-      rejectUnauthorized: true,
+      rejectUnauthorized: false, // Allow self-signed certificates for Dev Databases
       ca: process.env.DATABASE_CA_CERT
     };
     
