@@ -87,14 +87,7 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
     // Also include any configured environment origins
     allowlist = [...allowlist, ...fromEnv];
     
-    // Auto-detect current domain for DigitalOcean deployments
-    const currentDomain = process.env.DO_APP_URL || process.env.APP_URL;
-    if (currentDomain && !allowlist.includes(currentDomain)) {
-      allowlist.push(currentDomain);
-      logger.info('CORS: Auto-detected current domain for setup:', { currentDomain });
-    }
-    
-    // Also add any DigitalOcean app domains that might be in the allowlist but not resolved
+    // Remove any unresolved DigitalOcean domains from allowlist
     const unresolvedDoDomains = allowlist.filter(origin => origin.includes('${app.name}'));
     if (unresolvedDoDomains.length > 0) {
       logger.warn('CORS: Found unresolved DigitalOcean domains, removing them:', { unresolvedDoDomains });
