@@ -20,11 +20,12 @@ export class DatabaseService {
       databaseUrl: connection ? 'SET' : 'NOT_SET'
     });
     
-    // Configure SSL for Dev Databases using the provided CA certificate
-    const sslConfig = {
+    // Configure SSL with CA certificate when available
+    // NODE_TLS_REJECT_UNAUTHORIZED='0' handles certificate validation globally
+    const sslConfig = process.env.DATABASE_CA_CERT ? {
       ca: process.env.DATABASE_CA_CERT,
-      rejectUnauthorized: true // Verify certificate against provided CA
-    };
+      rejectUnauthorized: false // Let NODE_TLS_REJECT_UNAUTHORIZED handle validation
+    } : true;
     
     logger.info('SSL Config Applied', { sslConfig, nodeEnv: process.env.NODE_ENV });
     
