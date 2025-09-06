@@ -11,11 +11,6 @@ export class DatabaseService {
       throw new Error('DATABASE_URL is required');
     }
     
-    // Disable SSL entirely for Dev Databases to avoid self-signed certificate issues
-    if (connection.includes('sslmode=require')) {
-      connection = connection.replace('sslmode=require', 'sslmode=disable');
-    }
-    
     // Debug logging for SSL configuration
     logger.info('Database SSL Configuration', {
       nodeEnv: process.env.NODE_ENV,
@@ -25,8 +20,11 @@ export class DatabaseService {
       databaseUrl: connection ? 'SET' : 'NOT_SET'
     });
     
-    // Disable SSL entirely for Dev Databases
-    const sslConfig = false;
+    // Configure SSL for Dev Databases using the provided CA certificate
+    const sslConfig = {
+      ca: process.env.DATABASE_CA_CERT,
+      rejectUnauthorized: true // Verify certificate against provided CA
+    };
     
     logger.info('SSL Config Applied', { sslConfig, nodeEnv: process.env.NODE_ENV });
     
