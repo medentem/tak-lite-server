@@ -1,0 +1,53 @@
+name: tak-lite-server
+region: nyc
+
+services:
+  - name: api
+    dockerfile_path: Dockerfile
+    source_dir: /
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: medentem/tak-lite-server
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: basic-xs
+    envs:
+      - key: NODE_ENV
+        scope: RUN_TIME
+        value: production
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${tak-lite-server-db.DATABASE_URL}
+      - key: DATABASE_CA_CERT
+        scope: RUN_AND_BUILD_TIME
+        value: ${tak-lite-server-db.CA_CERT}
+      - key: PGSSLMODE
+        scope: RUN_AND_BUILD_TIME
+        value: require
+      - key: JWT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: JWT_EXPIRES_IN
+        scope: RUN_TIME
+        value: 7d
+      - key: CORS_ORIGIN
+        scope: RUN_TIME
+        value: "*"
+      - key: LOG_LEVEL
+        scope: RUN_TIME
+        value: info
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 30
+    routes:
+      - path: /
+
+databases:
+  - cluster_name: tak-lite-server-db
+    engine: PG
+    name: tak-lite-server-db
+    num_nodes: 1
+    size: db-s-1vcpu-1gb
+    version: "15"
+    production: true
