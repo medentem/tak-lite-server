@@ -2,7 +2,7 @@
 
 Cloud-native backend for TAK Lite. Purpose-built to bridge disconnected meshes and provide online visibility for teams using the TAK Lite app. Includes first‑run setup, authentication, real‑time sync, and a lightweight admin dashboard.
 
-[![Deploy to DO](https://mp-assets1.sfo2.digitaloceanspaces.com/deploy-to-do/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/medentem/tak-lite-server/tree/main&refcode=6be1d132f60d)
+[![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/medentem/tak-lite-server/tree/main&refcode=6be1d132f60d)
 
 > **✅ Recommended**: The "Deploy to DO" button now includes all essential features including database SSL certificates. For advanced features like monitoring alerts, use Option 3 below.
 
@@ -106,7 +106,7 @@ socket.on('location:update', (data) => {
 
 **Perfect for**: Most users who want the fastest setup
 
-1. **Click the "Deploy to DO" button above** (or use this link: [Deploy to DigitalOcean](https://cloud.digitalocean.com/apps/new?repo=https://github.com/medentem/tak-lite-server/tree/main))
+1. **Click the "Deploy to DO" button above** (or use this link: [Deploy to DigitalOcean](https://cloud.digitalocean.com/apps/new?repo=https://github.com/medentem/tak-lite-server/tree/main&refcode=6be1d132f60d))
 2. **Follow the setup wizard** in DigitalOcean
 3. **Complete setup** at `https://your-app-url.ondigitalocean.app/setup`
 
