@@ -43,24 +43,6 @@ services:
     routes:
       - path: /
 
-jobs:
-  - name: migrate
-    kind: PRE_DEPLOY
-    dockerfile_path: Dockerfile
-    source_dir: /
-    github:
-      branch: main
-      deploy_on_push: true
-      repo: medentem/tak-lite-server
-    envs:
-      - key: DATABASE_URL
-        value: ${tak-lite-server-db.DATABASE_URL}
-      - key: DATABASE_CA_CERT
-        value: ${tak-lite-server-db.CA_CERT}
-      - key: PGSSLMODE
-        value: require
-    run_command: sh -c "cd dist && npm run db:migrate"
-
 databases:
   - cluster_name: tak-lite-server-db
     engine: PG
@@ -69,19 +51,3 @@ databases:
     size: db-s-1vcpu-1gb
     version: "15"
     production: true
-
-alerts:
-  - rule: DEPLOYMENT_FAILED
-    value: 1
-    window: 5m
-  - rule: CPU_UTILIZATION
-    value: 80
-    window: 5m
-
-ingress:
-  rules:
-    - component:
-        name: api
-      match:
-        path:
-          prefix: /
