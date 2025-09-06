@@ -19,12 +19,6 @@ spec:
         - key: DATABASE_URL
           scope: RUN_AND_BUILD_TIME
           value: ${tak-lite-server-db.DATABASE_URL}
-        - key: DATABASE_CA_CERT
-          scope: RUN_AND_BUILD_TIME
-          value: ${tak-lite-server-db.CA_CERT}
-        - key: PGSSLMODE
-          scope: RUN_AND_BUILD_TIME
-          value: require
         - key: JWT_SECRET
           scope: RUN_TIME
           type: SECRET
@@ -44,10 +38,4 @@ spec:
         - path: /
 
   databases:
-    - cluster_name: tak-lite-server-db
-      engine: PG
-      name: tak-lite-server-db
-      num_nodes: 1
-      size: db-s-1vcpu-1gb
-      version: "15"
-      production: true
+    - name: tak-lite-server-db
