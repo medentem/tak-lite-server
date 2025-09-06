@@ -86,6 +86,14 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
     allowlist = ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:8080', 'http://127.0.0.1:8080'];
     // Also include any configured environment origins
     allowlist = [...allowlist, ...fromEnv];
+    
+    // Auto-detect current domain for DigitalOcean deployments
+    const currentDomain = process.env.DO_APP_URL || process.env.APP_URL;
+    if (currentDomain && !allowlist.includes(currentDomain)) {
+      allowlist.push(currentDomain);
+      logger.info('CORS: Auto-detected current domain for setup:', { currentDomain });
+    }
+    
     logger.info('CORS setup phase - allowing origins:', { allowlist, completed });
   } else {
     // After setup: use configured origins, fallback to env, or use development defaults if nothing configured
