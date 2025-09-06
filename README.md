@@ -4,7 +4,7 @@ Cloud-native backend for TAK Lite. Purpose-built to bridge disconnected meshes a
 
 [![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/medentem/tak-lite-server/tree/main&refcode=6be1d132f60d)
 
-> **✅ Recommended**: The "Deploy to DO" button now includes all essential features including database SSL certificates. For advanced features like monitoring alerts, use Option 3 below.
+> **✅ Recommended**: The "Deploy to DO" button provides the fastest setup with a Dev Database. For production databases with SSL certificates and monitoring alerts, use Option 3 below.
 
 ## 🚀 Quick Start (Local Development)
 
@@ -110,7 +110,7 @@ socket.on('location:update', (data) => {
 2. **Follow the setup wizard** in DigitalOcean
 3. **Complete setup** at `https://your-app-url.ondigitalocean.app/setup`
 
-**Cost**: $27/month | **Time**: 2 minutes | **Features**: All essential features included
+**Cost**: $20/month | **Time**: 2 minutes | **Features**: Dev Database included (no SSL)
 
 ### Option 2: Manual App Platform Setup
 
