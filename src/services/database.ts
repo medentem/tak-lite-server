@@ -6,9 +6,14 @@ export class DatabaseService {
   private knexInstance: Knex;
 
   constructor() {
-    const connection = process.env.DATABASE_URL;
+    let connection = process.env.DATABASE_URL;
     if (!connection) {
       throw new Error('DATABASE_URL is required');
+    }
+    
+    // Override SSL mode in connection string for Dev Databases
+    if (connection.includes('sslmode=require')) {
+      connection = connection.replace('sslmode=require', 'sslmode=prefer');
     }
     
     // Debug logging for SSL configuration
@@ -41,7 +46,8 @@ export class DatabaseService {
       .replace(/(:)([^:@]+)(@)/, '$1***$3');
     logger.info('Database Connection', {
       connectionString: connectionForLog,
-      hasCaFromEnv: !!process.env.DATABASE_CA_CERT
+      hasCaFromEnv: !!process.env.DATABASE_CA_CERT,
+      sslModeOverridden: process.env.DATABASE_URL?.includes('sslmode=require')
     });
 
     this.knexInstance = knex({
