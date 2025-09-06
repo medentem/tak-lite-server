@@ -24,7 +24,10 @@ spec:
           value: ${tak-lite-server-db.CA_CERT}
         - key: PGSSLMODE
           scope: RUN_AND_BUILD_TIME
-          value: require
+          value: prefer
+        - key: NODE_TLS_REJECT_UNAUTHORIZED
+          scope: RUN_AND_BUILD_TIME
+          value: "0"
         - key: JWT_SECRET
           scope: RUN_TIME
           type: SECRET
