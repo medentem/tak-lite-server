@@ -121,9 +121,9 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
       return callback(null, true);
     }
     
-    // Auto-allow DigitalOcean app domains during setup
-    if (!completed && origin.includes('.ondigitalocean.app')) {
-      logger.info('CORS: Auto-allowing DigitalOcean app domain during setup:', { origin });
+    // Auto-allow DigitalOcean app domains (both during setup and after setup)
+    if (origin.includes('.ondigitalocean.app')) {
+      logger.info('CORS: Auto-allowing DigitalOcean app domain:', { origin, completed });
       return callback(null, true);
     }
     
