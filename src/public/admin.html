@@ -62,8 +62,8 @@
       /* Improved Overview section */
       .overview-grid {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 20px;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
         margin-bottom: 20px;
       }
       
@@ -159,7 +159,7 @@
       /* Responsive improvements */
       @media (max-width: 768px) {
         .overview-grid {
-          grid-template-columns: 1fr;
+          grid-template-columns: repeat(2, 1fr);
         }
         
         .overview-stats {
@@ -173,6 +173,12 @@
         
         .config-row label {
           min-width: auto;
+        }
+      }
+      
+      @media (max-width: 480px) {
+        .overview-grid {
+          grid-template-columns: 1fr;
         }
       }
     </style>
@@ -220,6 +226,22 @@
               <div class="kpi">
                 <span class="value" id="k_auth">-</span>
                 <span class="label">Auth</span>
+              </div>
+              <div class="kpi">
+                <span class="value" id="k_annotations">-</span>
+                <span class="label">Annotations</span>
+              </div>
+              <div class="kpi">
+                <span class="value" id="k_messages">-</span>
+                <span class="label">Messages</span>
+              </div>
+              <div class="kpi">
+                <span class="value" id="k_locations">-</span>
+                <span class="label">Locations</span>
+              </div>
+              <div class="kpi">
+                <span class="value" id="k_sync_status">-</span>
+                <span class="label">Sync Status</span>
               </div>
             </div>
             
@@ -280,11 +302,23 @@
         </div>
 
         <div class="section card">
-          <h2>Active Connections</h2>
+          <h2>Real-time Activity</h2>
           <div class="help-text">
-            <strong>Real-time status</strong> of connected TAK Lite devices and their team assignments
+            <strong>Live updates</strong> of connected devices, sync activity, and system events
           </div>
-          <pre id="rooms" class="muted" style="white-space:pre-wrap; margin:12px 0 0 0; background: #0c1527; padding: 12px; border-radius: 6px; max-height: 200px; overflow-y: auto;"></pre>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
+            <div>
+              <h3 style="margin: 0 0 8px; font-size: 14px; color: #cbd5e1;">Active Connections</h3>
+              <pre id="rooms" class="muted" style="white-space:pre-wrap; margin:0; background: #0c1527; padding: 12px; border-radius: 6px; max-height: 150px; overflow-y: auto; font-size: 12px;"></pre>
+            </div>
+            <div>
+              <h3 style="margin: 0 0 8px; font-size: 14px; color: #cbd5e1;">Recent Activity</h3>
+              <div id="activity_log" style="background: #0c1527; padding: 12px; border-radius: 6px; max-height: 150px; overflow-y: auto; font-size: 12px; font-family: 'Courier New', monospace;">
+                <div class="muted">Waiting for activity...</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="section grid">
@@ -322,6 +356,7 @@
       </div>
     </div>
 
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="/public/js/admin.js"></script>
   </body>
 </html>

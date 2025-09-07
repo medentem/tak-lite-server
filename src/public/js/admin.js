@@ -1,6 +1,100 @@
 let token = localStorage.getItem('taklite:token') || '';
 const q = (s)=>document.querySelector(s);
 
+// WebSocket connection for real-time updates
+let socket = null;
+let activityLog = [];
+const MAX_ACTIVITY_ITEMS = 50;
+
+// Real-time activity logging
+function addActivityLog(message, type = 'info') {
+  const timestamp = new Date().toLocaleTimeString();
+  const logEntry = { timestamp, message, type };
+  
+  activityLog.unshift(logEntry);
+  if (activityLog.length > MAX_ACTIVITY_ITEMS) {
+    activityLog = activityLog.slice(0, MAX_ACTIVITY_ITEMS);
+  }
+  
+  updateActivityDisplay();
+}
+
+function updateActivityDisplay() {
+  const activityEl = q('#activity_log');
+  if (!activityEl) return;
+  
+  if (activityLog.length === 0) {
+    activityEl.innerHTML = '<div class="muted">Waiting for activity...</div>';
+    return;
+  }
+  
+  const html = activityLog.map(entry => {
+    const color = entry.type === 'error' ? '#ef4444' : 
+                  entry.type === 'success' ? '#22c55e' : 
+                  entry.type === 'warning' ? '#f59e0b' : '#3b82f6';
+    return `<div style="color: ${color};">[${entry.timestamp}] ${entry.message}</div>`;
+  }).join('');
+  
+  activityEl.innerHTML = html;
+}
+
+// WebSocket connection management
+function connectWebSocket() {
+  if (socket) {
+    socket.disconnect();
+  }
+  
+  if (!token) return;
+  
+  try {
+    socket = io({
+      auth: { token: token },
+      transports: ['websocket', 'polling']
+    });
+    
+    socket.on('connect', () => {
+      console.log('Admin WebSocket connected');
+      addActivityLog('WebSocket connected', 'success');
+    });
+    
+    socket.on('disconnect', () => {
+      console.log('Admin WebSocket disconnected');
+      addActivityLog('WebSocket disconnected', 'warning');
+    });
+    
+    socket.on('connect_error', (error) => {
+      console.error('WebSocket connection error:', error);
+      addActivityLog(`Connection error: ${error.message}`, 'error');
+    });
+    
+    // Listen for real-time updates
+    socket.on('admin:stats_update', (stats) => {
+      updateStatsDisplay(stats);
+      addActivityLog('Stats updated', 'info');
+    });
+    
+    socket.on('admin:connection_update', (data) => {
+      updateConnectionsDisplay(data);
+      addActivityLog(`Connection update: ${data.type}`, 'info');
+    });
+    
+    socket.on('admin:sync_activity', (data) => {
+      addActivityLog(`Sync: ${data.type} - ${data.details}`, 'info');
+    });
+    
+  } catch (error) {
+    console.error('Failed to connect WebSocket:', error);
+    addActivityLog(`WebSocket setup failed: ${error.message}`, 'error');
+  }
+}
+
+function disconnectWebSocket() {
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
+}
+
 // Enhanced message display system
 function showMessage(message, type = 'info', duration = 5000) {
   const msgEl = q('#globalMessage');
@@ -74,6 +168,65 @@ function showDash(show) {
   q('#dash').classList.toggle('hidden', !show);
   q('#logout').classList.toggle('hidden', !show);
   q('#who').classList.toggle('hidden', !show);
+  
+  if (show) {
+    connectWebSocket();
+  } else {
+    disconnectWebSocket();
+  }
+}
+
+// Real-time stats update function
+function updateStatsDisplay(stats) {
+  if (!stats) return;
+  
+  // Update KPI values
+  if (stats.db) {
+    q('#k_users').textContent = stats.db.users ?? '-';
+    q('#k_teams').textContent = stats.db.teams ?? '-';
+    q('#k_annotations').textContent = stats.db.annotations ?? '-';
+    q('#k_messages').textContent = stats.db.messages ?? '-';
+    q('#k_locations').textContent = stats.db.locations ?? '-';
+  }
+  
+  if (stats.sockets) {
+    q('#k_sockets').textContent = stats.sockets.totalConnections ?? 0;
+    q('#k_auth').textContent = stats.sockets.authenticatedConnections ?? 0;
+  }
+  
+  if (stats.server) {
+    q('#k_uptime').textContent = (stats.server.uptimeSec || 0) + 's';
+    q('#k_node').textContent = stats.server.node || '-';
+    q('#k_load').textContent = (stats.server.loadavg || []).map(n => n.toFixed(2)).join(' / ') || '-';
+    q('#k_mem').textContent = stats.server.memory?.heapUsed ? (stats.server.memory.heapUsed/1048576).toFixed(1)+' MB' : '-';
+  }
+  
+  // Update sync status
+  const totalConnections = stats.sockets?.totalConnections || 0;
+  const authConnections = stats.sockets?.authenticatedConnections || 0;
+  if (totalConnections > 0) {
+    const syncStatus = authConnections > 0 ? 'Active' : 'Inactive';
+    q('#k_sync_status').textContent = syncStatus;
+    q('#k_sync_status').style.color = authConnections > 0 ? '#22c55e' : '#ef4444';
+  } else {
+    q('#k_sync_status').textContent = 'Offline';
+    q('#k_sync_status').style.color = '#8b97a7';
+  }
+}
+
+// Real-time connections update function
+function updateConnectionsDisplay(data) {
+  if (!data || !data.rooms) return;
+  
+  const roomsData = data.rooms;
+  if (Object.keys(roomsData).length > 0) {
+    const formattedRooms = Object.entries(roomsData)
+      .map(([room, count]) => `${room}: ${count} connections`)
+      .join('\n');
+    q('#rooms').textContent = formattedRooms;
+  } else {
+    q('#rooms').textContent = 'No active connections';
+  }
 }
 
 async function refresh() {
@@ -91,28 +244,9 @@ async function refresh() {
     q('#cors').value = cfg.corsOrigin || '';
     q('#retention').value = cfg.retentionDays || 0;
     
-    // Update overview KPIs
-    q('#k_users').textContent = stats.db?.users ?? '-';
-    q('#k_teams').textContent = stats.db?.teams ?? '-';
-    q('#k_sockets').textContent = stats.sockets?.totalConnections ?? 0;
-    q('#k_auth').textContent = stats.sockets?.authenticatedConnections ?? 0;
-    
-    // Update server stats
-    q('#k_uptime').textContent = (stats.server?.uptimeSec || 0) + 's';
-    q('#k_node').textContent = stats.server?.node || '-';
-    q('#k_load').textContent = (stats.server?.loadavg || []).map(n => n.toFixed(2)).join(' / ') || '-';
-    q('#k_mem').textContent = stats.server?.memory?.heapUsed ? (stats.server.memory.heapUsed/1048576).toFixed(1)+' MB' : '-';
-    
-    // Update socket rooms with better formatting
-    const roomsData = stats.sockets?.rooms || {};
-    if (Object.keys(roomsData).length > 0) {
-      const formattedRooms = Object.entries(roomsData)
-        .map(([room, count]) => `${room}: ${count} connections`)
-        .join('\n');
-      q('#rooms').textContent = formattedRooms;
-    } else {
-      q('#rooms').textContent = 'No active connections';
-    }
+    // Update stats using real-time function
+    updateStatsDisplay(stats);
+    updateConnectionsDisplay(stats.sockets);
 
     // Populate users table
     const utb = q('#u_table tbody'); 
@@ -229,6 +363,7 @@ q('#logout').onclick = async () => {
   }
   token = ''; 
   localStorage.removeItem('taklite:token'); 
+  disconnectWebSocket();
   showDash(false);
   showMessage('Logged out successfully', 'info', 3000);
 };

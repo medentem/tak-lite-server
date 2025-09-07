@@ -5,6 +5,20 @@ import { DatabaseService } from './database';
 
 export class SyncService {
   constructor(private io: Server, private db: DatabaseService) {}
+  
+  // Expose database client for admin stats
+  public get database() {
+    return this.db;
+  }
+  
+  // Emit sync activity to admin users
+  private emitSyncActivity(type: string, details: string) {
+    // Access the socket gateway through the io instance
+    const socketGateway = (this.io as any).socketGateway;
+    if (socketGateway && typeof socketGateway.emitSyncActivity === 'function') {
+      socketGateway.emitSyncActivity(type, details);
+    }
+  }
 
   async authenticateSocket(_token: string): Promise<{ id: string; teamId: string } | null> {
     // Placeholder: rely on REST login + token in app; full socket auth later
@@ -36,6 +50,8 @@ export class SyncService {
     const data = await schema.validateAsync(payload, { abortEarly: false, stripUnknown: true });
     await this.assertTeamMembership(userId, data.teamId);
     await this.db.client('locations').insert({ id: uuidv4(), user_id: userId, team_id: data.teamId, latitude: data.latitude, longitude: data.longitude, altitude: data.altitude, accuracy: data.accuracy, timestamp: data.timestamp });
+    
+    this.emitSyncActivity('location_update', `User ${userId} updated location in team ${data.teamId}`);
   }
 
   async handleAnnotationUpdate(userId: string, payload: any) {
@@ -50,6 +66,8 @@ export class SyncService {
     const id = annotationId || uuidv4();
     const row = { id, user_id: userId, team_id: teamId, type, data };
     await this.db.client('annotations').insert(row).onConflict('id').merge({ data, type, updated_at: this.db.client.fn.now() });
+    
+    this.emitSyncActivity('annotation_update', `User ${userId} ${annotationId ? 'updated' : 'created'} annotation ${id} in team ${teamId}`);
     return row;
   }
 
@@ -63,6 +81,8 @@ export class SyncService {
     await this.assertTeamMembership(userId, teamId);
     const row = { id: uuidv4(), user_id: userId, team_id: teamId, message_type: messageType, content };
     await this.db.client('messages').insert(row);
+    
+    this.emitSyncActivity('message_send', `User ${userId} sent message in team ${teamId}`);
     return row;
   }
 }

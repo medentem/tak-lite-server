@@ -11,6 +11,9 @@ export class SocketGateway {
   }
 
   bind() {
+    // Start periodic admin stats updates
+    this.startPeriodicStatsUpdates();
+    
     // Require authentication during connection via auth token in query or headers
     this.io.use(async (socket, next) => {
       try {
@@ -42,6 +45,12 @@ export class SocketGateway {
   private async onConnection(socket: Socket) {
     console.log('[SOCKET] Client connected:', socket.id);
     socket.emit('hello');
+    
+    // Emit admin stats update for admin users
+    const user = (socket.data as any).user;
+    if (user?.is_admin) {
+      this.emitAdminStatsUpdate();
+    }
 
     socket.on('team:join', async (teamId: string) => {
       const user = (socket.data as any).user;
@@ -82,6 +91,100 @@ export class SocketGateway {
       const message = await this.sync.handleMessage(user.id, data);
       if (data.teamId) this.io.to(`team:${data.teamId}`).emit('message:received', message);
     });
+    
+    // Handle disconnection
+    socket.on('disconnect', () => {
+      console.log('[SOCKET] Client disconnected:', socket.id);
+      this.emitAdminConnectionUpdate('disconnect', socket.id);
+    });
+  }
+  
+  // Emit admin stats update to all admin users
+  private async emitAdminStatsUpdate() {
+    try {
+      const stats = await this.getAdminStats();
+      this.io.emit('admin:stats_update', stats);
+    } catch (error) {
+      console.error('[SOCKET] Failed to emit admin stats update:', error);
+    }
+  }
+  
+  // Emit admin connection update
+  private emitAdminConnectionUpdate(type: string, socketId: string) {
+    const rooms = Object.fromEntries(
+      Array.from(this.io.sockets.adapter.rooms.entries())
+        .filter(([name]) => name.startsWith('team:'))
+        .map(([name, set]) => [name, set.size])
+    );
+    
+    this.io.emit('admin:connection_update', {
+      type,
+      socketId,
+      rooms,
+      totalConnections: this.io.engine.clientsCount,
+      authenticatedConnections: Array.from(this.io.sockets.sockets.values()).filter((s) => (s.data as any)?.user).length
+    });
+  }
+  
+  // Get admin statistics
+  private async getAdminStats() {
+    try {
+      const [users, teams, annotations, messages, locations] = await Promise.all([
+        this.sync.database.client('users').count<{ count: string }>('id as count').first(),
+        this.sync.database.client('teams').count<{ count: string }>('id as count').first(),
+        this.sync.database.client('annotations').count<{ count: string }>('id as count').first(),
+        this.sync.database.client('messages').count<{ count: string }>('id as count').first(),
+        this.sync.database.client('locations').count<{ count: string }>('id as count').first()
+      ]);
+
+      const socketsTotal = this.io.engine.clientsCount;
+      const socketsAuth = Array.from(this.io.sockets.sockets.values()).filter((s) => (s.data as any)?.user).length;
+      const rooms = Object.fromEntries(
+        Array.from(this.io.sockets.adapter.rooms.entries())
+          .filter(([name]) => name.startsWith('team:'))
+          .map(([name, set]) => [name, set.size])
+      );
+
+      return {
+        db: {
+          users: users ? Number(users.count) : 0,
+          teams: teams ? Number(teams.count) : 0,
+          annotations: annotations ? Number(annotations.count) : 0,
+          messages: messages ? Number(messages.count) : 0,
+          locations: locations ? Number(locations.count) : 0
+        },
+        sockets: {
+          totalConnections: socketsTotal,
+          authenticatedConnections: socketsAuth,
+          rooms
+        }
+      };
+    } catch (error) {
+      console.error('[SOCKET] Failed to get admin stats:', error);
+      return null;
+    }
+  }
+  
+  // Emit sync activity to admin users
+  public emitSyncActivity(type: string, details: string) {
+    this.io.emit('admin:sync_activity', { type, details });
+  }
+  
+  // Start periodic stats updates for admin users
+  private startPeriodicStatsUpdates() {
+    setInterval(async () => {
+      try {
+        // Check if there are any admin users connected
+        const adminSockets = Array.from(this.io.sockets.sockets.values())
+          .filter((s) => (s.data as any)?.user?.is_admin);
+        
+        if (adminSockets.length > 0) {
+          await this.emitAdminStatsUpdate();
+        }
+      } catch (error) {
+        console.error('[SOCKET] Periodic stats update failed:', error);
+      }
+    }, 10000); // Update every 10 seconds
   }
 }
 

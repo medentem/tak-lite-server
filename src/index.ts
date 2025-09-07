@@ -253,7 +253,11 @@ app.get('/admin', (_req: Request, res: Response) => {
 // TODO: add sync/users/analytics/admin routes in subsequent phases
 
 // WebSocket connection handling (basic placeholders)
-new SocketGateway(io, configService, syncService).bind();
+const socketGateway = new SocketGateway(io, configService, syncService);
+socketGateway.bind();
+
+// Make socket gateway available to sync service for admin events
+(io as any).socketGateway = socketGateway;
 
 // Background services
 retentionService.start();
