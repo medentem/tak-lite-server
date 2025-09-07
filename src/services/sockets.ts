@@ -14,12 +14,25 @@ export class SocketGateway {
     // Require authentication during connection via auth token in query or headers
     this.io.use(async (socket, next) => {
       try {
+        console.log('[SOCKET] Authentication attempt:', {
+          auth: socket.handshake.auth,
+          headers: socket.handshake.headers,
+          query: socket.handshake.query
+        });
+        
         const token = (socket.handshake.auth?.token as string) || (socket.handshake.headers['authorization']?.toString().split(' ')[1] || '');
-        if (!token) return next(new Error('Missing token'));
+        if (!token) {
+          console.log('[SOCKET] Missing token');
+          return next(new Error('Missing token'));
+        }
+        
+        console.log('[SOCKET] Token found, verifying...');
         const payload = await this.security.verifyJwt<{ sub: string; is_admin?: boolean }>(token);
         (socket.data as any).user = { id: payload.sub, is_admin: !!payload.is_admin };
+        console.log('[SOCKET] Authentication successful for user:', payload.sub);
         next();
       } catch (e) {
+        console.error('[SOCKET] Authentication failed:', e);
         next(new Error('Invalid token'));
       }
     });
@@ -27,6 +40,7 @@ export class SocketGateway {
   }
 
   private async onConnection(socket: Socket) {
+    console.log('[SOCKET] Client connected:', socket.id);
     socket.emit('hello');
 
     socket.on('team:join', async (teamId: string) => {
