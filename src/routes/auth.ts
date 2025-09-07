@@ -181,9 +181,9 @@ export function createAuthRouter(db: DatabaseService, config: ConfigService) {
       const userId = payload.sub;
       
       // Get teams the user is a member of
-      const teams = await db.client('team_members')
-        .join('teams', 'team_members.team_id', 'teams.id')
-        .where('team_members.user_id', userId)
+      const teams = await db.client('team_memberships')
+        .join('teams', 'team_memberships.team_id', 'teams.id')
+        .where('team_memberships.user_id', userId)
         .select('teams.id', 'teams.name', 'teams.created_at')
         .orderBy('teams.name');
       
