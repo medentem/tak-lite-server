@@ -364,44 +364,9 @@
       </div>
     </div>
 
-    <script>
-      // Debug Socket.IO loading
-      console.log('Loading Socket.IO library...');
-      
-      // Function to load Socket.IO with fallback
-      function loadSocketIO() {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
-        script.onload = function() {
-          console.log('Socket.IO library loaded successfully');
-        };
-        script.onerror = function() {
-          console.error('Primary CDN failed, trying fallback...');
-          // Try fallback CDN
-          const fallbackScript = document.createElement('script');
-          fallbackScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js';
-          fallbackScript.onload = function() {
-            console.log('Socket.IO library loaded from fallback CDN');
-          };
-          fallbackScript.onerror = function() {
-            console.error('All CDN sources failed - WebSocket features will not work');
-            showSocketIOError();
-          };
-          document.head.appendChild(fallbackScript);
-        };
-        document.head.appendChild(script);
-      }
-      
-      function showSocketIOError() {
-        const errorDiv = document.createElement('div');
-        errorDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ef4444;color:white;padding:10px;text-align:center;z-index:9999;';
-        errorDiv.innerHTML = '⚠️ WebSocket library failed to load - real-time features disabled. Check your internet connection.';
-        document.body.appendChild(errorDiv);
-      }
-      
-      // Load Socket.IO
-      loadSocketIO();
-    </script>
+    <script src="/socket.io-client/socket.io.min.js" 
+            onload="console.log('Socket.IO library loaded from local server')"
+            onerror="console.error('Failed to load Socket.IO from local server')"></script>
     <script>
       // Simple check for Socket.IO availability
       window.addEventListener('load', function() {

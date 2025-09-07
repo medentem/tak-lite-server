@@ -176,6 +176,12 @@ if (fs.existsSync(staticPrimary)) {
   app.use('/public', express.static(staticFallback));
 }
 
+// Serve Socket.IO client library from node_modules
+const socketIOPath = path.resolve(__dirname, '..', 'node_modules', 'socket.io-client', 'dist');
+if (fs.existsSync(socketIOPath)) {
+  app.use('/socket.io-client', express.static(socketIOPath));
+}
+
 app.get('/metrics', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const completed = await configService.get<boolean>('setup.completed');
@@ -242,7 +248,7 @@ app.use('/api/sync', auth.authenticate, createSyncRouter(syncService));
 // Serve admin UI
 app.get('/admin', (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/html');
-  // Strict CSP for admin: external scripts only; allow inline styles for now
+  // Strict CSP for admin: only local scripts allowed
   res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'");
   const primary = path.resolve(__dirname, 'public', 'admin.html');
   const fallback = path.resolve(__dirname, '..', 'public', 'admin.html');
