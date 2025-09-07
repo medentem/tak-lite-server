@@ -176,23 +176,7 @@ if (fs.existsSync(staticPrimary)) {
   app.use('/public', express.static(staticFallback));
 }
 
-// Serve Socket.IO client library from node_modules
-const socketIOPath = path.resolve(__dirname, '..', 'node_modules', 'socket.io', 'client-dist');
-if (fs.existsSync(socketIOPath)) {
-  console.log(`[SERVER] Serving Socket.IO client from: ${socketIOPath}`);
-  app.use('/socket.io-client', express.static(socketIOPath));
-  
-  // Test route to verify Socket.IO client is accessible
-  app.get('/socket.io-client/test', (_req: Request, res: Response) => {
-    res.json({ 
-      message: 'Socket.IO client is being served',
-      path: socketIOPath,
-      files: fs.readdirSync(socketIOPath)
-    });
-  });
-} else {
-  console.error(`[SERVER] Socket.IO client path not found: ${socketIOPath}`);
-}
+// Socket.IO client library is now served from CDN (see CSP configuration)
 
 app.get('/metrics', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -260,8 +244,8 @@ app.use('/api/sync', auth.authenticate, createSyncRouter(syncService));
 // Serve admin UI
 app.get('/admin', (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/html');
-  // Strict CSP for admin: only local scripts allowed
-  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'");
+  // CSP for admin: allow Socket.IO CDN and local scripts
+  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' https://cdn.socket.io https://cdnjs.cloudflare.com; connect-src 'self'");
   const primary = path.resolve(__dirname, 'public', 'admin.html');
   const fallback = path.resolve(__dirname, '..', 'public', 'admin.html');
   const file = fs.existsSync(primary) ? primary : fallback;
