@@ -307,6 +307,14 @@
             <strong>Live updates</strong> of connected devices, sync activity, and system events
           </div>
           
+          <div style="display: flex; justify-content: space-between; align-items: center; margin: 16px 0;">
+            <div>
+              <strong>WebSocket Status:</strong> 
+              <span id="ws_status" style="color: #ef4444;">Disconnected</span>
+            </div>
+            <button id="reconnect_ws" class="secondary small">Reconnect WebSocket</button>
+          </div>
+          
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
             <div>
               <h3 style="margin: 0 0 8px; font-size: 14px; color: #cbd5e1;">Active Connections</h3>
@@ -356,7 +364,55 @@
       </div>
     </div>
 
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+      // Debug Socket.IO loading
+      console.log('Loading Socket.IO library...');
+      
+      // Function to load Socket.IO with fallback
+      function loadSocketIO() {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
+        script.onload = function() {
+          console.log('Socket.IO library loaded successfully');
+        };
+        script.onerror = function() {
+          console.error('Primary CDN failed, trying fallback...');
+          // Try fallback CDN
+          const fallbackScript = document.createElement('script');
+          fallbackScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js';
+          fallbackScript.onload = function() {
+            console.log('Socket.IO library loaded from fallback CDN');
+          };
+          fallbackScript.onerror = function() {
+            console.error('All CDN sources failed - WebSocket features will not work');
+            showSocketIOError();
+          };
+          document.head.appendChild(fallbackScript);
+        };
+        document.head.appendChild(script);
+      }
+      
+      function showSocketIOError() {
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ef4444;color:white;padding:10px;text-align:center;z-index:9999;';
+        errorDiv.innerHTML = '⚠️ WebSocket library failed to load - real-time features disabled. Check your internet connection.';
+        document.body.appendChild(errorDiv);
+      }
+      
+      // Load Socket.IO
+      loadSocketIO();
+    </script>
+    <script>
+      // Simple check for Socket.IO availability
+      window.addEventListener('load', function() {
+        console.log('Page loaded, checking Socket.IO availability...');
+        if (typeof io === 'undefined') {
+          console.error('Socket.IO library failed to load from all CDN sources');
+        } else {
+          console.log('Socket.IO library is available');
+        }
+      });
+    </script>
     <script src="/public/js/admin.js"></script>
   </body>
 </html>

@@ -5,6 +5,8 @@ const q = (s)=>document.querySelector(s);
 let socket = null;
 let activityLog = [];
 const MAX_ACTIVITY_ITEMS = 50;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 // Real-time activity logging
 function addActivityLog(message, type = 'info') {
@@ -40,6 +42,13 @@ function updateActivityDisplay() {
 
 // WebSocket connection management
 function connectWebSocket() {
+  // Check if Socket.IO library is loaded first
+  if (typeof io === 'undefined') {
+    console.error('Socket.IO library not loaded');
+    addActivityLog('Socket.IO library not loaded - check network connection', 'error');
+    return;
+  }
+  
   if (socket) {
     socket.disconnect();
   }
@@ -55,16 +64,42 @@ function connectWebSocket() {
     socket.on('connect', () => {
       console.log('Admin WebSocket connected');
       addActivityLog('WebSocket connected', 'success');
+      reconnectAttempts = 0; // Reset on successful connection
+      updateWebSocketStatus('Connected', '#22c55e');
     });
     
-    socket.on('disconnect', () => {
-      console.log('Admin WebSocket disconnected');
-      addActivityLog('WebSocket disconnected', 'warning');
+    socket.on('disconnect', (reason) => {
+      console.log('Admin WebSocket disconnected:', reason);
+      addActivityLog(`WebSocket disconnected: ${reason}`, 'warning');
+      updateWebSocketStatus('Disconnected', '#ef4444');
+      
+      // Auto-reconnect on unexpected disconnections
+      if (reason === 'io server disconnect') {
+        // Server initiated disconnect, don't auto-reconnect
+        addActivityLog('Server disconnected - manual reconnection required', 'error');
+      } else if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        updateWebSocketStatus('Reconnecting...', '#f59e0b');
+        setTimeout(() => {
+          reconnectAttempts++;
+          addActivityLog(`Attempting reconnection ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`, 'info');
+          connectWebSocket();
+        }, 2000 * reconnectAttempts); // Exponential backoff
+      }
     });
     
     socket.on('connect_error', (error) => {
       console.error('WebSocket connection error:', error);
       addActivityLog(`Connection error: ${error.message}`, 'error');
+      
+      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        setTimeout(() => {
+          reconnectAttempts++;
+          addActivityLog(`Retrying connection ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`, 'info');
+          connectWebSocket();
+        }, 3000 * reconnectAttempts);
+      } else {
+        addActivityLog('Max reconnection attempts reached', 'error');
+      }
     });
     
     // Listen for real-time updates
@@ -92,6 +127,39 @@ function disconnectWebSocket() {
   if (socket) {
     socket.disconnect();
     socket = null;
+  }
+  updateWebSocketStatus('Disconnected', '#ef4444');
+}
+
+// Update WebSocket status display
+function updateWebSocketStatus(status, color) {
+  const statusEl = q('#ws_status');
+  if (statusEl) {
+    statusEl.textContent = status;
+    statusEl.style.color = color;
+  }
+}
+
+// Initialize WebSocket status on page load
+document.addEventListener('DOMContentLoaded', () => {
+  updateWebSocketStatus('Disconnected', '#ef4444');
+  
+  // Wait for Socket.IO library to load
+  waitForSocketIO();
+});
+
+// Wait for Socket.IO library to be available
+function waitForSocketIO() {
+  if (typeof io !== 'undefined') {
+    console.log('Socket.IO library is available');
+    // If we're already logged in, try to connect WebSocket
+    if (token) {
+      connectWebSocket();
+    }
+  } else {
+    console.log('Waiting for Socket.IO library...');
+    updateWebSocketStatus('Loading Library...', '#f59e0b');
+    setTimeout(waitForSocketIO, 100);
   }
 }
 
@@ -170,7 +238,14 @@ function showDash(show) {
   q('#who').classList.toggle('hidden', !show);
   
   if (show) {
-    connectWebSocket();
+    // Wait for Socket.IO library if not available, then connect
+    if (typeof io !== 'undefined') {
+      connectWebSocket();
+    } else {
+      console.log('Socket.IO not ready, waiting...');
+      updateWebSocketStatus('Loading Library...', '#f59e0b');
+      waitForSocketIO();
+    }
   } else {
     disconnectWebSocket();
   }
@@ -367,6 +442,23 @@ q('#logout').onclick = async () => {
   showDash(false);
   showMessage('Logged out successfully', 'info', 3000);
 };
+
+// Manual WebSocket reconnection
+const reconnectBtn = q('#reconnect_ws');
+if (reconnectBtn) {
+  reconnectBtn.onclick = () => {
+    addActivityLog('Manual reconnection requested', 'info');
+    reconnectAttempts = 0; // Reset attempts for manual reconnect
+    
+    if (typeof io !== 'undefined') {
+      connectWebSocket();
+    } else {
+      console.log('Socket.IO not ready, waiting...');
+      updateWebSocketStatus('Loading Library...', '#f59e0b');
+      waitForSocketIO();
+    }
+  };
+}
 
 // Enhanced save configuration with validation
 q('#save').onclick = async () => {
