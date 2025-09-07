@@ -177,9 +177,21 @@ if (fs.existsSync(staticPrimary)) {
 }
 
 // Serve Socket.IO client library from node_modules
-const socketIOPath = path.resolve(__dirname, '..', 'node_modules', 'socket.io-client', 'dist');
+const socketIOPath = path.resolve(__dirname, '..', 'node_modules', 'socket.io', 'client-dist');
 if (fs.existsSync(socketIOPath)) {
+  console.log(`[SERVER] Serving Socket.IO client from: ${socketIOPath}`);
   app.use('/socket.io-client', express.static(socketIOPath));
+  
+  // Test route to verify Socket.IO client is accessible
+  app.get('/socket.io-client/test', (_req: Request, res: Response) => {
+    res.json({ 
+      message: 'Socket.IO client is being served',
+      path: socketIOPath,
+      files: fs.readdirSync(socketIOPath)
+    });
+  });
+} else {
+  console.error(`[SERVER] Socket.IO client path not found: ${socketIOPath}`);
 }
 
 app.get('/metrics', async (req: Request, res: Response, next: NextFunction) => {
