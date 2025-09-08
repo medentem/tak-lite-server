@@ -244,8 +244,8 @@ app.use('/api/sync', auth.authenticate, createSyncRouter(syncService));
 // Serve admin UI
 app.get('/admin', (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/html');
-  // CSP for admin: allow Socket.IO CDN, local scripts, and inline scripts
-  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://cdn.socket.io https://cdnjs.cloudflare.com; connect-src 'self'");
+  // CSP for admin: allow Socket.IO CDN, MapLibre CDN, local scripts, and inline scripts
+  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.socket.io https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net; connect-src 'self'");
   const primary = path.resolve(__dirname, 'public', 'admin.html');
   const fallback = path.resolve(__dirname, '..', 'public', 'admin.html');
   const file = fs.existsSync(primary) ? primary : fallback;
