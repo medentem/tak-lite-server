@@ -115,9 +115,9 @@ class AdminMap {
     });
   }
   
-  async setupMapSources() {
-    // Generate SVG-based POI icons for all shape-color combinations
-    await this.generateSvgPoiIcons();
+  setupMapSources() {
+    // Generate Canvas-based POI icons for all shape-color combinations
+    this.generateCanvasPoiIcons();
     
     // Add annotation sources
     this.map.addSource('annotations-poi', {
@@ -149,110 +149,129 @@ class AdminMap {
     this.addMapLayers();
   }
   
-  // Generate SVG-based POI icons (matching Android app exactly)
-  async generateSvgPoiIcons() {
+  // Generate Canvas-based POI icons (matching Android app exactly)
+  generateCanvasPoiIcons() {
     const shapes = ['circle', 'square', 'triangle', 'exclamation'];
     const colors = ['green', 'yellow', 'red', 'black', 'white'];
     
-    for (const shape of shapes) {
-      for (const color of colors) {
+    shapes.forEach(shape => {
+      colors.forEach(color => {
         const iconName = `poi-${shape}-${color}`;
         try {
-          const imageElement = await this.createSvgPoiIcon(shape, color);
-          this.map.addImage(iconName, imageElement);
-          console.log(`Generated SVG POI icon: ${iconName}`);
+          const imageData = this.createCanvasPoiIcon(shape, color);
+          this.map.addImage(iconName, imageData);
+          console.log(`Generated Canvas POI icon: ${iconName}`);
         } catch (error) {
-          console.error(`Failed to create SVG icon ${iconName}:`, error);
+          console.error(`Failed to create Canvas icon ${iconName}:`, error);
         }
-      }
-    }
+      });
+    });
   }
   
-  // Create SVG POI icon (matching Android app exactly)
-  async createSvgPoiIcon(shape, color) {
+  // Create Canvas POI icon (matching Android app exactly)
+  createCanvasPoiIcon(shape, color) {
     const size = 80; // Match Android bitmap size
     const centerX = size / 2;
     const centerY = size / 2;
     const radius = size / 3; // Match Android radius calculation
     const colorHex = this.getColorHex(color);
     
-    let shapeSvg = '';
+    // Create canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, size, size);
+    
+    // Set up drawing styles
+    ctx.fillStyle = colorHex;
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     
     switch (shape) {
       case 'circle':
-        shapeSvg = `<circle cx="${centerX}" cy="${centerY}" r="${radius}" fill="${colorHex}" stroke="#FFFFFF" stroke-width="2"/>`;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
         break;
         
       case 'square':
         const squareSize = radius * 2;
         const squareOffset = (size - squareSize) / 2;
-        shapeSvg = `<rect x="${squareOffset}" y="${squareOffset}" width="${squareSize}" height="${squareSize}" fill="${colorHex}" stroke="#FFFFFF" stroke-width="2"/>`;
+        ctx.beginPath();
+        ctx.rect(squareOffset, squareOffset, squareSize, squareSize);
+        ctx.fill();
+        ctx.stroke();
         break;
         
       case 'triangle':
         const height = radius * 2;
-        const topX = centerX;
         const topY = centerY - height / 2;
         const leftX = centerX - radius;
         const leftY = centerY + height / 2;
         const rightX = centerX + radius;
         const rightY = centerY + height / 2;
-        shapeSvg = `<path d="M ${topX} ${topY} L ${leftX} ${leftY} L ${rightX} ${rightY} Z" fill="${colorHex}" stroke="#FFFFFF" stroke-width="2"/>`;
+        
+        ctx.beginPath();
+        ctx.moveTo(centerX, topY);
+        ctx.lineTo(leftX, leftY);
+        ctx.lineTo(rightX, rightY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
         break;
         
       case 'exclamation':
         // Triangle base
         const exHeight = radius * 2;
-        const exTopX = centerX;
         const exTopY = centerY - exHeight / 2;
         const exLeftX = centerX - radius;
         const exLeftY = centerY + exHeight / 2;
         const exRightX = centerX + radius;
         const exRightY = centerY + exHeight / 2;
         
-        // Exclamation mark positions
+        // Draw triangle
+        ctx.beginPath();
+        ctx.moveTo(centerX, exTopY);
+        ctx.lineTo(exLeftX, exLeftY);
+        ctx.lineTo(exRightX, exRightY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Draw exclamation mark
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 4;
         const exMarkTop = centerY - exHeight / 6;
         const exMarkBottom = centerY + exHeight / 6;
+        
+        ctx.beginPath();
+        ctx.moveTo(centerX, exMarkTop);
+        ctx.lineTo(centerX, exMarkBottom);
+        ctx.stroke();
+        
+        // Draw dot
+        ctx.fillStyle = '#FFFFFF';
         const dotRadius = 3;
         const dotCenterY = exMarkBottom + dotRadius * 2;
-        
-        shapeSvg = `
-          <path d="M ${exTopX} ${exTopY} L ${exLeftX} ${exLeftY} L ${exRightX} ${exRightY} Z" fill="${colorHex}" stroke="#FFFFFF" stroke-width="2"/>
-          <line x1="${centerX}" y1="${exMarkTop}" x2="${centerX}" y2="${exMarkBottom}" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
-          <circle cx="${centerX}" cy="${dotCenterY}" r="${dotRadius}" fill="#FFFFFF"/>
-        `;
+        ctx.beginPath();
+        ctx.arc(centerX, dotCenterY, dotRadius, 0, 2 * Math.PI);
+        ctx.fill();
         break;
     }
     
-    const svg = `
-      <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-        ${shapeSvg}
-      </svg>
-    `;
-    
-    // Convert SVG to HTMLImageElement
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      
-      // Convert SVG to data URL
-      const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(svgBlob);
-      img.src = url;
-      
-      // Clean up the blob URL after image loads
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        resolve(img);
-      };
-    });
+    return canvas;
   }
   
   
   
   addMapLayers() {
-    // POI markers - use symbol layer with SVG shape icons (matching Android app)
+    // POI markers - use symbol layer with Canvas shape icons (matching Android app)
     this.map.addLayer({
       id: 'annotations-poi',
       type: 'symbol',
@@ -596,7 +615,7 @@ class AdminMap {
     // Ensure map sources are set up
     if (!this.map.getSource('annotations-poi')) {
       console.log('Map sources not ready, setting up...');
-      await this.setupMapSources();
+      this.setupMapSources();
     }
     
     console.log('Loading map data...');
