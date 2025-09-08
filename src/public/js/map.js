@@ -10,6 +10,8 @@ class AdminMap {
     this.showLocations = true;
     this.annotationSources = {};
     this.locationSources = {};
+    this.currentPopup = null;
+    this.ageUpdateInterval = null;
     
     this.init();
   }
@@ -479,6 +481,9 @@ class AdminMap {
   }
   
   showAnnotationPopup(feature, lngLat) {
+    // Close any existing popups first
+    this.closeAllPopups();
+    
     const properties = feature.properties;
     // Find the full annotation data for more detailed calculations
     const fullAnnotation = this.annotations.find(ann => ann.id === properties.id);
@@ -492,9 +497,18 @@ class AdminMap {
       .setLngLat(lngLat)
       .setHTML(popupContent)
       .addTo(this.map);
+    
+    // Store reference to current popup for cleanup
+    this.currentPopup = popup;
+    
+    // Start age updates for this popup
+    this.startAgeUpdates(popup);
   }
   
   showLocationPopup(feature, lngLat) {
+    // Close any existing popups first
+    this.closeAllPopups();
+    
     const properties = feature.properties;
     const popupContent = this.buildLocationPopupContent(properties, lngLat);
     
@@ -506,6 +520,12 @@ class AdminMap {
       .setLngLat(lngLat)
       .setHTML(popupContent)
       .addTo(this.map);
+    
+    // Store reference to current popup for cleanup
+    this.currentPopup = popup;
+    
+    // Start age updates for this popup
+    this.startAgeUpdates(popup);
   }
   
   // Build enhanced popover content for annotations (matching Android app style)
@@ -548,9 +568,8 @@ class AdminMap {
     lines.push(title);
     
     // Add location-specific information
-    const ageSec = Math.floor((Date.now() - new Date(properties.timestamp).getTime()) / 1000);
-    const ageStr = ageSec > 60 ? `${Math.floor(ageSec / 60)}m old` : `${ageSec}s old`;
-    lines.push(ageStr);
+    // Age (will be updated dynamically)
+    lines.push({ type: 'age', timestamp: properties.timestamp });
     
     // Coordinates
     const coords = `${properties.latitude.toFixed(5)}, ${properties.longitude.toFixed(5)}`;
@@ -575,10 +594,8 @@ class AdminMap {
   
   // Add POI-specific information
   addPoiInfo(lines, properties, lngLat) {
-    // Age
-    const ageSec = Math.floor((Date.now() - new Date(properties.timestamp).getTime()) / 1000);
-    const ageStr = ageSec > 60 ? `${Math.floor(ageSec / 60)}m old` : `${ageSec}s old`;
-    lines.push(ageStr);
+    // Age (will be updated dynamically)
+    lines.push({ type: 'age', timestamp: properties.timestamp });
     
     // Coordinates
     const coords = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
@@ -599,10 +616,8 @@ class AdminMap {
       lines.push(this.formatDistance(length));
     }
     
-    // Age
-    const ageSec = Math.floor((Date.now() - new Date(properties.timestamp).getTime()) / 1000);
-    const ageStr = ageSec > 60 ? `${Math.floor(ageSec / 60)}m old` : `${ageSec}s old`;
-    lines.push(ageStr);
+    // Age (will be updated dynamically)
+    lines.push({ type: 'age', timestamp: properties.timestamp });
     
     // Coordinates (center of line)
     const coords = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
@@ -623,10 +638,8 @@ class AdminMap {
       lines.push(this.formatArea(area));
     }
     
-    // Age
-    const ageSec = Math.floor((Date.now() - new Date(properties.timestamp).getTime()) / 1000);
-    const ageStr = ageSec > 60 ? `${Math.floor(ageSec / 60)}m old` : `${ageSec}s old`;
-    lines.push(ageStr);
+    // Age (will be updated dynamically)
+    lines.push({ type: 'age', timestamp: properties.timestamp });
     
     // Coordinates (center of area)
     const coords = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
@@ -647,10 +660,8 @@ class AdminMap {
       lines.push(this.formatArea(area));
     }
     
-    // Age
-    const ageSec = Math.floor((Date.now() - new Date(properties.timestamp).getTime()) / 1000);
-    const ageStr = ageSec > 60 ? `${Math.floor(ageSec / 60)}m old` : `${ageSec}s old`;
-    lines.push(ageStr);
+    // Age (will be updated dynamically)
+    lines.push({ type: 'age', timestamp: properties.timestamp });
     
     // Coordinates (center of polygon)
     const coords = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
@@ -683,10 +694,19 @@ class AdminMap {
     const title = lines[0];
     const content = lines.slice(1);
     
+    // Process content lines, handling age objects specially
+    const processedContent = content.map(line => {
+      if (typeof line === 'object' && line.type === 'age') {
+        return `<span class="age-text" data-timestamp="${line.timestamp}">${this.formatAge(line.timestamp)}</span>`;
+      } else {
+        return this.escapeHtml(line);
+      }
+    });
+    
     return `
       <div class="popup-container">
         <div class="popup-title">${this.escapeHtml(title)}</div>
-        ${content.length > 0 ? `<div class="popup-content">${content.map(line => this.escapeHtml(line)).join('<br>')}</div>` : ''}
+        ${processedContent.length > 0 ? `<div class="popup-content">${processedContent.join('<br>')}</div>` : ''}
         ${properties.status ? `<div class="popup-status">${this.getStatusDescription(properties.status)}</div>` : ''}
       </div>
     `;
@@ -818,6 +838,97 @@ class AdminMap {
   // Convert degrees to radians
   toRadians(degrees) {
     return degrees * (Math.PI / 180);
+  }
+  
+  // Close all existing popups
+  closeAllPopups() {
+    if (this.currentPopup) {
+      this.currentPopup.remove();
+      this.currentPopup = null;
+    }
+    
+    // Also close any other popups that might exist
+    const popups = document.querySelectorAll('.maplibregl-popup');
+    popups.forEach(popup => {
+      if (popup._popup) {
+        popup._popup.remove();
+      }
+    });
+    
+    // Clear any age update intervals
+    if (this.ageUpdateInterval) {
+      clearInterval(this.ageUpdateInterval);
+      this.ageUpdateInterval = null;
+    }
+  }
+  
+  // Format age with dynamic updates (e.g., "1d 2h 3m ago", "45m 10s ago")
+  formatAge(timestamp) {
+    const now = Date.now();
+    const ageMs = now - new Date(timestamp).getTime();
+    
+    if (ageMs < 0) return 'Just now';
+    
+    const seconds = Math.floor(ageMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    const parts = [];
+    
+    if (days > 0) {
+      parts.push(`${days}d`);
+    }
+    if (hours % 24 > 0) {
+      parts.push(`${hours % 24}h`);
+    }
+    if (minutes % 60 > 0) {
+      parts.push(`${minutes % 60}m`);
+    }
+    if (seconds % 60 > 0 && days === 0 && hours === 0) {
+      parts.push(`${seconds % 60}s`);
+    }
+    
+    if (parts.length === 0) {
+      return 'Just now';
+    }
+    
+    return parts.join(' ') + ' ago';
+  }
+  
+  // Start age update interval for current popup
+  startAgeUpdates(popup) {
+    if (this.ageUpdateInterval) {
+      clearInterval(this.ageUpdateInterval);
+    }
+    
+    this.ageUpdateInterval = setInterval(() => {
+      if (this.currentPopup && this.currentPopup.isOpen()) {
+        // Update the popup content with new age
+        this.updatePopupAge();
+      } else {
+        // Popup is closed, stop updating
+        clearInterval(this.ageUpdateInterval);
+        this.ageUpdateInterval = null;
+      }
+    }, 1000); // Update every second
+  }
+  
+  // Update age in current popup
+  updatePopupAge() {
+    if (!this.currentPopup || !this.currentPopup.isOpen()) return;
+    
+    const popupContent = this.currentPopup.getElement();
+    if (!popupContent) return;
+    
+    // Find all age elements and update them
+    const ageElements = popupContent.querySelectorAll('.age-text');
+    ageElements.forEach(element => {
+      const timestamp = element.dataset.timestamp;
+      if (timestamp) {
+        element.textContent = this.formatAge(timestamp);
+      }
+    });
   }
   
   setupEventListeners() {
@@ -1340,6 +1451,9 @@ class AdminMap {
   cleanup() {
     // Disconnect WebSocket listeners
     this.disconnectFromWebSocket();
+    
+    // Close any open popups
+    this.closeAllPopups();
     
     console.log('AdminMap cleaned up');
   }
