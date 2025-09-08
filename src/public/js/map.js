@@ -303,7 +303,91 @@ class AdminMap {
   
   
   addMapLayers() {
-    // POI markers - use symbol layer with Canvas shape icons (matching Android app)
+    // IMPORTANT: Layer order matters for click handling!
+    // Areas and polygons should be at the bottom (rendered first)
+    // POIs, lines, and locations should be on top (rendered last)
+    
+    // 1. Areas (fill) - bottom layer
+    if (!this.map.getLayer('annotations-area')) {
+      this.map.addLayer({
+        id: 'annotations-area',
+        type: 'fill',
+        source: 'annotations-area',
+        paint: {
+          'fill-color': ['get', 'color'],
+          'fill-opacity': ['get', 'fillOpacity']
+        }
+      });
+    }
+
+    // 2. Areas (stroke) - on top of area fill
+    if (!this.map.getLayer('annotations-area-stroke')) {
+      this.map.addLayer({
+        id: 'annotations-area-stroke',
+        type: 'line',
+        source: 'annotations-area',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': ['get', 'strokeWidth'],
+          'line-opacity': 1.0
+        }
+      });
+    }
+    
+    // 3. Polygons (fill) - on top of areas
+    if (!this.map.getLayer('annotations-polygon')) {
+      this.map.addLayer({
+        id: 'annotations-polygon',
+        type: 'fill',
+        source: 'annotations-polygon',
+        paint: {
+          'fill-color': ['get', 'color'],
+          'fill-opacity': 0.3
+        }
+      });
+    }
+    
+    // 4. Polygons (stroke) - on top of polygon fill
+    if (!this.map.getLayer('annotations-polygon-stroke')) {
+      this.map.addLayer({
+        id: 'annotations-polygon-stroke',
+        type: 'line',
+        source: 'annotations-polygon',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 2,
+          'line-opacity': 0.8
+        }
+      });
+    }
+    
+    // 5. Lines - on top of areas and polygons
+    if (!this.map.getLayer('annotations-line')) {
+      this.map.addLayer({
+        id: 'annotations-line',
+        type: 'line',
+        source: 'annotations-line',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 3,
+          'line-opacity': 0.8
+        }
+      });
+    }
+    
+    // 6. POI markers - on top of everything (most important for clicking)
     if (!this.map.getLayer('annotations-poi')) {
       this.map.addLayer({
         id: 'annotations-poi',
@@ -340,85 +424,7 @@ class AdminMap {
       });
     }
     
-    // Lines
-    if (!this.map.getLayer('annotations-line')) {
-      this.map.addLayer({
-        id: 'annotations-line',
-        type: 'line',
-        source: 'annotations-line',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
-        paint: {
-          'line-color': ['get', 'color'],
-          'line-width': 3,
-          'line-opacity': 0.8
-        }
-      });
-    }
-    
-    // Areas (polygons - matching Android app approach)
-    if (!this.map.getLayer('annotations-area')) {
-      this.map.addLayer({
-        id: 'annotations-area',
-        type: 'fill',
-        source: 'annotations-area',
-        paint: {
-          'fill-color': ['get', 'color'],
-          'fill-opacity': ['get', 'fillOpacity']
-        }
-      });
-    }
-
-    if (!this.map.getLayer('annotations-area-stroke')) {
-      this.map.addLayer({
-        id: 'annotations-area-stroke',
-        type: 'line',
-        source: 'annotations-area',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
-        paint: {
-          'line-color': ['get', 'color'],
-          'line-width': ['get', 'strokeWidth'],
-          'line-opacity': 1.0
-        }
-      });
-    }
-    
-    // Polygons
-    if (!this.map.getLayer('annotations-polygon')) {
-      this.map.addLayer({
-        id: 'annotations-polygon',
-        type: 'fill',
-        source: 'annotations-polygon',
-        paint: {
-          'fill-color': ['get', 'color'],
-          'fill-opacity': 0.3
-        }
-      });
-    }
-    
-    if (!this.map.getLayer('annotations-polygon-stroke')) {
-      this.map.addLayer({
-        id: 'annotations-polygon-stroke',
-        type: 'line',
-        source: 'annotations-polygon',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
-        paint: {
-          'line-color': ['get', 'color'],
-          'line-width': 2,
-          'line-opacity': 0.8
-        }
-      });
-    }
-    
-    // Location markers
+    // 7. Location markers - top layer (most important for clicking)
     if (!this.map.getLayer('locations')) {
       this.map.addLayer({
         id: 'locations',
