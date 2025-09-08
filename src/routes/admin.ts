@@ -123,6 +123,90 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
     }
   });
 
+  // Map data endpoints for admin dashboard
+  router.get('/map/annotations', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!db) return res.json([]);
+      
+      const teamId = req.query.teamId as string;
+      const limit = parseInt(req.query.limit as string) || 1000;
+      const since = req.query.since as string; // ISO timestamp
+      
+      let query = db.client('annotations')
+        .select(['id', 'user_id', 'team_id', 'type', 'data', 'created_at', 'updated_at'])
+        .orderBy('updated_at', 'desc')
+        .limit(limit);
+      
+      if (teamId) {
+        query = query.where('team_id', teamId);
+      }
+      
+      if (since) {
+        query = query.where('updated_at', '>', since);
+      }
+      
+      const annotations = await query;
+      res.json(annotations);
+    } catch (err) { next(err); }
+  });
+
+  router.get('/map/locations', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!db) return res.json([]);
+      
+      const teamId = req.query.teamId as string;
+      const limit = parseInt(req.query.limit as string) || 100;
+      const since = req.query.since as string; // ISO timestamp
+      
+      let query = db.client('locations as l')
+        .join('users as u', 'u.id', 'l.user_id')
+        .select([
+          'l.id', 'l.user_id', 'l.team_id', 'l.latitude', 'l.longitude', 
+          'l.altitude', 'l.accuracy', 'l.timestamp', 'l.created_at',
+          'u.name as user_name', 'u.email as user_email'
+        ])
+        .orderBy('l.timestamp', 'desc')
+        .limit(limit);
+      
+      if (teamId) {
+        query = query.where('l.team_id', teamId);
+      }
+      
+      if (since) {
+        query = query.where('l.timestamp', '>', new Date(since).getTime());
+      }
+      
+      const locations = await query;
+      res.json(locations);
+    } catch (err) { next(err); }
+  });
+
+  router.get('/map/locations/latest', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!db) return res.json([]);
+      
+      const teamId = req.query.teamId as string;
+      
+      if (!teamId) {
+        return res.status(400).json({ error: 'teamId is required' });
+      }
+      
+      // Get latest location for each user in the team
+      const locations = await db.client.raw(`
+        SELECT DISTINCT ON (l.user_id) 
+          l.id, l.user_id, l.team_id, l.latitude, l.longitude, 
+          l.altitude, l.accuracy, l.timestamp, l.created_at,
+          u.name as user_name, u.email as user_email
+        FROM locations l
+        JOIN users u ON u.id = l.user_id
+        WHERE l.team_id = ?
+        ORDER BY l.user_id, l.timestamp DESC
+      `, [teamId]);
+      
+      res.json(locations.rows || []);
+    } catch (err) { next(err); }
+  });
+
   // --- Users management (admin) ---
   router.get('/users', async (_req: Request, res: Response, next: NextFunction) => {
     try {

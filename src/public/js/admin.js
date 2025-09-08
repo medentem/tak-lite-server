@@ -61,17 +61,26 @@ function connectWebSocket() {
       transports: ['websocket', 'polling']
     });
     
+    // Make socket globally available for other components
+    window.socket = socket;
+    
     socket.on('connect', () => {
       console.log('Admin WebSocket connected');
       addActivityLog('WebSocket connected', 'success');
       reconnectAttempts = 0; // Reset on successful connection
       updateWebSocketStatus('Connected', '#22c55e');
+      
+      // Emit custom event for other components to listen to
+      document.dispatchEvent(new CustomEvent('socketConnected'));
     });
     
     socket.on('disconnect', (reason) => {
       console.log('Admin WebSocket disconnected:', reason);
       addActivityLog(`WebSocket disconnected: ${reason}`, 'warning');
       updateWebSocketStatus('Disconnected', '#ef4444');
+      
+      // Emit custom event for other components to listen to
+      document.dispatchEvent(new CustomEvent('socketDisconnected'));
       
       // Auto-reconnect on unexpected disconnections
       if (reason === 'io server disconnect') {
@@ -127,6 +136,7 @@ function disconnectWebSocket() {
   if (socket) {
     socket.disconnect();
     socket = null;
+    window.socket = null;
   }
   updateWebSocketStatus('Disconnected', '#ef4444');
 }
