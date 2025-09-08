@@ -85,6 +85,28 @@ export class SocketGateway {
       if (data.teamId) this.io.to(`team:${data.teamId}`).emit('annotation:update', annotation);
     });
 
+    socket.on('annotation:delete', async (data: { teamId?: string; annotationId: string }) => {
+      const user = (socket.data as any).user;
+      if (!user) return socket.emit('error', { message: 'Not authenticated' });
+      await this.sync.handleAnnotationDelete(user.id, data);
+      if (data.teamId) this.io.to(`team:${data.teamId}`).emit('annotation:delete', { annotationId: data.annotationId });
+    });
+
+    socket.on('annotation:bulk_delete', async (data: { teamId?: string; annotationIds: string[] }) => {
+      const user = (socket.data as any).user;
+      if (!user) return socket.emit('error', { message: 'Not authenticated' });
+      
+      const result = await this.sync.handleBulkAnnotationDelete(user.id, data);
+      
+      if (data.teamId) {
+        this.io.to(`team:${data.teamId}`).emit('annotation:bulk_delete', { 
+          annotationIds: data.annotationIds 
+        });
+      }
+      
+      socket.emit('annotation:bulk_delete_result', result);
+    });
+
     socket.on('message:send', async (data: { teamId?: string; [key: string]: unknown }) => {
       const user = (socket.data as any).user;
       if (!user) return socket.emit('error', { message: 'Not authenticated' });

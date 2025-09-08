@@ -33,6 +33,43 @@ export function createSyncRouter(sync: SyncService) {
     } catch (err) { next(err); }
   });
 
+  // Delete: single annotation
+  router.delete('/annotation/:annotationId', writeLimiter, async (req, res, next) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+      
+      const qSchema = Joi.object({ teamId: Joi.string().uuid().required() });
+      const { teamId } = await qSchema.validateAsync({ teamId: req.query.teamId });
+      
+      const result = await sync.handleAnnotationDelete(req.user.sub, {
+        teamId,
+        annotationId: req.params.annotationId
+      });
+      
+      res.json(result);
+    } catch (err) { next(err); }
+  });
+
+  // Delete: bulk annotations
+  router.delete('/annotations/bulk', writeLimiter, async (req, res, next) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+      
+      const schema = Joi.object({
+        teamId: Joi.string().uuid().required(),
+        annotationIds: Joi.array().items(Joi.string().uuid()).min(1).max(100).required()
+      });
+      const { teamId, annotationIds } = await schema.validateAsync(req.body);
+      
+      const result = await sync.handleBulkAnnotationDelete(req.user.sub, {
+        teamId,
+        annotationIds
+      });
+      
+      res.json(result);
+    } catch (err) { next(err); }
+  });
+
   // Read: last known locations for a team
   router.get('/locations/last', async (req, res, next) => {
     try {

@@ -62,6 +62,10 @@ export class SyncService {
       data: Joi.object().max(50_000).required() // ~50KB max serialized
     });
     const { teamId, annotationId, type, data } = await schema.validateAsync(payload, { abortEarly: false, stripUnknown: true });
+    
+    // Validate annotation data structure
+    this.validateAnnotationData(type, data);
+    
     await this.assertTeamMembership(userId, teamId);
     const id = annotationId || uuidv4();
     const row = { id, user_id: userId, team_id: teamId, type, data };
@@ -69,6 +73,113 @@ export class SyncService {
     
     this.emitSyncActivity('annotation_update', `User ${userId} ${annotationId ? 'updated' : 'created'} annotation ${id} in team ${teamId}`);
     return row;
+  }
+
+  private validateAnnotationData(type: string, data: any): void {
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid annotation data: must be an object');
+    }
+    
+    // Validate required fields based on type
+    switch (type) {
+      case 'poi':
+        if (!data.position || !data.position.lt || !data.position.lng) {
+          throw new Error('Point of Interest requires valid position');
+        }
+        if (typeof data.position.lt !== 'number' || typeof data.position.lng !== 'number') {
+          throw new Error('Position coordinates must be numbers');
+        }
+        if (data.position.lt < -90 || data.position.lt > 90 || data.position.lng < -180 || data.position.lng > 180) {
+          throw new Error('Position coordinates are out of valid range');
+        }
+        break;
+      case 'line':
+        if (!data.points || !Array.isArray(data.points) || data.points.length < 2) {
+          throw new Error('Line requires at least 2 points');
+        }
+        data.points.forEach((point: any, index: number) => {
+          if (!point.lt || !point.lng) {
+            throw new Error(`Line point ${index} requires valid coordinates`);
+          }
+        });
+        break;
+      case 'area':
+        if (!data.center || !data.radius || data.radius <= 0) {
+          throw new Error('Area requires valid center and radius');
+        }
+        if (!data.center.lt || !data.center.lng) {
+          throw new Error('Area center requires valid coordinates');
+        }
+        break;
+      case 'polygon':
+        if (!data.points || !Array.isArray(data.points) || data.points.length < 3) {
+          throw new Error('Polygon requires at least 3 points');
+        }
+        data.points.forEach((point: any, index: number) => {
+          if (!point.lt || !point.lng) {
+            throw new Error(`Polygon point ${index} requires valid coordinates`);
+          }
+        });
+        break;
+      case 'deletion':
+        if (!data.id) {
+          throw new Error('Deletion annotation requires valid ID');
+        }
+        break;
+      default:
+        throw new Error(`Unknown annotation type: ${type}`);
+    }
+  }
+
+  async handleAnnotationDelete(userId: string, payload: any) {
+    const schema = Joi.object({
+      teamId: Joi.string().uuid().required(),
+      annotationId: Joi.string().uuid().required()
+    });
+    const { teamId, annotationId } = await schema.validateAsync(payload, { abortEarly: false, stripUnknown: true });
+    await this.assertTeamMembership(userId, teamId);
+    
+    // Delete the annotation from the database
+    const deleted = await this.db.client('annotations')
+      .where({ id: annotationId, team_id: teamId })
+      .del();
+    
+    if (deleted > 0) {
+      this.emitSyncActivity('annotation_delete', `User ${userId} deleted annotation ${annotationId} in team ${teamId}`);
+    }
+    
+    return { annotationId, deleted: deleted > 0 };
+  }
+
+  async handleBulkAnnotationDelete(userId: string, payload: any) {
+    const schema = Joi.object({
+      teamId: Joi.string().uuid().required(),
+      annotationIds: Joi.array().items(Joi.string().uuid()).min(1).max(100).required()
+    });
+    
+    const { teamId, annotationIds } = await schema.validateAsync(payload, { 
+      abortEarly: false, 
+      stripUnknown: true 
+    });
+    
+    await this.assertTeamMembership(userId, teamId);
+    
+    // Delete annotations in batch
+    const deleted = await this.db.client('annotations')
+      .whereIn('id', annotationIds)
+      .where('team_id', teamId)
+      .del();
+    
+    if (deleted > 0) {
+      this.emitSyncActivity('annotation_bulk_delete', 
+        `User ${userId} deleted ${deleted} annotations in team ${teamId}`);
+    }
+    
+    return { 
+      annotationIds, 
+      deleted, 
+      requested: annotationIds.length 
+    };
   }
 
   async handleMessage(userId: string, payload: any) {
