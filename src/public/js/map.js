@@ -158,6 +158,12 @@ class AdminMap {
       colors.forEach(color => {
         const iconName = `poi-${shape}-${color}`;
         try {
+          // Check if icon already exists to prevent duplicates
+          if (this.map.getImage(iconName)) {
+            console.log(`Icon ${iconName} already exists, skipping`);
+            return;
+          }
+          
           const imageData = this.createCanvasPoiIcon(shape, color);
           this.map.addImage(iconName, imageData);
           console.log(`Generated Canvas POI icon: ${iconName}`);
