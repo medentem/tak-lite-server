@@ -153,6 +153,8 @@ export class SyncService {
   }
 
   async handleBulkAnnotationDelete(userId: string, payload: any) {
+    console.log('[SYNC] Starting bulk annotation delete:', { userId, payload });
+    
     const schema = Joi.object({
       teamId: Joi.string().uuid().required(),
       annotationIds: Joi.array().items(Joi.string().uuid()).min(1).max(100).required()
@@ -163,13 +165,18 @@ export class SyncService {
       stripUnknown: true 
     });
     
+    console.log('[SYNC] Validated bulk delete request:', { teamId, annotationIds });
+    
     await this.assertTeamMembership(userId, teamId);
     
     // Delete annotations in batch
+    console.log('[SYNC] Executing bulk delete query for annotations:', annotationIds);
     const deleted = await this.db.client('annotations')
       .whereIn('id', annotationIds)
       .where('team_id', teamId)
       .del();
+    
+    console.log('[SYNC] Bulk delete completed:', { deleted, requested: annotationIds.length });
     
     if (deleted > 0) {
       this.emitSyncActivity('annotation_bulk_delete', 

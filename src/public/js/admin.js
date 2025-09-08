@@ -291,16 +291,39 @@ function updateStatsDisplay(stats) {
 
 // Real-time connections update function
 function updateConnectionsDisplay(data) {
-  if (!data || !data.rooms) return;
+  if (!data) return;
   
-  const roomsData = data.rooms;
+  const roomsData = data.rooms || {};
+  const allRoomsData = data.allRooms || {};
+  
+  // Show team rooms (original behavior)
   if (Object.keys(roomsData).length > 0) {
     const formattedRooms = Object.entries(roomsData)
       .map(([room, count]) => `${room}: ${count} connections`)
       .join('\n');
     q('#rooms').textContent = formattedRooms;
   } else {
-    q('#rooms').textContent = 'No active connections';
+    // Show debugging info when no team rooms
+    const totalConnections = data.totalConnections || 0;
+    const authConnections = data.authenticatedConnections || 0;
+    
+    if (totalConnections > 0) {
+      let debugInfo = `Total connections: ${totalConnections}\n`;
+      debugInfo += `Authenticated: ${authConnections}\n\n`;
+      
+      if (Object.keys(allRoomsData).length > 0) {
+        debugInfo += 'All rooms:\n';
+        debugInfo += Object.entries(allRoomsData)
+          .map(([room, count]) => `  ${room}: ${count}`)
+          .join('\n');
+      } else {
+        debugInfo += 'No rooms found';
+      }
+      
+      q('#rooms').textContent = debugInfo;
+    } else {
+      q('#rooms').textContent = 'No active connections';
+    }
   }
 }
 

@@ -51,15 +51,24 @@ export class SocketGateway {
     if (user?.is_admin) {
       this.emitAdminStatsUpdate();
     }
+    
+    // Emit admin connection update for all connections
+    this.emitAdminConnectionUpdate('connect', socket.id);
 
     socket.on('team:join', async (teamId: string) => {
       const user = (socket.data as any).user;
       if (!user) return socket.emit('error', { message: 'Not authenticated' });
       try {
+        console.log(`[SOCKET] User ${user.id} attempting to join team: ${teamId}`);
         await this.sync.assertTeamMembership(user.id, teamId);
         await socket.join(`team:${teamId}`);
+        console.log(`[SOCKET] User ${user.id} successfully joined team: ${teamId}`);
         socket.emit('team:joined', { teamId });
+        
+        // Emit admin connection update to show the new team room
+        this.emitAdminConnectionUpdate('team_join', socket.id);
       } catch (err: any) {
+        console.error(`[SOCKET] Failed to join team ${teamId}:`, err);
         socket.emit('error', { message: err.message || 'Join failed' });
       }
     });
@@ -67,8 +76,12 @@ export class SocketGateway {
     socket.on('team:leave', async (teamId: string) => {
       const user = (socket.data as any).user;
       if (!user) return socket.emit('error', { message: 'Not authenticated' });
+      console.log(`[SOCKET] User ${user.id} leaving team: ${teamId}`);
       await socket.leave(`team:${teamId}`);
       socket.emit('team:left', { teamId });
+      
+      // Emit admin connection update to show the team room change
+      this.emitAdminConnectionUpdate('team_leave', socket.id);
     });
 
     socket.on('location:update', async (data: { teamId?: string; [key: string]: unknown }) => {
@@ -111,16 +124,25 @@ export class SocketGateway {
     });
 
     socket.on('annotation:bulk_delete', async (data: { teamId?: string; annotationIds: string[] }) => {
+      console.log('[SOCKET] Received bulk annotation delete request:', { 
+        userId: (socket.data as any).user?.id, 
+        teamId: data.teamId, 
+        annotationCount: data.annotationIds?.length,
+        annotationIds: data.annotationIds 
+      });
+      
       const user = (socket.data as any).user;
       if (!user) return socket.emit('error', { message: 'Not authenticated' });
       
       try {
         const result = await this.sync.handleBulkAnnotationDelete(user.id, data);
+        console.log('[SOCKET] Bulk annotation delete result:', result);
         
         if (data.teamId) {
           this.io.to(`team:${data.teamId}`).emit('annotation:bulk_delete', { 
             annotationIds: data.annotationIds 
           });
+          console.log('[SOCKET] Broadcasted bulk delete to team:', data.teamId);
         }
         
         socket.emit('annotation:bulk_delete_result', result);
@@ -165,10 +187,17 @@ export class SocketGateway {
         .map(([name, set]) => [name, set.size])
     );
     
+    // Get all rooms (including individual socket rooms) for debugging
+    const allRooms = Object.fromEntries(
+      Array.from(this.io.sockets.adapter.rooms.entries())
+        .map(([name, set]) => [name, set.size])
+    );
+    
     this.io.emit('admin:connection_update', {
       type,
       socketId,
       rooms,
+      allRooms, // Add all rooms for debugging
       totalConnections: this.io.engine.clientsCount,
       authenticatedConnections: Array.from(this.io.sockets.sockets.values()).filter((s) => (s.data as any)?.user).length
     });
