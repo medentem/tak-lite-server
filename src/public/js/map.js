@@ -128,32 +128,42 @@ class AdminMap {
     // Generate Canvas-based POI icons for all shape-color combinations
     this.generateCanvasPoiIcons();
     
-    // Add annotation sources
-    this.map.addSource('annotations-poi', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] }
-    });
+    // Add annotation sources (only if they don't exist)
+    if (!this.map.getSource('annotations-poi')) {
+      this.map.addSource('annotations-poi', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+    }
     
-    this.map.addSource('annotations-line', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] }
-    });
+    if (!this.map.getSource('annotations-line')) {
+      this.map.addSource('annotations-line', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+    }
     
-    this.map.addSource('annotations-area', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] }
-    });
+    if (!this.map.getSource('annotations-area')) {
+      this.map.addSource('annotations-area', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+    }
     
-    this.map.addSource('annotations-polygon', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] }
-    });
+    if (!this.map.getSource('annotations-polygon')) {
+      this.map.addSource('annotations-polygon', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+    }
     
     // Add location source
-    this.map.addSource('locations', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] }
-    });
+    if (!this.map.getSource('locations')) {
+      this.map.addSource('locations', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+    }
     
     this.addMapLayers();
   }
@@ -185,7 +195,7 @@ class AdminMap {
   
   // Create Canvas POI icon (matching Android app exactly)
   createCanvasPoiIcon(shape, color) {
-    const size = 80; // Match Android bitmap size
+    const size = 32; // Smaller size for better performance and visibility
     const centerX = size / 2;
     const centerY = size / 2;
     const radius = size / 3; // Match Android radius calculation
@@ -298,11 +308,25 @@ class AdminMap {
       source: 'annotations-poi',
       layout: {
         'icon-image': ['get', 'icon'],
-        'icon-size': 1.0,
+        'icon-size': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          8, 0.5,   // Very small when zoomed out
+          12, 0.8,  // Medium size at mid zoom
+          16, 1.2   // Larger when zoomed in
+        ],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'text-field': ['get', 'label'],
-        'text-size': 12,
+        'text-size': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          8, 8,     // Small text when zoomed out
+          12, 10,   // Medium text at mid zoom
+          16, 12    // Larger text when zoomed in
+        ],
         'text-offset': [0, -2],
         'text-allow-overlap': true,
         'text-ignore-placement': false
@@ -334,7 +358,7 @@ class AdminMap {
       type: 'circle',
       source: 'annotations-area',
       paint: {
-        'circle-radius': ['get', 'radius'],
+        'circle-radius': ['get', 'radius'], // Use actual radius from data
         'circle-color': ['get', 'color'],
         'circle-opacity': 0.3,
         'circle-stroke-width': 2,
@@ -777,7 +801,7 @@ class AdminMap {
           break;
           
         case 'area':
-          // Convert radius from meters to approximate degrees (rough conversion)
+          // Convert radius from meters to degrees (matching Android app conversion)
           const radiusDegrees = data.radius / 111320; // meters to degrees
           areaFeatures.push({
             type: 'Feature',
@@ -787,7 +811,7 @@ class AdminMap {
             },
             properties: {
               ...properties,
-              radius: Math.max(radiusDegrees * 1000, 5) // Scale for visibility
+              radius: radiusDegrees // Use actual radius without scaling
             }
           });
           break;
