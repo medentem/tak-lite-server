@@ -62,6 +62,9 @@ class AdminMap {
       return;
     }
     
+    // Remove loading text
+    container.innerHTML = '';
+    
     // Dark mode style configuration (matching Android app)
     const darkStyle = {
       version: 8,
@@ -90,8 +93,8 @@ class AdminMap {
     this.map = new maplibregl.Map({
       container: 'map_container',
       style: darkStyle,
-      center: [-122.4194, 37.7749], // San Francisco default
-      zoom: 10,
+      center: [0, 0], // Default center, will be updated based on data or user location
+      zoom: 2,
       attributionControl: false
     });
     
@@ -105,6 +108,8 @@ class AdminMap {
     this.map.on('load', () => {
       console.log('Map loaded successfully');
       this.setupMapSources();
+      // Try to center map on user location or existing data
+      this.autoCenterMap();
     });
     
     this.map.on('error', (e) => {
@@ -143,17 +148,18 @@ class AdminMap {
     this.addMapLayers();
   }
   
+  
   addMapLayers() {
-    // POI markers
+    // POI markers - use circle layer with proper sizing to match Android
     this.map.addLayer({
       id: 'annotations-poi',
       type: 'circle',
       source: 'annotations-poi',
       paint: {
-        'circle-radius': 8,
+        'circle-radius': 13, // Match Android effective radius (~27px / 2)
         'circle-color': ['get', 'color'],
         'circle-stroke-width': 2,
-        'circle-stroke-color': '#ffffff'
+        'circle-stroke-color': '#FFFFFF'
       }
     });
     
@@ -685,18 +691,43 @@ class AdminMap {
     console.log(`Updated map with ${poiFeatures.length} POIs, ${lineFeatures.length} lines, ${areaFeatures.length} areas, ${polygonFeatures.length} polygons, ${locationFeatures.length} locations`);
   }
   
-  getColorHex(color) {
-    const colorMap = {
-      'green': '#22c55e',
-      'yellow': '#f59e0b',
-      'red': '#ef4444',
-      'black': '#000000',
-      'white': '#ffffff'
-    };
-    return colorMap[color] || '#3b82f6';
+  
+  // Auto-center map based on user location or existing data
+  async autoCenterMap() {
+    if (!this.map) return;
+    
+    // First try to get user's current location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          console.log('Centering map on user location:', latitude, longitude);
+          this.map.flyTo({
+            center: [longitude, latitude],
+            zoom: 12,
+            duration: 1000
+          });
+        },
+        (error) => {
+          console.log('Geolocation failed:', error.message);
+          // Fall back to centering on existing data
+          this.centerMapOnData();
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 300000 // 5 minutes
+        }
+      );
+    } else {
+      console.log('Geolocation not supported');
+      // Fall back to centering on existing data
+      this.centerMapOnData();
+    }
   }
   
-  centerMap() {
+  // Center map on existing annotations and locations
+  centerMapOnData() {
     if (!this.map) return;
     
     // Calculate bounds of all features
@@ -731,11 +762,29 @@ class AdminMap {
         return bounds.extend(coord);
       }, new maplibregl.LngLatBounds(allFeatures[0], allFeatures[0]));
       
-      this.map.fitBounds(bounds, { padding: 50 });
+      this.map.fitBounds(bounds, { padding: 50, duration: 1000 });
+      console.log('Centered map on existing data');
     } else {
-      // Default to San Francisco if no data
-      this.map.flyTo({ center: [-122.4194, 37.7749], zoom: 10 });
+      // Default to US center if no data
+      this.map.flyTo({ center: [-98.5795, 39.8283], zoom: 4, duration: 1000 });
+      console.log('No data found, using default US center');
     }
+  }
+  
+  getColorHex(color) {
+    // Match Android app color values exactly
+    const colorMap = {
+      'green': '#4CAF50',
+      'yellow': '#FBC02D', 
+      'red': '#F44336',
+      'black': '#000000',
+      'white': '#FFFFFF'
+    };
+    return colorMap[color] || '#3b82f6';
+  }
+  
+  centerMap() {
+    this.centerMapOnData();
   }
 }
 
