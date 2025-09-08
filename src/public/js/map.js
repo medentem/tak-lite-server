@@ -302,109 +302,134 @@ class AdminMap {
   
   addMapLayers() {
     // POI markers - use symbol layer with Canvas shape icons (matching Android app)
-    this.map.addLayer({
-      id: 'annotations-poi',
-      type: 'symbol',
-      source: 'annotations-poi',
-      layout: {
-        'icon-image': ['get', 'icon'],
-        'icon-size': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          8, 0.5,   // Very small when zoomed out
-          12, 0.8,  // Medium size at mid zoom
-          16, 1.2   // Larger when zoomed in
-        ],
-        'icon-allow-overlap': true,
-        'icon-ignore-placement': true,
-        'text-field': ['get', 'label'],
-        'text-size': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          8, 8,     // Small text when zoomed out
-          12, 10,   // Medium text at mid zoom
-          16, 12    // Larger text when zoomed in
-        ],
-        'text-offset': [0, -2],
-        'text-allow-overlap': true,
-        'text-ignore-placement': false
-      },
-      paint: {
-        'text-color': '#FFFFFF'
-      }
-    });
+    if (!this.map.getLayer('annotations-poi')) {
+      this.map.addLayer({
+        id: 'annotations-poi',
+        type: 'symbol',
+        source: 'annotations-poi',
+        layout: {
+          'icon-image': ['get', 'icon'],
+          'icon-size': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            8, 0.5,   // Very small when zoomed out
+            12, 0.8,  // Medium size at mid zoom
+            16, 1.2   // Larger when zoomed in
+          ],
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+          'text-field': ['get', 'label'],
+          'text-size': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            8, 8,     // Small text when zoomed out
+            12, 10,   // Medium text at mid zoom
+            16, 12    // Larger text when zoomed in
+          ],
+          'text-offset': [0, -2],
+          'text-allow-overlap': true,
+          'text-ignore-placement': false
+        },
+        paint: {
+          'text-color': '#FFFFFF'
+        }
+      });
+    }
     
     // Lines
-    this.map.addLayer({
-      id: 'annotations-line',
-      type: 'line',
-      source: 'annotations-line',
-      layout: {
-        'line-join': 'round',
-        'line-cap': 'round'
-      },
-      paint: {
-        'line-color': ['get', 'color'],
-        'line-width': 3,
-        'line-opacity': 0.8
-      }
-    });
+    if (!this.map.getLayer('annotations-line')) {
+      this.map.addLayer({
+        id: 'annotations-line',
+        type: 'line',
+        source: 'annotations-line',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 3,
+          'line-opacity': 0.8
+        }
+      });
+    }
     
-    // Areas (circles)
-    this.map.addLayer({
-      id: 'annotations-area',
-      type: 'circle',
-      source: 'annotations-area',
-      paint: {
-        'circle-radius': ['get', 'radius'], // Use actual radius from data
-        'circle-color': ['get', 'color'],
-        'circle-opacity': 0.3,
-        'circle-stroke-width': 2,
-        'circle-stroke-color': ['get', 'color'],
-        'circle-stroke-opacity': 0.8
-      }
-    });
+    // Areas (polygons - matching Android app approach)
+    if (!this.map.getLayer('annotations-area')) {
+      this.map.addLayer({
+        id: 'annotations-area',
+        type: 'fill',
+        source: 'annotations-area',
+        paint: {
+          'fill-color': ['get', 'color'],
+          'fill-opacity': ['get', 'fillOpacity']
+        }
+      });
+    }
+
+    if (!this.map.getLayer('annotations-area-stroke')) {
+      this.map.addLayer({
+        id: 'annotations-area-stroke',
+        type: 'line',
+        source: 'annotations-area',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': ['get', 'strokeWidth'],
+          'line-opacity': 1.0
+        }
+      });
+    }
     
     // Polygons
-    this.map.addLayer({
-      id: 'annotations-polygon',
-      type: 'fill',
-      source: 'annotations-polygon',
-      paint: {
-        'fill-color': ['get', 'color'],
-        'fill-opacity': 0.3
-      }
-    });
+    if (!this.map.getLayer('annotations-polygon')) {
+      this.map.addLayer({
+        id: 'annotations-polygon',
+        type: 'fill',
+        source: 'annotations-polygon',
+        paint: {
+          'fill-color': ['get', 'color'],
+          'fill-opacity': 0.3
+        }
+      });
+    }
     
-    this.map.addLayer({
-      id: 'annotations-polygon-stroke',
-      type: 'line',
-      source: 'annotations-polygon',
-      layout: {
-        'line-join': 'round',
-        'line-cap': 'round'
-      },
-      paint: {
-        'line-color': ['get', 'color'],
-        'line-width': 2,
-        'line-opacity': 0.8
-      }
-    });
+    if (!this.map.getLayer('annotations-polygon-stroke')) {
+      this.map.addLayer({
+        id: 'annotations-polygon-stroke',
+        type: 'line',
+        source: 'annotations-polygon',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 2,
+          'line-opacity': 0.8
+        }
+      });
+    }
     
     // Location markers
-    this.map.addLayer({
-      id: 'locations',
-      type: 'circle',
-      source: 'locations',
-      paint: {
-        'circle-radius': 6,
-        'circle-color': '#3b82f6',
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#ffffff'
-      }
-    });
+    if (!this.map.getLayer('locations')) {
+      this.map.addLayer({
+        id: 'locations',
+        type: 'circle',
+        source: 'locations',
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#3b82f6',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff'
+        }
+      });
+    }
     
     // Add click handlers
     this.setupClickHandlers();
@@ -801,17 +826,18 @@ class AdminMap {
           break;
           
         case 'area':
-          // Convert radius from meters to degrees (matching Android app conversion)
-          const radiusDegrees = data.radius / 111320; // meters to degrees
+          // Generate polygon points for area (matching Android app approach)
+          const areaPolygon = this.generateCirclePolygon(data.center.lng, data.center.lt, data.radius);
           areaFeatures.push({
             type: 'Feature',
             geometry: {
-              type: 'Point',
-              coordinates: [data.center.lng, data.center.lt]
+              type: 'Polygon',
+              coordinates: [areaPolygon]
             },
             properties: {
               ...properties,
-              radius: radiusDegrees // Use actual radius without scaling
+              fillOpacity: 0.3,
+              strokeWidth: 3
             }
           });
           break;
@@ -968,6 +994,34 @@ class AdminMap {
       'white': '#FFFFFF'
     };
     return colorMap[color] || '#3b82f6';
+  }
+
+  // Generate circle polygon points (matching Android app logic)
+  generateCirclePolygon(centerLng, centerLat, radiusMeters, numPoints = 32) {
+    const points = [];
+    const earthRadius = 6371000; // meters
+    const angularDistance = radiusMeters / earthRadius;
+    const centerLatRad = this.toRadians(centerLat);
+    const centerLonRad = this.toRadians(centerLng);
+
+    for (let i = 0; i < numPoints; i++) {
+      const bearingRad = this.toRadians((i * 360.0 / numPoints));
+      const latRad = Math.asin(Math.sin(centerLatRad) * Math.cos(angularDistance) + 
+                              Math.cos(centerLatRad) * Math.sin(angularDistance) * Math.cos(bearingRad));
+      const lonRad = centerLonRad + Math.atan2(Math.sin(bearingRad) * Math.sin(angularDistance) * Math.cos(centerLatRad), 
+                                               Math.cos(angularDistance) - Math.sin(centerLatRad) * Math.sin(latRad));
+      points.push([this.toDegrees(lonRad), this.toDegrees(latRad)]);
+    }
+    points.push(points[0]); // Close the polygon
+    return points;
+  }
+
+  toRadians(degrees) {
+    return degrees * (Math.PI / 180);
+  }
+
+  toDegrees(radians) {
+    return radians * (180 / Math.PI);
   }
   
   centerMap() {
