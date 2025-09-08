@@ -480,36 +480,344 @@ class AdminMap {
   
   showAnnotationPopup(feature, lngLat) {
     const properties = feature.properties;
-    const popup = new maplibregl.Popup()
+    // Find the full annotation data for more detailed calculations
+    const fullAnnotation = this.annotations.find(ann => ann.id === properties.id);
+    const popupContent = this.buildAnnotationPopupContent(properties, lngLat, fullAnnotation);
+    
+    const popup = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: false,
+      className: 'enhanced-popup'
+    })
       .setLngLat(lngLat)
-      .setHTML(`
-        <div style="color: #e6edf3; font-family: ui-sans-serif, system-ui;">
-          <h3 style="margin: 0 0 8px; color: #cbd5e1;">${properties.type.toUpperCase()}</h3>
-          ${properties.label ? `<p style="margin: 0 0 8px;"><strong>Label:</strong> ${properties.label}</p>` : ''}
-          <p style="margin: 0 0 8px;"><strong>Color:</strong> ${properties.color}</p>
-          <p style="margin: 0 0 8px;"><strong>Created:</strong> ${new Date(properties.timestamp).toLocaleString()}</p>
-          <p style="margin: 0 0 8px;"><strong>User:</strong> ${properties.creatorId}</p>
-          ${properties.source ? `<p style="margin: 0;"><strong>Source:</strong> ${properties.source}</p>` : ''}
-        </div>
-      `)
+      .setHTML(popupContent)
       .addTo(this.map);
   }
   
   showLocationPopup(feature, lngLat) {
     const properties = feature.properties;
-    const popup = new maplibregl.Popup()
+    const popupContent = this.buildLocationPopupContent(properties, lngLat);
+    
+    const popup = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: false,
+      className: 'enhanced-popup'
+    })
       .setLngLat(lngLat)
-      .setHTML(`
-        <div style="color: #e6edf3; font-family: ui-sans-serif, system-ui;">
-          <h3 style="margin: 0 0 8px; color: #cbd5e1;">Peer Location</h3>
-          <p style="margin: 0 0 8px;"><strong>User:</strong> ${properties.user_name || properties.user_email}</p>
-          <p style="margin: 0 0 8px;"><strong>Coordinates:</strong> ${properties.latitude.toFixed(6)}, ${properties.longitude.toFixed(6)}</p>
-          ${properties.altitude ? `<p style="margin: 0 0 8px;"><strong>Altitude:</strong> ${properties.altitude.toFixed(1)}m</p>` : ''}
-          ${properties.accuracy ? `<p style="margin: 0 0 8px;"><strong>Accuracy:</strong> ${properties.accuracy.toFixed(1)}m</p>` : ''}
-          <p style="margin: 0;"><strong>Updated:</strong> ${new Date(properties.timestamp).toLocaleString()}</p>
-        </div>
-      `)
+      .setHTML(popupContent)
       .addTo(this.map);
+  }
+  
+  // Build enhanced popover content for annotations (matching Android app style)
+  buildAnnotationPopupContent(properties, lngLat, fullAnnotation = null) {
+    const type = properties.type;
+    const lines = [];
+    
+    // Title line - use label if available, otherwise use type
+    const title = properties.label || this.capitalizeFirst(type);
+    lines.push(title);
+    
+    // Add type-specific information
+    switch (type) {
+      case 'poi':
+        this.addPoiInfo(lines, properties, lngLat, fullAnnotation);
+        break;
+      case 'line':
+        this.addLineInfo(lines, properties, lngLat, fullAnnotation);
+        break;
+      case 'area':
+        this.addAreaInfo(lines, properties, lngLat, fullAnnotation);
+        break;
+      case 'polygon':
+        this.addPolygonInfo(lines, properties, lngLat, fullAnnotation);
+        break;
+    }
+    
+    // Add common information
+    this.addCommonInfo(lines, properties, lngLat);
+    
+    return this.buildPopupHTML(lines, properties);
+  }
+  
+  // Build enhanced popover content for peer locations
+  buildLocationPopupContent(properties, lngLat) {
+    const lines = [];
+    
+    // Title - use user name or email
+    const title = properties.user_name || properties.user_email || 'Peer Location';
+    lines.push(title);
+    
+    // Add location-specific information
+    const ageSec = Math.floor((Date.now() - new Date(properties.timestamp).getTime()) / 1000);
+    const ageStr = ageSec > 60 ? `${Math.floor(ageSec / 60)}m old` : `${ageSec}s old`;
+    lines.push(ageStr);
+    
+    // Coordinates
+    const coords = `${properties.latitude.toFixed(5)}, ${properties.longitude.toFixed(5)}`;
+    lines.push(coords);
+    
+    // Distance from user location (if available)
+    const distance = this.calculateDistanceFromUser(lngLat);
+    if (distance !== null) {
+      lines.push(`${this.formatDistance(distance)} away`);
+    }
+    
+    // Additional location details
+    if (properties.altitude !== null && properties.altitude !== undefined) {
+      lines.push(`Altitude: ${properties.altitude.toFixed(1)}m`);
+    }
+    if (properties.accuracy !== null && properties.accuracy !== undefined) {
+      lines.push(`Accuracy: ${properties.accuracy.toFixed(1)}m`);
+    }
+    
+    return this.buildPopupHTML(lines, properties);
+  }
+  
+  // Add POI-specific information
+  addPoiInfo(lines, properties, lngLat) {
+    // Age
+    const ageSec = Math.floor((Date.now() - new Date(properties.timestamp).getTime()) / 1000);
+    const ageStr = ageSec > 60 ? `${Math.floor(ageSec / 60)}m old` : `${ageSec}s old`;
+    lines.push(ageStr);
+    
+    // Coordinates
+    const coords = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
+    lines.push(coords);
+    
+    // Distance from user location
+    const distance = this.calculateDistanceFromUser(lngLat);
+    if (distance !== null) {
+      lines.push(`${this.formatDistance(distance)} away`);
+    }
+  }
+  
+  // Add line-specific information
+  addLineInfo(lines, properties, lngLat, fullAnnotation = null) {
+    // Calculate line length (approximate)
+    const length = this.calculateLineLength(properties, fullAnnotation);
+    if (length !== null) {
+      lines.push(this.formatDistance(length));
+    }
+    
+    // Age
+    const ageSec = Math.floor((Date.now() - new Date(properties.timestamp).getTime()) / 1000);
+    const ageStr = ageSec > 60 ? `${Math.floor(ageSec / 60)}m old` : `${ageSec}s old`;
+    lines.push(ageStr);
+    
+    // Coordinates (center of line)
+    const coords = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
+    lines.push(coords);
+    
+    // Distance from user location
+    const distance = this.calculateDistanceFromUser(lngLat);
+    if (distance !== null) {
+      lines.push(`${this.formatDistance(distance)} away`);
+    }
+  }
+  
+  // Add area-specific information
+  addAreaInfo(lines, properties, lngLat, fullAnnotation = null) {
+    // Calculate area (approximate)
+    const area = this.calculateAreaSize(properties, fullAnnotation);
+    if (area !== null) {
+      lines.push(this.formatArea(area));
+    }
+    
+    // Age
+    const ageSec = Math.floor((Date.now() - new Date(properties.timestamp).getTime()) / 1000);
+    const ageStr = ageSec > 60 ? `${Math.floor(ageSec / 60)}m old` : `${ageSec}s old`;
+    lines.push(ageStr);
+    
+    // Coordinates (center of area)
+    const coords = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
+    lines.push(coords);
+    
+    // Distance from user location
+    const distance = this.calculateDistanceFromUser(lngLat);
+    if (distance !== null) {
+      lines.push(`${this.formatDistance(distance)} away`);
+    }
+  }
+  
+  // Add polygon-specific information
+  addPolygonInfo(lines, properties, lngLat, fullAnnotation = null) {
+    // Calculate area (approximate)
+    const area = this.calculatePolygonArea(properties, fullAnnotation);
+    if (area !== null) {
+      lines.push(this.formatArea(area));
+    }
+    
+    // Age
+    const ageSec = Math.floor((Date.now() - new Date(properties.timestamp).getTime()) / 1000);
+    const ageStr = ageSec > 60 ? `${Math.floor(ageSec / 60)}m old` : `${ageSec}s old`;
+    lines.push(ageStr);
+    
+    // Coordinates (center of polygon)
+    const coords = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
+    lines.push(coords);
+    
+    // Distance from user location
+    const distance = this.calculateDistanceFromUser(lngLat);
+    if (distance !== null) {
+      lines.push(`${this.formatDistance(distance)} away`);
+    }
+  }
+  
+  // Add common information for all annotations
+  addCommonInfo(lines, properties, lngLat) {
+    // Creator information
+    if (properties.creatorId) {
+      lines.push(`Created by: ${properties.creatorId}`);
+    }
+    
+    // Source information
+    if (properties.source) {
+      lines.push(`Source: ${properties.source}`);
+    }
+  }
+  
+  // Build the HTML for the popup (matching Android app styling)
+  buildPopupHTML(lines, properties) {
+    if (lines.length === 0) return '';
+    
+    const title = lines[0];
+    const content = lines.slice(1);
+    
+    return `
+      <div class="popup-container">
+        <div class="popup-title">${this.escapeHtml(title)}</div>
+        ${content.length > 0 ? `<div class="popup-content">${content.map(line => this.escapeHtml(line)).join('<br>')}</div>` : ''}
+        ${properties.status ? `<div class="popup-status">${this.getStatusDescription(properties.status)}</div>` : ''}
+      </div>
+    `;
+  }
+  
+  // Utility functions
+  capitalizeFirst(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+  
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+  
+  // Calculate distance from user location (if available)
+  calculateDistanceFromUser(lngLat) {
+    // For now, return null since we don't have user location in admin interface
+    // This could be enhanced to use browser geolocation API
+    return null;
+  }
+  
+  // Calculate line length (approximate)
+  calculateLineLength(properties, fullAnnotation = null) {
+    if (!fullAnnotation || !fullAnnotation.data || !fullAnnotation.data.points) {
+      return null;
+    }
+    
+    const points = fullAnnotation.data.points;
+    if (points.length < 2) return null;
+    
+    let totalLength = 0;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      totalLength += this.haversineDistance(p1.lt, p1.lng, p2.lt, p2.lng);
+    }
+    
+    return totalLength;
+  }
+  
+  // Calculate area size (approximate)
+  calculateAreaSize(properties, fullAnnotation = null) {
+    if (!fullAnnotation || !fullAnnotation.data || !fullAnnotation.data.radius) {
+      return null;
+    }
+    
+    const radius = fullAnnotation.data.radius;
+    // Calculate area of circle: π * r²
+    return Math.PI * radius * radius;
+  }
+  
+  // Calculate polygon area (approximate)
+  calculatePolygonArea(properties, fullAnnotation = null) {
+    if (!fullAnnotation || !fullAnnotation.data || !fullAnnotation.data.points) {
+      return null;
+    }
+    
+    const points = fullAnnotation.data.points;
+    if (points.length < 3) return null;
+    
+    // Use the shoelace formula for polygon area
+    let area = 0;
+    for (let i = 0; i < points.length; i++) {
+      const j = (i + 1) % points.length;
+      area += points[i].lng * points[j].lt;
+      area -= points[j].lng * points[i].lt;
+    }
+    area = Math.abs(area) / 2;
+    
+    // Convert from square degrees to square meters (approximate)
+    // This is a rough approximation - for more accuracy, we'd need proper projection
+    const lat = points[0].lt;
+    const metersPerDegreeLat = 111320; // meters per degree latitude
+    const metersPerDegreeLng = 111320 * Math.cos(lat * Math.PI / 180); // meters per degree longitude at this latitude
+    
+    return area * metersPerDegreeLat * metersPerDegreeLng;
+  }
+  
+  // Format distance for display
+  formatDistance(meters) {
+    if (meters < 1000) {
+      return `${Math.round(meters)}m`;
+    } else if (meters < 1609.344) {
+      return `${(meters / 1000).toFixed(1)}km`;
+    } else {
+      const miles = meters / 1609.344;
+      return `${miles.toFixed(1)}mi`;
+    }
+  }
+  
+  // Format area for display
+  formatArea(squareMeters) {
+    if (squareMeters < 10000) {
+      return `${Math.round(squareMeters)}m²`;
+    } else if (squareMeters < 2589988.11) {
+      return `${(squareMeters / 10000).toFixed(1)}ha`;
+    } else {
+      const acres = squareMeters / 4046.86;
+      return `${acres.toFixed(1)}ac`;
+    }
+  }
+  
+  // Get status description
+  getStatusDescription(status) {
+    const statusMap = {
+      'sending': 'Sending...',
+      'sent': 'Sent',
+      'delivered': 'Delivered',
+      'failed': 'Failed',
+      'retrying': 'Retrying...'
+    };
+    return statusMap[status.toLowerCase()] || status;
+  }
+  
+  // Calculate distance between two points using Haversine formula
+  haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = this.toRadians(lat2 - lat1);
+    const dLon = this.toRadians(lon2 - lon1);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+  
+  // Convert degrees to radians
+  toRadians(degrees) {
+    return degrees * (Math.PI / 180);
   }
   
   setupEventListeners() {
