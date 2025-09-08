@@ -118,6 +118,9 @@ class AdminMap {
   }
   
   setupMapSources() {
+    // Generate POI icons for all shape-color combinations
+    this.generatePoiIcons();
+    
     // Add annotation sources
     this.map.addSource('annotations-poi', {
       type: 'geojson',
@@ -148,18 +151,126 @@ class AdminMap {
     this.addMapLayers();
   }
   
+  // Generate POI icons for all shape-color combinations (matching Android app)
+  generatePoiIcons() {
+    const shapes = ['circle', 'square', 'triangle', 'exclamation'];
+    const colors = ['green', 'yellow', 'red', 'black', 'white'];
+    
+    shapes.forEach(shape => {
+      colors.forEach(color => {
+        const iconName = `poi-${shape}-${color}`;
+        const bitmap = this.createPoiIconBitmap(shape, color);
+        this.map.addImage(iconName, bitmap);
+        console.log(`Generated POI icon: ${iconName}`);
+      });
+    });
+  }
+  
+  // Create bitmap for POI icon (matching Android app exactly)
+  createPoiIconBitmap(shape, color) {
+    const size = 80; // Match Android bitmap size
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    
+    // Get color hex value
+    const colorHex = this.getColorHex(color);
+    
+    // Fill paint
+    const fillPaint = {
+      fillStyle: colorHex,
+      strokeStyle: '#FFFFFF',
+      lineWidth: 2
+    };
+    
+    const centerX = size / 2;
+    const centerY = size / 2;
+    const radius = size / 3; // Match Android radius calculation
+    
+    ctx.fillStyle = fillPaint.fillStyle;
+    ctx.strokeStyle = fillPaint.strokeStyle;
+    ctx.lineWidth = fillPaint.lineWidth;
+    
+    switch (shape) {
+      case 'circle':
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+        break;
+        
+      case 'square':
+        const squareSize = radius * 2;
+        const squareOffset = (size - squareSize) / 2;
+        ctx.fillRect(squareOffset, squareOffset, squareSize, squareSize);
+        ctx.strokeRect(squareOffset, squareOffset, squareSize, squareSize);
+        break;
+        
+      case 'triangle':
+        ctx.beginPath();
+        const height = radius * 2;
+        ctx.moveTo(centerX, centerY - height / 2);
+        ctx.lineTo(centerX - radius, centerY + height / 2);
+        ctx.lineTo(centerX + radius, centerY + height / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        break;
+        
+      case 'exclamation':
+        // Draw triangle base
+        ctx.beginPath();
+        const exHeight = radius * 2;
+        ctx.moveTo(centerX, centerY - exHeight / 2);
+        ctx.lineTo(centerX - radius, centerY + exHeight / 2);
+        ctx.lineTo(centerX + radius, centerY + exHeight / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Draw white exclamation mark
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        const exMarkTop = centerY - exHeight / 6;
+        const exMarkBottom = centerY + exHeight / 6;
+        ctx.beginPath();
+        ctx.moveTo(centerX, exMarkTop);
+        ctx.lineTo(centerX, exMarkBottom);
+        ctx.stroke();
+        
+        // Draw dot
+        ctx.fillStyle = '#FFFFFF';
+        const dotRadius = 3;
+        const dotCenterY = exMarkBottom + dotRadius * 2;
+        ctx.beginPath();
+        ctx.arc(centerX, dotCenterY, dotRadius, 0, 2 * Math.PI);
+        ctx.fill();
+        break;
+    }
+    
+    return canvas;
+  }
+  
   
   addMapLayers() {
-    // POI markers - use circle layer with proper sizing to match Android
+    // POI markers - use symbol layer with proper shape icons (matching Android app)
     this.map.addLayer({
       id: 'annotations-poi',
-      type: 'circle',
+      type: 'symbol',
       source: 'annotations-poi',
-      paint: {
-        'circle-radius': 13, // Match Android effective radius (~27px / 2)
-        'circle-color': ['get', 'color'],
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#FFFFFF'
+      layout: {
+        'icon-image': ['get', 'icon'],
+        'icon-size': 1.0,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'text-field': ['get', 'label'],
+        'text-color': '#FFFFFF',
+        'text-size': 12,
+        'text-offset': [0, -2],
+        'text-allow-overlap': true,
+        'text-ignore-placement': false
       }
     });
     
@@ -238,7 +349,7 @@ class AdminMap {
   }
   
   setupClickHandlers() {
-    // POI click handler
+    // POI click handler (symbol layer)
     this.map.on('click', 'annotations-poi', (e) => {
       const feature = e.features[0];
       this.showAnnotationPopup(feature, e.lngLat);
@@ -268,40 +379,15 @@ class AdminMap {
       this.showLocationPopup(feature, e.lngLat);
     });
     
-    // Change cursor on hover
-    this.map.on('mouseenter', 'annotations-poi', () => {
-      this.map.getCanvas().style.cursor = 'pointer';
-    });
-    this.map.on('mouseleave', 'annotations-poi', () => {
-      this.map.getCanvas().style.cursor = '';
-    });
-    
-    this.map.on('mouseenter', 'annotations-line', () => {
-      this.map.getCanvas().style.cursor = 'pointer';
-    });
-    this.map.on('mouseleave', 'annotations-line', () => {
-      this.map.getCanvas().style.cursor = '';
-    });
-    
-    this.map.on('mouseenter', 'annotations-area', () => {
-      this.map.getCanvas().style.cursor = 'pointer';
-    });
-    this.map.on('mouseleave', 'annotations-area', () => {
-      this.map.getCanvas().style.cursor = '';
-    });
-    
-    this.map.on('mouseenter', 'annotations-polygon', () => {
-      this.map.getCanvas().style.cursor = 'pointer';
-    });
-    this.map.on('mouseleave', 'annotations-polygon', () => {
-      this.map.getCanvas().style.cursor = '';
-    });
-    
-    this.map.on('mouseenter', 'locations', () => {
-      this.map.getCanvas().style.cursor = 'pointer';
-    });
-    this.map.on('mouseleave', 'locations', () => {
-      this.map.getCanvas().style.cursor = '';
+    // Change cursor on hover for all layers
+    const layers = ['annotations-poi', 'annotations-line', 'annotations-area', 'annotations-polygon', 'locations'];
+    layers.forEach(layerId => {
+      this.map.on('mouseenter', layerId, () => {
+        this.map.getCanvas().style.cursor = 'pointer';
+      });
+      this.map.on('mouseleave', layerId, () => {
+        this.map.getCanvas().style.cursor = '';
+      });
     });
   }
   
@@ -592,13 +678,18 @@ class AdminMap {
       
       switch (annotation.type) {
         case 'poi':
+          // Create icon name based on shape and color (matching Android app pattern)
+          const iconName = `poi-${(data.shape || 'circle').toLowerCase()}-${data.color.toLowerCase()}`;
           poiFeatures.push({
             type: 'Feature',
             geometry: {
               type: 'Point',
               coordinates: [data.position.lng, data.position.lt]
             },
-            properties
+            properties: {
+              ...properties,
+              icon: iconName
+            }
           });
           break;
           
