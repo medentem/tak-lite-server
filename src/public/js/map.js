@@ -10,6 +10,7 @@ class AdminMap {
     this.showLocations = true;
     this.annotationSources = {};
     this.locationSources = {};
+    this.svgBlobUrls = []; // Track SVG blob URLs for cleanup
     
     this.init();
   }
@@ -108,8 +109,6 @@ class AdminMap {
     this.map.on('load', () => {
       console.log('Map loaded successfully');
       this.setupMapSources();
-      // Try to center map on user location or existing data
-      this.autoCenterMap();
     });
     
     this.map.on('error', (e) => {
@@ -118,8 +117,8 @@ class AdminMap {
   }
   
   setupMapSources() {
-    // Generate POI icons for all shape-color combinations
-    this.generatePoiIcons();
+    // Generate SVG-based POI icons for all shape-color combinations
+    this.generateSvgPoiIcons();
     
     // Add annotation sources
     this.map.addSource('annotations-poi', {
@@ -151,111 +150,97 @@ class AdminMap {
     this.addMapLayers();
   }
   
-  // Generate POI icons for all shape-color combinations (matching Android app)
-  generatePoiIcons() {
+  // Generate SVG-based POI icons (matching Android app exactly)
+  generateSvgPoiIcons() {
     const shapes = ['circle', 'square', 'triangle', 'exclamation'];
     const colors = ['green', 'yellow', 'red', 'black', 'white'];
     
     shapes.forEach(shape => {
       colors.forEach(color => {
         const iconName = `poi-${shape}-${color}`;
-        const bitmap = this.createPoiIconBitmap(shape, color);
-        this.map.addImage(iconName, bitmap);
-        console.log(`Generated POI icon: ${iconName}`);
+        try {
+          const svgDataUrl = this.createSvgPoiIcon(shape, color);
+          this.svgBlobUrls.push(svgDataUrl); // Track for cleanup
+          this.map.addImage(iconName, svgDataUrl);
+          console.log(`Generated SVG POI icon: ${iconName}`);
+        } catch (error) {
+          console.error(`Failed to create SVG icon ${iconName}:`, error);
+        }
       });
     });
   }
   
-  // Create bitmap for POI icon (matching Android app exactly)
-  createPoiIconBitmap(shape, color) {
+  // Create SVG POI icon (matching Android app exactly)
+  createSvgPoiIcon(shape, color) {
     const size = 80; // Match Android bitmap size
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    
-    // Get color hex value
-    const colorHex = this.getColorHex(color);
-    
-    // Fill paint
-    const fillPaint = {
-      fillStyle: colorHex,
-      strokeStyle: '#FFFFFF',
-      lineWidth: 2
-    };
-    
     const centerX = size / 2;
     const centerY = size / 2;
     const radius = size / 3; // Match Android radius calculation
+    const colorHex = this.getColorHex(color);
     
-    ctx.fillStyle = fillPaint.fillStyle;
-    ctx.strokeStyle = fillPaint.strokeStyle;
-    ctx.lineWidth = fillPaint.lineWidth;
+    let shapeSvg = '';
     
     switch (shape) {
       case 'circle':
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.stroke();
+        shapeSvg = `<circle cx="${centerX}" cy="${centerY}" r="${radius}" fill="${colorHex}" stroke="#FFFFFF" stroke-width="2"/>`;
         break;
         
       case 'square':
         const squareSize = radius * 2;
         const squareOffset = (size - squareSize) / 2;
-        ctx.fillRect(squareOffset, squareOffset, squareSize, squareSize);
-        ctx.strokeRect(squareOffset, squareOffset, squareSize, squareSize);
+        shapeSvg = `<rect x="${squareOffset}" y="${squareOffset}" width="${squareSize}" height="${squareSize}" fill="${colorHex}" stroke="#FFFFFF" stroke-width="2"/>`;
         break;
         
       case 'triangle':
-        ctx.beginPath();
         const height = radius * 2;
-        ctx.moveTo(centerX, centerY - height / 2);
-        ctx.lineTo(centerX - radius, centerY + height / 2);
-        ctx.lineTo(centerX + radius, centerY + height / 2);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
+        const topX = centerX;
+        const topY = centerY - height / 2;
+        const leftX = centerX - radius;
+        const leftY = centerY + height / 2;
+        const rightX = centerX + radius;
+        const rightY = centerY + height / 2;
+        shapeSvg = `<path d="M ${topX} ${topY} L ${leftX} ${leftY} L ${rightX} ${rightY} Z" fill="${colorHex}" stroke="#FFFFFF" stroke-width="2"/>`;
         break;
         
       case 'exclamation':
-        // Draw triangle base
-        ctx.beginPath();
+        // Triangle base
         const exHeight = radius * 2;
-        ctx.moveTo(centerX, centerY - exHeight / 2);
-        ctx.lineTo(centerX - radius, centerY + exHeight / 2);
-        ctx.lineTo(centerX + radius, centerY + exHeight / 2);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
+        const exTopX = centerX;
+        const exTopY = centerY - exHeight / 2;
+        const exLeftX = centerX - radius;
+        const exLeftY = centerY + exHeight / 2;
+        const exRightX = centerX + radius;
+        const exRightY = centerY + exHeight / 2;
         
-        // Draw white exclamation mark
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 4;
-        ctx.lineCap = 'round';
+        // Exclamation mark positions
         const exMarkTop = centerY - exHeight / 6;
         const exMarkBottom = centerY + exHeight / 6;
-        ctx.beginPath();
-        ctx.moveTo(centerX, exMarkTop);
-        ctx.lineTo(centerX, exMarkBottom);
-        ctx.stroke();
-        
-        // Draw dot
-        ctx.fillStyle = '#FFFFFF';
         const dotRadius = 3;
         const dotCenterY = exMarkBottom + dotRadius * 2;
-        ctx.beginPath();
-        ctx.arc(centerX, dotCenterY, dotRadius, 0, 2 * Math.PI);
-        ctx.fill();
+        
+        shapeSvg = `
+          <path d="M ${exTopX} ${exTopY} L ${exLeftX} ${exLeftY} L ${exRightX} ${exRightY} Z" fill="${colorHex}" stroke="#FFFFFF" stroke-width="2"/>
+          <line x1="${centerX}" y1="${exMarkTop}" x2="${centerX}" y2="${exMarkBottom}" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="${centerX}" cy="${dotCenterY}" r="${dotRadius}" fill="#FFFFFF"/>
+        `;
         break;
     }
     
-    return canvas;
+    const svg = `
+      <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+        ${shapeSvg}
+      </svg>
+    `;
+    
+    // Convert SVG to data URL
+    const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    return URL.createObjectURL(svgBlob);
   }
   
   
+  
   addMapLayers() {
-    // POI markers - use symbol layer with proper shape icons (matching Android app)
+    // POI markers - use symbol layer with SVG shape icons (matching Android app)
     this.map.addLayer({
       id: 'annotations-poi',
       type: 'symbol',
@@ -594,6 +579,12 @@ class AdminMap {
   async loadMapData() {
     if (!this.map) return;
     
+    // Ensure map sources are set up
+    if (!this.map.getSource('annotations-poi')) {
+      console.log('Map sources not ready, setting up...');
+      this.setupMapSources();
+    }
+    
     console.log('Loading map data...');
     await Promise.all([
       this.loadAnnotations(),
@@ -601,6 +592,9 @@ class AdminMap {
     ]);
     
     this.updateMapData();
+    
+    // Try to center map on user location or existing data after loading
+    this.autoCenterMap();
   }
   
   async loadAnnotations() {
@@ -657,6 +651,15 @@ class AdminMap {
   
   updateMapData() {
     if (!this.map) return;
+    
+    // Ensure all sources exist
+    const requiredSources = ['annotations-poi', 'annotations-line', 'annotations-area', 'annotations-polygon', 'locations'];
+    for (const sourceId of requiredSources) {
+      if (!this.map.getSource(sourceId)) {
+        console.error(`Map source '${sourceId}' not found`);
+        return;
+      }
+    }
     
     // Convert annotations to GeoJSON
     const poiFeatures = [];
@@ -877,6 +880,20 @@ class AdminMap {
   centerMap() {
     this.centerMapOnData();
   }
+  
+  // Cleanup method to prevent memory leaks
+  cleanup() {
+    // Revoke all SVG blob URLs
+    this.svgBlobUrls.forEach(url => {
+      URL.revokeObjectURL(url);
+    });
+    this.svgBlobUrls = [];
+    
+    // Disconnect WebSocket listeners
+    this.disconnectFromWebSocket();
+    
+    console.log('AdminMap cleaned up');
+  }
 }
 
 // Initialize map when page loads
@@ -894,4 +911,11 @@ window.addEventListener('load', function() {
   };
   
   checkLibraries();
+});
+
+// Cleanup when page is unloaded
+window.addEventListener('beforeunload', function() {
+  if (adminMap) {
+    adminMap.cleanup();
+  }
 });
