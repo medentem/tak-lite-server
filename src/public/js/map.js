@@ -10,7 +10,6 @@ class AdminMap {
     this.showLocations = true;
     this.annotationSources = {};
     this.locationSources = {};
-    this.svgBlobUrls = []; // Track SVG blob URLs for cleanup
     
     this.init();
   }
@@ -116,9 +115,9 @@ class AdminMap {
     });
   }
   
-  setupMapSources() {
+  async setupMapSources() {
     // Generate SVG-based POI icons for all shape-color combinations
-    this.generateSvgPoiIcons();
+    await this.generateSvgPoiIcons();
     
     // Add annotation sources
     this.map.addSource('annotations-poi', {
@@ -151,27 +150,26 @@ class AdminMap {
   }
   
   // Generate SVG-based POI icons (matching Android app exactly)
-  generateSvgPoiIcons() {
+  async generateSvgPoiIcons() {
     const shapes = ['circle', 'square', 'triangle', 'exclamation'];
     const colors = ['green', 'yellow', 'red', 'black', 'white'];
     
-    shapes.forEach(shape => {
-      colors.forEach(color => {
+    for (const shape of shapes) {
+      for (const color of colors) {
         const iconName = `poi-${shape}-${color}`;
         try {
-          const svgDataUrl = this.createSvgPoiIcon(shape, color);
-          this.svgBlobUrls.push(svgDataUrl); // Track for cleanup
-          this.map.addImage(iconName, svgDataUrl);
+          const imageElement = await this.createSvgPoiIcon(shape, color);
+          this.map.addImage(iconName, imageElement);
           console.log(`Generated SVG POI icon: ${iconName}`);
         } catch (error) {
           console.error(`Failed to create SVG icon ${iconName}:`, error);
         }
-      });
-    });
+      }
+    }
   }
   
   // Create SVG POI icon (matching Android app exactly)
-  createSvgPoiIcon(shape, color) {
+  async createSvgPoiIcon(shape, color) {
     const size = 80; // Match Android bitmap size
     const centerX = size / 2;
     const centerY = size / 2;
@@ -232,9 +230,23 @@ class AdminMap {
       </svg>
     `;
     
-    // Convert SVG to data URL
-    const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-    return URL.createObjectURL(svgBlob);
+    // Convert SVG to HTMLImageElement
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      
+      // Convert SVG to data URL
+      const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+      img.src = url;
+      
+      // Clean up the blob URL after image loads
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(img);
+      };
+    });
   }
   
   
@@ -251,11 +263,13 @@ class AdminMap {
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'text-field': ['get', 'label'],
-        'text-color': '#FFFFFF',
         'text-size': 12,
         'text-offset': [0, -2],
         'text-allow-overlap': true,
         'text-ignore-placement': false
+      },
+      paint: {
+        'text-color': '#FFFFFF'
       }
     });
     
@@ -582,7 +596,7 @@ class AdminMap {
     // Ensure map sources are set up
     if (!this.map.getSource('annotations-poi')) {
       console.log('Map sources not ready, setting up...');
-      this.setupMapSources();
+      await this.setupMapSources();
     }
     
     console.log('Loading map data...');
@@ -883,12 +897,6 @@ class AdminMap {
   
   // Cleanup method to prevent memory leaks
   cleanup() {
-    // Revoke all SVG blob URLs
-    this.svgBlobUrls.forEach(url => {
-      URL.revokeObjectURL(url);
-    });
-    this.svgBlobUrls = [];
-    
     // Disconnect WebSocket listeners
     this.disconnectFromWebSocket();
     
