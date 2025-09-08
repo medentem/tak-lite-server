@@ -265,7 +265,12 @@ class AdminMap {
         break;
     }
     
-    return canvas;
+    // Convert canvas to ImageData format that MapLibre expects
+    return {
+      width: size,
+      height: size,
+      data: ctx.getImageData(0, 0, size, size).data
+    };
   }
   
   
