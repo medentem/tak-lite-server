@@ -116,6 +116,15 @@ class AdminMap {
   }
   
   setupMapSources() {
+    // Check if map style is loaded before adding sources
+    if (!this.map.isStyleLoaded()) {
+      console.log('Map style not loaded yet, waiting...');
+      this.map.once('styledata', () => {
+        this.setupMapSources();
+      });
+      return;
+    }
+    
     // Generate Canvas-based POI icons for all shape-color combinations
     this.generateCanvasPoiIcons();
     
@@ -649,15 +658,20 @@ class AdminMap {
       }
       params.append('limit', '1000');
       
-      const response = await fetch(`/api/admin/map/annotations?${params}`);
+      const url = `/api/admin/map/annotations?${params}`;
+      console.log(`Loading annotations from: ${url}`);
+      
+      const response = await fetch(url);
       if (response.ok) {
         this.annotations = await response.json();
         console.log(`Loaded ${this.annotations.length} annotations`);
       } else {
         console.error(`Failed to load annotations: ${response.status} ${response.statusText}`);
+        this.annotations = [];
       }
     } catch (error) {
       console.error('Failed to load annotations:', error);
+      this.annotations = [];
     }
   }
   
@@ -668,33 +682,44 @@ class AdminMap {
         const params = new URLSearchParams();
         params.append('limit', '100');
         
-        const response = await fetch(`/api/admin/map/locations?${params}`);
+        const url = `/api/admin/map/locations?${params}`;
+        console.log(`Loading locations from: ${url}`);
+        
+        const response = await fetch(url);
         if (response.ok) {
           this.locations = await response.json();
           console.log(`Loaded ${this.locations.length} locations from all teams`);
         } else {
           console.error(`Failed to load locations: ${response.status} ${response.statusText}`);
+          this.locations = [];
         }
       } else {
         // Use the latest endpoint for specific team
         const params = new URLSearchParams();
         params.append('teamId', this.currentTeamId);
         
-        const response = await fetch(`/api/admin/map/locations/latest?${params}`);
+        const url = `/api/admin/map/locations/latest?${params}`;
+        console.log(`Loading latest locations from: ${url}`);
+        
+        const response = await fetch(url);
         if (response.ok) {
           this.locations = await response.json();
           console.log(`Loaded ${this.locations.length} latest locations for team ${this.currentTeamId}`);
         } else {
           console.error(`Failed to load locations for team ${this.currentTeamId}: ${response.status} ${response.statusText}`);
+          this.locations = [];
         }
       }
     } catch (error) {
       console.error('Failed to load locations:', error);
+      this.locations = [];
     }
   }
   
   updateMapData() {
     if (!this.map) return;
+    
+    console.log(`updateMapData called with ${this.annotations?.length || 0} annotations and ${this.locations?.length || 0} locations`);
     
     // Ensure all sources exist
     const requiredSources = ['annotations-poi', 'annotations-line', 'annotations-area', 'annotations-polygon', 'locations'];
