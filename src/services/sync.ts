@@ -83,6 +83,7 @@ export class SyncService {
     // Validate required fields based on type
     switch (type) {
       case 'poi':
+      case 'pointofinterest': // Support both serialized name and class name
         if (!data.position || !data.position.lt || !data.position.lng) {
           throw new Error('Point of Interest requires valid position');
         }

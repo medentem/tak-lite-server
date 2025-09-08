@@ -81,30 +81,56 @@ export class SocketGateway {
     socket.on('annotation:update', async (data: { teamId?: string; [key: string]: unknown }) => {
       const user = (socket.data as any).user;
       if (!user) return socket.emit('error', { message: 'Not authenticated' });
-      const annotation = await this.sync.handleAnnotationUpdate(user.id, data);
-      if (data.teamId) this.io.to(`team:${data.teamId}`).emit('annotation:update', annotation);
+      
+      try {
+        const annotation = await this.sync.handleAnnotationUpdate(user.id, data);
+        if (data.teamId) this.io.to(`team:${data.teamId}`).emit('annotation:update', annotation);
+      } catch (error: any) {
+        console.error('[SOCKET] Annotation update error:', error);
+        socket.emit('error', { 
+          message: error.message || 'Failed to process annotation update',
+          code: 'ANNOTATION_UPDATE_ERROR'
+        });
+      }
     });
 
     socket.on('annotation:delete', async (data: { teamId?: string; annotationId: string }) => {
       const user = (socket.data as any).user;
       if (!user) return socket.emit('error', { message: 'Not authenticated' });
-      await this.sync.handleAnnotationDelete(user.id, data);
-      if (data.teamId) this.io.to(`team:${data.teamId}`).emit('annotation:delete', { annotationId: data.annotationId });
+      
+      try {
+        await this.sync.handleAnnotationDelete(user.id, data);
+        if (data.teamId) this.io.to(`team:${data.teamId}`).emit('annotation:delete', { annotationId: data.annotationId });
+      } catch (error: any) {
+        console.error('[SOCKET] Annotation delete error:', error);
+        socket.emit('error', { 
+          message: error.message || 'Failed to process annotation deletion',
+          code: 'ANNOTATION_DELETE_ERROR'
+        });
+      }
     });
 
     socket.on('annotation:bulk_delete', async (data: { teamId?: string; annotationIds: string[] }) => {
       const user = (socket.data as any).user;
       if (!user) return socket.emit('error', { message: 'Not authenticated' });
       
-      const result = await this.sync.handleBulkAnnotationDelete(user.id, data);
-      
-      if (data.teamId) {
-        this.io.to(`team:${data.teamId}`).emit('annotation:bulk_delete', { 
-          annotationIds: data.annotationIds 
+      try {
+        const result = await this.sync.handleBulkAnnotationDelete(user.id, data);
+        
+        if (data.teamId) {
+          this.io.to(`team:${data.teamId}`).emit('annotation:bulk_delete', { 
+            annotationIds: data.annotationIds 
+          });
+        }
+        
+        socket.emit('annotation:bulk_delete_result', result);
+      } catch (error: any) {
+        console.error('[SOCKET] Bulk annotation delete error:', error);
+        socket.emit('error', { 
+          message: error.message || 'Failed to process bulk annotation deletion',
+          code: 'BULK_ANNOTATION_DELETE_ERROR'
         });
       }
-      
-      socket.emit('annotation:bulk_delete_result', result);
     });
 
     socket.on('message:send', async (data: { teamId?: string; [key: string]: unknown }) => {
