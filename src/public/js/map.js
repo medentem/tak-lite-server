@@ -523,6 +523,8 @@ class AdminMap {
       if (response.ok) {
         this.annotations = await response.json();
         console.log(`Loaded ${this.annotations.length} annotations`);
+      } else {
+        console.error(`Failed to load annotations: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
       console.error('Failed to load annotations:', error);
@@ -531,15 +533,30 @@ class AdminMap {
   
   async loadLocations() {
     try {
-      const params = new URLSearchParams();
-      if (this.currentTeamId) {
+      // If no team is selected, load locations from all teams by using the regular locations endpoint
+      if (!this.currentTeamId) {
+        const params = new URLSearchParams();
+        params.append('limit', '100');
+        
+        const response = await fetch(`/api/admin/map/locations?${params}`);
+        if (response.ok) {
+          this.locations = await response.json();
+          console.log(`Loaded ${this.locations.length} locations from all teams`);
+        } else {
+          console.error(`Failed to load locations: ${response.status} ${response.statusText}`);
+        }
+      } else {
+        // Use the latest endpoint for specific team
+        const params = new URLSearchParams();
         params.append('teamId', this.currentTeamId);
-      }
-      
-      const response = await fetch(`/api/admin/map/locations/latest?${params}`);
-      if (response.ok) {
-        this.locations = await response.json();
-        console.log(`Loaded ${this.locations.length} locations`);
+        
+        const response = await fetch(`/api/admin/map/locations/latest?${params}`);
+        if (response.ok) {
+          this.locations = await response.json();
+          console.log(`Loaded ${this.locations.length} latest locations for team ${this.currentTeamId}`);
+        } else {
+          console.error(`Failed to load locations for team ${this.currentTeamId}: ${response.status} ${response.statusText}`);
+        }
       }
     } catch (error) {
       console.error('Failed to load locations:', error);
