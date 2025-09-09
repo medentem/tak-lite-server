@@ -167,9 +167,14 @@ function connectWebSocket() {
     socket.disconnect();
   }
   
-  if (!token) return;
+  if (!token) {
+    console.log('No authentication token available, skipping WebSocket connection');
+    addActivityLog('No authentication token - login required', 'warning');
+    return;
+  }
   
   try {
+    console.log('Attempting WebSocket connection with token:', token.substring(0, 10) + '...');
     socket = io({
       auth: { token: token },
       transports: ['websocket', 'polling']
@@ -212,7 +217,18 @@ function connectWebSocket() {
     
     socket.on('connect_error', (error) => {
       console.error('WebSocket connection error:', error);
-      addActivityLog(`Connection error: ${error.message}`, 'error');
+      
+      // Provide more specific error messages
+      let errorMessage = 'Connection failed';
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.type === 'TransportError') {
+        errorMessage = 'Network connection failed';
+      } else if (error.type === 'UnauthorizedError') {
+        errorMessage = 'Authentication failed - please login again';
+      }
+      
+      addActivityLog(`Connection error: ${errorMessage}`, 'error');
       
       if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
         setTimeout(() => {

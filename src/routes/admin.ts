@@ -103,7 +103,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       const isContainerized = loadavg.every(val => val === 0);
       const alternativeMetrics = isContainerized ? {
         cpuUsage: process.cpuUsage(),
-        eventLoopDelay: process.hrtime.bigint(), // We'll calculate actual delay in frontend
+        eventLoopDelay: Number(process.hrtime.bigint()), // Convert BigInt to Number for JSON serialization
         activeHandles: (process as any)._getActiveHandles().length,
         activeRequests: (process as any)._getActiveRequests().length
       } : null;

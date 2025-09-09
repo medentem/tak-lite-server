@@ -1461,7 +1461,10 @@ class AdminMap {
           });
         },
         (error) => {
-          console.log('Geolocation failed:', error.message);
+          // Only log non-permission errors to reduce noise
+          if (error.code !== error.PERMISSION_DENIED) {
+            console.log('Geolocation failed:', error.message);
+          }
           // Fall back to centering on existing data
           this.centerMapOnData();
         },
