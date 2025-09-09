@@ -96,12 +96,26 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         : {};
 
       const mem = process.memoryUsage();
+      const loadavg = os.loadavg();
+      
+      // In containerized environments (like DigitalOcean App Platform), os.loadavg() returns zeros
+      // Provide alternative metrics that are meaningful in containers
+      const isContainerized = loadavg.every(val => val === 0);
+      const alternativeMetrics = isContainerized ? {
+        cpuUsage: process.cpuUsage(),
+        eventLoopDelay: process.hrtime.bigint(), // We'll calculate actual delay in frontend
+        activeHandles: (process as any)._getActiveHandles().length,
+        activeRequests: (process as any)._getActiveRequests().length
+      } : null;
+      
       const stats = {
         server: {
           pid: process.pid,
           node: process.version,
           uptimeSec: Math.round(process.uptime()),
-          loadavg: os.loadavg(),
+          loadavg: loadavg,
+          isContainerized: isContainerized,
+          alternativeMetrics: alternativeMetrics,
           memory: { rss: mem.rss, heapUsed: mem.heapUsed, heapTotal: mem.heapTotal }
         },
         db: {

@@ -282,7 +282,17 @@ function updateStatsDisplay(stats) {
   if (stats.server) {
     q('#k_uptime').textContent = (stats.server.uptimeSec || 0) + 's';
     q('#k_node').textContent = stats.server.node || '-';
-    q('#k_load').textContent = (stats.server.loadavg || []).map(n => n.toFixed(2)).join(' / ') || '-';
+    
+    // Handle load display - show alternative metrics for containerized environments
+    if (stats.server.isContainerized && stats.server.alternativeMetrics) {
+      const alt = stats.server.alternativeMetrics;
+      const cpuUsage = alt.cpuUsage;
+      const cpuPercent = ((cpuUsage.user + cpuUsage.system) / 1000000).toFixed(1); // Convert to seconds
+      q('#k_load').textContent = `CPU: ${cpuPercent}s | Handles: ${alt.activeHandles}`;
+    } else {
+      q('#k_load').textContent = (stats.server.loadavg || []).map(n => n.toFixed(2)).join(' / ') || '-';
+    }
+    
     q('#k_mem').textContent = stats.server.memory?.heapUsed ? (stats.server.memory.heapUsed/1048576).toFixed(1)+' MB' : '-';
   }
   
