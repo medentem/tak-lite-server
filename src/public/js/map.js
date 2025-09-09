@@ -431,11 +431,35 @@ class AdminMap {
         type: 'circle',
         source: 'locations',
         paint: {
-          'circle-radius': 6,
-          'circle-color': '#3b82f6',
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff'
-        }
+          'circle-radius': 5, // Match Android app size
+          'circle-color': [
+            'case',
+            ['get', 'isStale'], '#BDBDBD', // Gray for stale locations
+            ['==', ['get', 'user_status'], 'RED'], '#F44336',
+            ['==', ['get', 'user_status'], 'YELLOW'], '#FFC107',
+            ['==', ['get', 'user_status'], 'BLUE'], '#2196F3',
+            ['==', ['get', 'user_status'], 'ORANGE'], '#FF9800',
+            ['==', ['get', 'user_status'], 'VIOLET'], '#9C27B0',
+            ['==', ['get', 'user_status'], 'GREEN'], '#4CAF50',
+            '#4CAF50' // Default green
+          ],
+          'circle-stroke-width': 3, // Match Android app stroke width
+          'circle-stroke-color': [
+            'case',
+            ['get', 'isStale'], [
+              'case',
+              ['==', ['get', 'user_status'], 'RED'], '#F44336',
+              ['==', ['get', 'user_status'], 'YELLOW'], '#FFC107',
+              ['==', ['get', 'user_status'], 'BLUE'], '#2196F3',
+              ['==', ['get', 'user_status'], 'ORANGE'], '#FF9800',
+              ['==', ['get', 'user_status'], 'VIOLET'], '#9C27B0',
+              ['==', ['get', 'user_status'], 'GREEN'], '#4CAF50',
+              '#4CAF50' // Default green
+            ],
+            '#FFFFFF' // White for fresh locations
+          ]
+        },
+        filter: ['>=', ['zoom'], 7] // Only show at zoom level 7+ (match Android app)
       });
     }
     
@@ -572,6 +596,16 @@ class AdminMap {
     // Title - use user name or email
     const title = properties.user_name || properties.user_email || 'Peer Location';
     lines.push(title);
+    
+    // Add status information
+    if (properties.user_status && properties.user_status !== 'GREEN') {
+      lines.push(`Status: ${properties.user_status}`);
+    }
+    
+    // Add staleness indicator
+    if (properties.isStale) {
+      lines.push(`⚠️ Stale (${properties.ageMinutes}m old)`);
+    }
     
     // Add location-specific information
     // Age (will be updated dynamically)
@@ -1069,6 +1103,7 @@ class AdminMap {
     // Add or update location in local data
     const existingIndex = this.locations.findIndex(l => l.user_id === data.userId);
     if (existingIndex >= 0) {
+      // Update existing location
       this.locations[existingIndex] = {
         ...this.locations[existingIndex],
         latitude: data.latitude,
@@ -1078,9 +1113,22 @@ class AdminMap {
         timestamp: data.timestamp
       };
     } else {
-      // For new locations, we need to fetch user info
-      this.loadLocations(); // This will get the latest data with user info
-      return;
+      // Add new location with user info from the event data
+      const newLocation = {
+        id: `temp-${data.userId}-${Date.now()}`, // Temporary ID for new locations
+        user_id: data.userId,
+        team_id: data.teamId,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        altitude: data.altitude,
+        accuracy: data.accuracy,
+        timestamp: data.timestamp,
+        created_at: new Date().toISOString(),
+        user_name: data.user_name || 'Unknown User',
+        user_email: data.user_email || 'unknown@example.com',
+        user_status: data.user_status || 'GREEN'
+      };
+      this.locations.unshift(newLocation); // Add to beginning of array
     }
     
     // Update map immediately
@@ -1280,25 +1328,36 @@ class AdminMap {
       }
     });
     
-    // Convert locations to GeoJSON
-    const locationFeatures = this.locations.map(location => ({
-      type: 'Feature',
-      geometry: {
-        type: 'Point',
-        coordinates: [location.longitude, location.latitude]
-      },
-      properties: {
-        id: location.id,
-        user_id: location.user_id,
-        user_name: location.user_name,
-        user_email: location.user_email,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        altitude: location.altitude,
-        accuracy: location.accuracy,
-        timestamp: location.timestamp
-      }
-    }));
+    // Convert locations to GeoJSON with staleness detection
+    const now = Date.now();
+    const stalenessThresholdMs = 10 * 60 * 1000; // 10 minutes (configurable)
+    
+    const locationFeatures = this.locations.map(location => {
+      const locationAge = now - new Date(location.timestamp).getTime();
+      const isStale = locationAge > stalenessThresholdMs;
+      
+      return {
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [location.longitude, location.latitude]
+        },
+        properties: {
+          id: location.id,
+          user_id: location.user_id,
+          user_name: location.user_name,
+          user_email: location.user_email,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          altitude: location.altitude,
+          accuracy: location.accuracy,
+          timestamp: location.timestamp,
+          user_status: location.user_status || 'GREEN',
+          isStale: isStale,
+          ageMinutes: Math.round(locationAge / (60 * 1000))
+        }
+      };
+    });
     
     // Update map sources
     this.map.getSource('annotations-poi').setData({

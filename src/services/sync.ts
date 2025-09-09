@@ -58,13 +58,24 @@ export class SyncService {
       longitude: Joi.number().min(-180).max(180).precision(7).required(),
       altitude: Joi.number().min(-500).max(15000).optional(),
       accuracy: Joi.number().min(0).max(10000).optional(),
-      timestamp: Joi.number().integer().min(now - 1000 * 60 * 60 * 24 * 7).max(now + 1000 * 60 * 5).required()
+      timestamp: Joi.number().integer().min(now - 1000 * 60 * 60 * 24 * 7).max(now + 1000 * 60 * 5).required(),
+      userStatus: Joi.string().valid('RED', 'YELLOW', 'BLUE', 'ORANGE', 'VIOLET', 'GREEN').optional().default('GREEN')
     });
     const data = await schema.validateAsync(payload, { abortEarly: false, stripUnknown: true });
     await this.assertTeamMembership(userId, data.teamId);
-    await this.db.client('locations').insert({ id: uuidv4(), user_id: userId, team_id: data.teamId, latitude: data.latitude, longitude: data.longitude, altitude: data.altitude, accuracy: data.accuracy, timestamp: data.timestamp });
+    await this.db.client('locations').insert({ 
+      id: uuidv4(), 
+      user_id: userId, 
+      team_id: data.teamId, 
+      latitude: data.latitude, 
+      longitude: data.longitude, 
+      altitude: data.altitude, 
+      accuracy: data.accuracy, 
+      timestamp: data.timestamp,
+      user_status: data.userStatus
+    });
     
-    this.emitSyncActivity('location_update', `User ${userId} updated location in team ${data.teamId}`);
+    this.emitSyncActivity('location_update', `User ${userId} updated location in team ${data.teamId} with status ${data.userStatus}`);
   }
 
   async handleAnnotationUpdate(userId: string, payload: any) {

@@ -75,10 +75,14 @@ POST /api/sync/location
 ### WebSocket Events
 ```javascript
 // Connect and authenticate
-const socket = io('http://localhost:3000');
-socket.emit('authenticate', token);
+const socket = io('http://localhost:3000', {
+  auth: { token: 'your-jwt-token' }
+});
 
-// Send location update
+// Join a team room for real-time updates
+socket.emit('team:join', 'team-uuid');
+
+// Send location update (broadcasts to team room)
 socket.emit('location:update', {
   teamId: 'uuid',
   latitude: 37.7749,
@@ -86,14 +90,86 @@ socket.emit('location:update', {
   timestamp: Date.now()
 });
 
-// Listen for updates
+// Listen for real-time updates from team members
 socket.on('location:update', (data) => {
-  console.log('Location update:', data);
+  console.log('Team member location:', data);
+});
+
+// Listen for admin events (admin users only)
+socket.on('admin:stats_update', (stats) => {
+  console.log('Live server stats:', stats);
+});
+```
+
+### API Integration Example
+
+Here's how the REST API and WebSocket service work together:
+
+```javascript
+// 1. Initial app startup - use REST API for data sync
+const response = await fetch('/api/sync/locations/last?teamId=uuid', {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+const lastLocations = await response.json();
+
+// 2. Connect to WebSocket for real-time updates
+const socket = io('http://localhost:3000', { auth: { token } });
+socket.emit('team:join', 'uuid');
+
+// 3. Send updates via WebSocket (preferred for real-time)
+socket.emit('location:update', { teamId: 'uuid', latitude: 37.7749, longitude: -122.4194 });
+
+// 4. Fallback to REST API if WebSocket fails
+socket.on('disconnect', async () => {
+  // Queue updates and sync via REST when reconnected
+  await fetch('/api/sync/location', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teamId: 'uuid', latitude: 37.7749, longitude: -122.4194 })
+  });
 });
 ```
 
 ## 🏗️ Architecture
 
+### Dual API Architecture
+
+TAK Lite Server provides **both REST API and WebSocket services** that work together to support different client needs:
+
+#### **REST API** (`/api/*`)
+- **Purpose**: Initial sync, offline support, and traditional API operations
+- **Authentication**: JWT tokens in `Authorization: Bearer <token>` header
+- **Rate Limiting**: 120 requests/minute per IP
+- **Use Cases**: 
+  - App startup and initial data sync
+  - Offline operation with batch sync
+  - Admin operations and configuration
+  - Health checks and monitoring
+
+#### **WebSocket Service** (Socket.IO)
+- **Purpose**: Real-time updates and live collaboration
+- **Authentication**: JWT tokens in connection auth or headers
+- **Team Rooms**: Dynamic team-based communication channels
+- **Use Cases**:
+  - Live location tracking
+  - Real-time annotation updates
+  - Instant messaging
+  - Admin dashboard live monitoring
+
+#### **Shared Business Logic**
+Both APIs use the same `SyncService` for core operations:
+- Location updates → Database storage + team broadcasting
+- Annotation management → Validation + real-time sync
+- Message handling → Team-based communication
+- Team operations → Membership validation
+
+#### **Real-time Features**
+- **Team Rooms**: Clients join `team:${teamId}` rooms for team-specific updates
+- **Admin Monitoring**: Live statistics and connection tracking
+- **Broadcast Updates**: Changes are instantly pushed to all team members
+- **Connection Management**: Automatic reconnection and authentication
+
+### Technical Stack
 - **HTTP API**: Express.js with JWT authentication
 - **Real-time Sync**: Socket.IO for live location/annotation updates
 - **Database**: PostgreSQL with automatic migrations

@@ -162,7 +162,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         .join('users as u', 'u.id', 'l.user_id')
         .select([
           'l.id', 'l.user_id', 'l.team_id', 'l.latitude', 'l.longitude', 
-          'l.altitude', 'l.accuracy', 'l.timestamp', 'l.created_at',
+          'l.altitude', 'l.accuracy', 'l.timestamp', 'l.created_at', 'l.user_status',
           'u.name as user_name', 'u.email as user_email'
         ])
         .orderBy('l.timestamp', 'desc')
@@ -195,7 +195,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       const locations = await db.client.raw(`
         SELECT DISTINCT ON (l.user_id) 
           l.id, l.user_id, l.team_id, l.latitude, l.longitude, 
-          l.altitude, l.accuracy, l.timestamp, l.created_at,
+          l.altitude, l.accuracy, l.timestamp, l.created_at, l.user_status,
           u.name as user_name, u.email as user_email
         FROM locations l
         JOIN users u ON u.id = l.user_id

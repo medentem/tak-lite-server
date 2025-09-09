@@ -88,7 +88,11 @@ export class SocketGateway {
       const user = (socket.data as any).user;
       if (!user) return socket.emit('error', { message: 'Not authenticated' });
       await this.sync.handleLocationUpdate(user.id, data);
-      if (data.teamId) this.io.to(`team:${data.teamId}`).emit('location:update', { userId: user.id, ...data });
+      if (data.teamId) {
+        this.io.to(`team:${data.teamId}`).emit('location:update', { userId: user.id, ...data });
+        // Emit admin event for real-time map updates
+        this.emitAdminLocationUpdate(user.id, data);
+      }
     });
 
     socket.on('annotation:update', async (data: { teamId?: string; [key: string]: unknown }) => {
@@ -97,7 +101,11 @@ export class SocketGateway {
       
       try {
         const annotation = await this.sync.handleAnnotationUpdate(user.id, data);
-        if (data.teamId) this.io.to(`team:${data.teamId}`).emit('annotation:update', annotation);
+        if (data.teamId) {
+          this.io.to(`team:${data.teamId}`).emit('annotation:update', annotation);
+          // Emit admin event for real-time map updates
+          this.emitAdminAnnotationUpdate(user.id, annotation);
+        }
       } catch (error: any) {
         console.error('[SOCKET] Annotation update error:', error);
         socket.emit('error', { 
@@ -245,6 +253,71 @@ export class SocketGateway {
   // Emit sync activity to admin users
   public emitSyncActivity(type: string, details: string) {
     this.io.emit('admin:sync_activity', { type, details });
+  }
+  
+  // Emit location update to admin users
+  public emitAdminLocationUpdate(userId: string, locationData: any) {
+    // Get user information for the admin event
+    this.getUserInfo(userId).then(userInfo => {
+      if (userInfo) {
+        const adminEventData = {
+          userId: userId,
+          user_name: userInfo.name,
+          user_email: userInfo.email,
+          teamId: locationData.teamId,
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          altitude: locationData.altitude,
+          accuracy: locationData.accuracy,
+          timestamp: locationData.timestamp,
+          user_status: locationData.userStatus || 'GREEN'
+        };
+        this.io.emit('admin:location_update', adminEventData);
+      }
+    }).catch(error => {
+      console.error('[SOCKET] Failed to get user info for admin location update:', error);
+      // Emit with minimal data if user lookup fails
+      this.io.emit('admin:location_update', {
+        userId: userId,
+        teamId: locationData.teamId,
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
+        altitude: locationData.altitude,
+        accuracy: locationData.accuracy,
+        timestamp: locationData.timestamp,
+        user_status: locationData.userStatus || 'GREEN'
+      });
+    });
+  }
+  
+  // Emit annotation update to admin users
+  public emitAdminAnnotationUpdate(userId: string, annotation: any) {
+    // Get user information for the admin event
+    this.getUserInfo(userId).then(userInfo => {
+      if (userInfo) {
+        const adminEventData = {
+          ...annotation,
+          user_name: userInfo.name,
+          user_email: userInfo.email
+        };
+        this.io.emit('admin:annotation_update', adminEventData);
+      }
+    }).catch(error => {
+      console.error('[SOCKET] Failed to get user info for admin annotation update:', error);
+      // Emit with minimal data if user lookup fails
+      this.io.emit('admin:annotation_update', annotation);
+    });
+  }
+  
+  // Helper method to get user information
+  private async getUserInfo(userId: string): Promise<{ name: string; email: string } | null> {
+    try {
+      const user = await this.sync.database.client('users').where('id', userId).select(['name', 'email']).first();
+      return user || null;
+    } catch (error) {
+      console.error('[SOCKET] Failed to get user info:', error);
+      return null;
+    }
   }
   
   // Start periodic stats updates for admin users
