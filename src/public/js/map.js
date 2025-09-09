@@ -1045,6 +1045,18 @@ class AdminMap {
       this.handleAnnotationUpdate(data);
     });
     
+    // Listen for annotation deletions
+    window.socket.on('admin:annotation_delete', (data) => {
+      console.log('Received annotation deletion:', data);
+      this.handleAnnotationDelete(data);
+    });
+    
+    // Listen for bulk annotation deletions
+    window.socket.on('admin:annotation_bulk_delete', (data) => {
+      console.log('Received bulk annotation deletion:', data);
+      this.handleBulkAnnotationDelete(data);
+    });
+    
     // Listen for location updates
     window.socket.on('admin:location_update', (data) => {
       console.log('Received location update:', data);
@@ -1053,7 +1065,7 @@ class AdminMap {
     
     // Listen for sync activity that might affect map data
     window.socket.on('admin:sync_activity', (data) => {
-      if (data.type === 'annotation_update' || data.type === 'location_update') {
+      if (data.type === 'annotation_update' || data.type === 'annotation_delete' || data.type === 'annotation_bulk_delete' || data.type === 'location_update') {
         console.log('Sync activity affecting map:', data);
         // Refresh map data after a short delay to allow server to process
         setTimeout(() => {
@@ -1070,6 +1082,8 @@ class AdminMap {
     
     // Remove specific listeners
     window.socket.off('admin:annotation_update');
+    window.socket.off('admin:annotation_delete');
+    window.socket.off('admin:annotation_bulk_delete');
     window.socket.off('admin:location_update');
     window.socket.off('admin:sync_activity');
   }
@@ -1092,6 +1106,47 @@ class AdminMap {
     this.updateMapData();
     
     console.log(`Updated annotation ${data.id} on map`);
+  }
+
+  handleAnnotationDelete(data) {
+    // Check if this annotation is relevant to current view
+    if (this.currentTeamId && data.teamId !== this.currentTeamId) {
+      return; // Not relevant to current team filter
+    }
+    
+    // Remove annotation from local data
+    const existingIndex = this.annotations.findIndex(a => a.id === data.annotationId);
+    if (existingIndex >= 0) {
+      this.annotations.splice(existingIndex, 1);
+      console.log(`Removed annotation ${data.annotationId} from map`);
+    } else {
+      console.log(`Annotation ${data.annotationId} not found in local data`);
+    }
+    
+    // Update map immediately
+    this.updateMapData();
+  }
+
+  handleBulkAnnotationDelete(data) {
+    // Check if this deletion is relevant to current view
+    if (this.currentTeamId && data.teamId !== this.currentTeamId) {
+      return; // Not relevant to current team filter
+    }
+    
+    // Remove multiple annotations from local data
+    let removedCount = 0;
+    data.annotationIds.forEach(annotationId => {
+      const existingIndex = this.annotations.findIndex(a => a.id === annotationId);
+      if (existingIndex >= 0) {
+        this.annotations.splice(existingIndex, 1);
+        removedCount++;
+      }
+    });
+    
+    console.log(`Removed ${removedCount} annotations from map (${data.annotationIds.length} requested)`);
+    
+    // Update map immediately
+    this.updateMapData();
   }
   
   handleLocationUpdate(data) {

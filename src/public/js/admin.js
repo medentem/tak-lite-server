@@ -8,6 +8,13 @@ const MAX_ACTIVITY_ITEMS = 50;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 
+// Message monitoring variables
+let messageLog = [];
+const MAX_MESSAGE_ITEMS = 100;
+let messageTeamFilter = '';
+let messageAutoScroll = true;
+let messageShowTimestamps = true;
+
 // Real-time activity logging
 function addActivityLog(message, type = 'info') {
   const timestamp = new Date().toLocaleTimeString();
@@ -38,6 +45,113 @@ function updateActivityDisplay() {
   }).join('');
   
   activityEl.innerHTML = html;
+}
+
+// Message monitoring functions
+function handleMessageReceived(data) {
+  const timestamp = new Date();
+  const messageEntry = {
+    id: data.id,
+    timestamp: timestamp,
+    teamId: data.team_id,
+    userId: data.user_id,
+    userName: data.user_name || 'Unknown User',
+    userEmail: data.user_email || 'unknown@example.com',
+    content: data.content,
+    messageType: data.message_type || 'text'
+  };
+  
+  messageLog.unshift(messageEntry);
+  if (messageLog.length > MAX_MESSAGE_ITEMS) {
+    messageLog = messageLog.slice(0, MAX_MESSAGE_ITEMS);
+  }
+  
+  updateMessageDisplay();
+  addActivityLog(`Message from ${messageEntry.userName} in team ${data.team_id}`, 'info');
+}
+
+function updateMessageDisplay() {
+  const messageEl = q('#message_monitor');
+  if (!messageEl) return;
+  
+  if (messageLog.length === 0) {
+    messageEl.innerHTML = '<div class="muted" style="text-align: center; padding: 20px;">Waiting for messages...</div>';
+    return;
+  }
+  
+  // Filter messages by team if filter is set
+  const filteredMessages = messageTeamFilter 
+    ? messageLog.filter(msg => msg.teamId === messageTeamFilter)
+    : messageLog;
+  
+  if (filteredMessages.length === 0) {
+    messageEl.innerHTML = '<div class="muted" style="text-align: center; padding: 20px;">No messages for selected team...</div>';
+    return;
+  }
+  
+  const html = filteredMessages.map(msg => {
+    const timeStr = messageShowTimestamps ? msg.timestamp.toLocaleTimeString() : '';
+    const timePrefix = timeStr ? `[${timeStr}] ` : '';
+    const teamInfo = messageTeamFilter ? '' : ` (Team: ${msg.teamId.substring(0, 8)}...)`;
+    
+    return `<div style="margin-bottom: 8px; line-height: 1.4;">
+      <span style="color: #3b82f6;">${timePrefix}${msg.userName}${teamInfo}:</span>
+      <span style="color: #e6edf3;">${escapeHtml(msg.content)}</span>
+    </div>`;
+  }).join('');
+  
+  messageEl.innerHTML = html;
+  
+  // Auto-scroll to bottom if enabled
+  if (messageAutoScroll) {
+    messageEl.scrollTop = messageEl.scrollHeight;
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function clearMessages() {
+  messageLog = [];
+  updateMessageDisplay();
+  addActivityLog('Message log cleared', 'info');
+}
+
+function setupMessageControls() {
+  // Team filter
+  const teamFilter = q('#message_team_filter');
+  if (teamFilter) {
+    teamFilter.addEventListener('change', (e) => {
+      messageTeamFilter = e.target.value || '';
+      updateMessageDisplay();
+    });
+  }
+  
+  // Clear messages button
+  const clearBtn = q('#clear_messages');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', clearMessages);
+  }
+  
+  // Auto-scroll toggle
+  const autoScrollToggle = q('#message_auto_scroll');
+  if (autoScrollToggle) {
+    autoScrollToggle.addEventListener('change', (e) => {
+      messageAutoScroll = e.target.checked;
+    });
+  }
+  
+  // Show timestamps toggle
+  const timestampsToggle = q('#message_show_timestamps');
+  if (timestampsToggle) {
+    timestampsToggle.addEventListener('change', (e) => {
+      messageShowTimestamps = e.target.checked;
+      updateMessageDisplay();
+    });
+  }
 }
 
 // WebSocket connection management
@@ -124,6 +238,11 @@ function connectWebSocket() {
     
     socket.on('admin:sync_activity', (data) => {
       addActivityLog(`Sync: ${data.type} - ${data.details}`, 'info');
+    });
+    
+    // Listen for message events
+    socket.on('admin:message_received', (data) => {
+      handleMessageReceived(data);
     });
     
   } catch (error) {
@@ -248,6 +367,9 @@ function showDash(show) {
   q('#who').classList.toggle('hidden', !show);
   
   if (show) {
+    // Initialize message monitoring controls
+    setupMessageControls();
+    
     // Wait for Socket.IO library if not available, then connect
     if (typeof io !== 'undefined') {
       connectWebSocket();
@@ -387,6 +509,18 @@ async function refresh() {
       o.textContent = t.name; 
       tsel.appendChild(o); 
     });
+    
+    // Populate message team filter
+    const messageTeamFilter = q('#message_team_filter');
+    if (messageTeamFilter) {
+      messageTeamFilter.innerHTML = '<option value="">All Teams</option>';
+      teams.forEach(t => { 
+        const o = document.createElement('option'); 
+        o.value = t.id; 
+        o.textContent = t.name; 
+        messageTeamFilter.appendChild(o); 
+      });
+    }
     
     const usel = q('#t_user_select'); 
     usel.innerHTML = '';

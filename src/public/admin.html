@@ -483,6 +483,45 @@
           </div>
         </div>
 
+        <!-- Message Monitoring Section -->
+        <div class="section card" style="margin-top: 16px;">
+          <h2>Live Message Monitoring</h2>
+          <div class="help-text">
+            <strong>Real-time message monitoring</strong> showing all team communications as they happen
+          </div>
+          
+          <div style="display: flex; gap: 12px; margin-bottom: 16px; align-items: center;">
+            <select id="message_team_filter" style="flex: 1; min-width: 200px;">
+              <option value="">All Teams</option>
+            </select>
+            <button id="clear_messages" class="secondary">Clear Messages</button>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
+                <input id="message_auto_scroll" type="checkbox" checked />
+                Auto-scroll
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
+                <input id="message_show_timestamps" type="checkbox" checked />
+                Show timestamps
+              </label>
+            </div>
+          </div>
+          
+          <div id="message_monitor" style="height: 300px; border-radius: 8px; overflow: hidden; background: #0c1527; border: 1px solid #1f2a44; padding: 12px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 13px;">
+            <div class="muted" style="text-align: center; padding: 20px;">Waiting for messages...</div>
+          </div>
+          
+          <div style="margin-top: 16px; font-size: 13px;">
+            <strong>Message Controls:</strong>
+            <div style="margin-top: 8px; color: var(--muted);">
+              • Messages appear in real-time as they are sent<br>
+              • Use team filter to focus on specific teams<br>
+              • Auto-scroll keeps the latest messages visible<br>
+              • Messages are stored for the current session only
+            </div>
+          </div>
+        </div>
+
         <div class="section grid" style="margin-top: 16px;">
           <div class="card">
             <h2>Users</h2>

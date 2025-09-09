@@ -120,8 +120,12 @@ export class SocketGateway {
       if (!user) return socket.emit('error', { message: 'Not authenticated' });
       
       try {
-        await this.sync.handleAnnotationDelete(user.id, data);
-        if (data.teamId) this.io.to(`team:${data.teamId}`).emit('annotation:delete', { annotationId: data.annotationId });
+        const result = await this.sync.handleAnnotationDelete(user.id, data);
+        if (data.teamId) {
+          this.io.to(`team:${data.teamId}`).emit('annotation:delete', { annotationId: data.annotationId });
+          // Emit admin event for real-time map updates
+          this.emitAdminAnnotationDelete(user.id, { annotationId: data.annotationId, teamId: data.teamId });
+        }
       } catch (error: any) {
         console.error('[SOCKET] Annotation delete error:', error);
         socket.emit('error', { 
@@ -151,6 +155,8 @@ export class SocketGateway {
             annotationIds: data.annotationIds 
           });
           console.log('[SOCKET] Broadcasted bulk delete to team:', data.teamId);
+          // Emit admin event for real-time map updates
+          this.emitAdminBulkAnnotationDelete(user.id, { annotationIds: data.annotationIds, teamId: data.teamId });
         }
         
         socket.emit('annotation:bulk_delete_result', result);
@@ -167,7 +173,11 @@ export class SocketGateway {
       const user = (socket.data as any).user;
       if (!user) return socket.emit('error', { message: 'Not authenticated' });
       const message = await this.sync.handleMessage(user.id, data);
-      if (data.teamId) this.io.to(`team:${data.teamId}`).emit('message:received', message);
+      if (data.teamId) {
+        this.io.to(`team:${data.teamId}`).emit('message:received', message);
+        // Emit admin event for real-time message monitoring
+        this.emitAdminMessageReceived(user.id, message);
+      }
     });
     
     // Handle disconnection
@@ -306,6 +316,63 @@ export class SocketGateway {
       console.error('[SOCKET] Failed to get user info for admin annotation update:', error);
       // Emit with minimal data if user lookup fails
       this.io.emit('admin:annotation_update', annotation);
+    });
+  }
+
+  // Emit annotation deletion to admin users
+  public emitAdminAnnotationDelete(userId: string, deletionData: any) {
+    // Get user information for the admin event
+    this.getUserInfo(userId).then(userInfo => {
+      if (userInfo) {
+        const adminEventData = {
+          ...deletionData,
+          user_name: userInfo.name,
+          user_email: userInfo.email
+        };
+        this.io.emit('admin:annotation_delete', adminEventData);
+      }
+    }).catch(error => {
+      console.error('[SOCKET] Failed to get user info for admin annotation delete:', error);
+      // Emit with minimal data if user lookup fails
+      this.io.emit('admin:annotation_delete', deletionData);
+    });
+  }
+
+  // Emit bulk annotation deletion to admin users
+  public emitAdminBulkAnnotationDelete(userId: string, deletionData: any) {
+    // Get user information for the admin event
+    this.getUserInfo(userId).then(userInfo => {
+      if (userInfo) {
+        const adminEventData = {
+          ...deletionData,
+          user_name: userInfo.name,
+          user_email: userInfo.email
+        };
+        this.io.emit('admin:annotation_bulk_delete', adminEventData);
+      }
+    }).catch(error => {
+      console.error('[SOCKET] Failed to get user info for admin bulk annotation delete:', error);
+      // Emit with minimal data if user lookup fails
+      this.io.emit('admin:annotation_bulk_delete', deletionData);
+    });
+  }
+
+  // Emit message received to admin users
+  public emitAdminMessageReceived(userId: string, messageData: any) {
+    // Get user information for the admin event
+    this.getUserInfo(userId).then(userInfo => {
+      if (userInfo) {
+        const adminEventData = {
+          ...messageData,
+          user_name: userInfo.name,
+          user_email: userInfo.email
+        };
+        this.io.emit('admin:message_received', adminEventData);
+      }
+    }).catch(error => {
+      console.error('[SOCKET] Failed to get user info for admin message received:', error);
+      // Emit with minimal data if user lookup fails
+      this.io.emit('admin:message_received', messageData);
     });
   }
   
