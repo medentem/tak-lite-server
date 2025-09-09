@@ -163,8 +163,19 @@ function connectWebSocket() {
     return;
   }
   
+  // Prevent multiple simultaneous connections
+  if (socket && socket.connected) {
+    console.log('WebSocket already connected, skipping new connection');
+    return;
+  }
+  
+  // Clean up any existing connection first
   if (socket) {
+    console.log('Cleaning up existing WebSocket connection');
+    socket.removeAllListeners();
     socket.disconnect();
+    socket = null;
+    window.socket = null;
   }
   
   if (!token) {
@@ -177,7 +188,11 @@ function connectWebSocket() {
     console.log('Attempting WebSocket connection with token:', token.substring(0, 10) + '...');
     socket = io({
       auth: { token: token },
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      // Disable auto-reconnection to prevent connection leaks
+      reconnection: false,
+      // Set connection timeout
+      timeout: 10000
     });
     
     // Make socket globally available for other components
@@ -269,6 +284,9 @@ function connectWebSocket() {
 
 function disconnectWebSocket() {
   if (socket) {
+    console.log('Disconnecting WebSocket:', socket.id);
+    // Remove all event listeners to prevent memory leaks
+    socket.removeAllListeners();
     socket.disconnect();
     socket = null;
     window.socket = null;
@@ -291,6 +309,28 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Wait for Socket.IO library to load
   waitForSocketIO();
+});
+
+// Cleanup WebSocket connections when page is unloaded
+window.addEventListener('beforeunload', () => {
+  console.log('Page unloading - cleaning up WebSocket connections');
+  disconnectWebSocket();
+});
+
+// Also cleanup on page hide (mobile browsers, tab switching)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    console.log('Page hidden - disconnecting WebSocket to prevent leaks');
+    disconnectWebSocket();
+  } else if (document.visibilityState === 'visible' && token) {
+    console.log('Page visible - reconnecting WebSocket');
+    // Small delay to avoid rapid reconnection
+    setTimeout(() => {
+      if (token && !socket) {
+        connectWebSocket();
+      }
+    }, 1000);
+  }
 });
 
 // Wait for Socket.IO library to be available

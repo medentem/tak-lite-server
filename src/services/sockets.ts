@@ -6,8 +6,15 @@ import { SyncService } from './sync';
 
 export class SocketGateway {
   private security: SecurityService;
+  private connectionCleanupInterval: NodeJS.Timeout;
+  
   constructor(private io: Server, private config: ConfigService, private sync: SyncService) {
     this.security = new SecurityService(config);
+    
+    // Start periodic connection cleanup to prevent memory leaks
+    this.connectionCleanupInterval = setInterval(() => {
+      this.cleanupStaleConnections();
+    }, 30000); // Clean up every 30 seconds
   }
 
   bind() {
@@ -181,8 +188,14 @@ export class SocketGateway {
     });
     
     // Handle disconnection
-    socket.on('disconnect', () => {
-      console.log('[SOCKET] Client disconnected:', socket.id);
+    socket.on('disconnect', (reason) => {
+      console.log('[SOCKET] Client disconnected:', socket.id, 'reason:', reason);
+      
+      // Clean up socket data to prevent memory leaks
+      if (socket.data) {
+        socket.data = {};
+      }
+      
       this.emitAdminConnectionUpdate('disconnect', socket.id);
     });
   }
@@ -402,6 +415,36 @@ export class SocketGateway {
         console.error('[SOCKET] Periodic stats update failed:', error);
       }
     }, 10000); // Update every 10 seconds
+  }
+
+  // Clean up stale connections to prevent memory leaks
+  private cleanupStaleConnections() {
+    const sockets = Array.from(this.io.sockets.sockets.values());
+    const now = Date.now();
+    let cleanedCount = 0;
+    
+    sockets.forEach(socket => {
+      // Check if socket has been idle for too long (5 minutes)
+      const lastActivity = (socket as any).lastActivity || now;
+      const idleTime = now - lastActivity;
+      
+      if (idleTime > 300000) { // 5 minutes
+        console.log(`[SOCKET] Cleaning up stale connection: ${socket.id} (idle for ${Math.round(idleTime / 1000)}s)`);
+        socket.disconnect(true);
+        cleanedCount++;
+      }
+    });
+    
+    if (cleanedCount > 0) {
+      console.log(`[SOCKET] Cleaned up ${cleanedCount} stale connections`);
+    }
+  }
+
+  // Cleanup method to stop intervals
+  public cleanup() {
+    if (this.connectionCleanupInterval) {
+      clearInterval(this.connectionCleanupInterval);
+    }
   }
 }
 
