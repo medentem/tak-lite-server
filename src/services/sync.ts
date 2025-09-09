@@ -4,7 +4,20 @@ import Joi from 'joi';
 import { DatabaseService } from './database';
 
 export class SyncService {
-  constructor(private io: Server, private db: DatabaseService) {}
+  private meshSyncAttempts = new Map<string, number>(); // annotationId -> timestamp
+  private readonly MESH_SYNC_RATE_LIMIT_MS = 5000; // 5 seconds per annotation
+  
+  constructor(private io: Server, private db: DatabaseService) {
+    // Clean up old sync attempts every minute
+    setInterval(() => {
+      const now = Date.now();
+      for (const [annotationId, timestamp] of this.meshSyncAttempts.entries()) {
+        if (now - timestamp > this.MESH_SYNC_RATE_LIMIT_MS * 2) {
+          this.meshSyncAttempts.delete(annotationId);
+        }
+      }
+    }, 60000);
+  }
   
   // Expose database client for admin stats
   public get database() {
@@ -59,19 +72,66 @@ export class SyncService {
       teamId: Joi.string().uuid().required(),
       annotationId: Joi.string().uuid().optional(),
       type: Joi.string().max(64).required(),
-      data: Joi.object().max(50_000).required() // ~50KB max serialized
+      data: Joi.object().max(50_000).required(), // ~50KB max serialized
+      meshOrigin: Joi.boolean().optional(), // Flag indicating this came from mesh
+      originalSource: Joi.string().optional() // Track original source (mesh, server, etc.)
     });
-    const { teamId, annotationId, type, data } = await schema.validateAsync(payload, { abortEarly: false, stripUnknown: true });
+    const { teamId, annotationId, type, data, meshOrigin, originalSource } = await schema.validateAsync(payload, { abortEarly: false, stripUnknown: true });
     
     // Validate annotation data structure
     this.validateAnnotationData(type, data);
     
     await this.assertTeamMembership(userId, teamId);
     const id = annotationId || uuidv4();
-    const row = { id, user_id: userId, team_id: teamId, type, data };
-    await this.db.client('annotations').insert(row).onConflict('id').merge({ data, type, updated_at: this.db.client.fn.now() });
     
-    this.emitSyncActivity('annotation_update', `User ${userId} ${annotationId ? 'updated' : 'created'} annotation ${id} in team ${teamId}`);
+    // Rate limiting for mesh-originated annotations to prevent thundering herd
+    if (meshOrigin) {
+      const now = Date.now();
+      const lastAttempt = this.meshSyncAttempts.get(id);
+      if (lastAttempt && (now - lastAttempt) < this.MESH_SYNC_RATE_LIMIT_MS) {
+        console.log(`[SYNC] Rate limiting mesh sync for annotation ${id} (last attempt: ${now - lastAttempt}ms ago)`);
+        this.emitSyncActivity('annotation_rate_limited', `Mesh sync rate limited for annotation ${id} by user ${userId}`);
+        // Return existing annotation instead of creating duplicate
+        const existing = await this.db.client('annotations').where('id', id).first();
+        if (existing) {
+          return existing;
+        }
+      }
+      this.meshSyncAttempts.set(id, now);
+    }
+    
+    // Add metadata for mesh-originated annotations
+    const enhancedData = {
+      ...data,
+      ...(meshOrigin && { 
+        meshOrigin: true, 
+        originalSource: originalSource || 'mesh',
+        syncedBy: userId,
+        syncedAt: new Date().toISOString()
+      })
+    };
+    
+    const row = { 
+      id, 
+      user_id: userId, 
+      team_id: teamId, 
+      type, 
+      data: enhancedData,
+      ...(meshOrigin && { mesh_origin: true, original_source: originalSource || 'mesh' })
+    };
+    
+    // Use upsert with conflict resolution
+    await this.db.client('annotations').insert(row).onConflict('id').merge({ 
+      data: enhancedData, 
+      type, 
+      updated_at: this.db.client.fn.now(),
+      ...(meshOrigin && { mesh_origin: true, original_source: originalSource || 'mesh' })
+    });
+    
+    const action = annotationId ? 'updated' : 'created';
+    const source = meshOrigin ? ' (mesh-originated)' : '';
+    this.emitSyncActivity('annotation_update', `User ${userId} ${action} annotation ${id} in team ${teamId}${source}`);
+    
     return row;
   }
 
