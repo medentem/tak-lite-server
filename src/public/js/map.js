@@ -177,14 +177,7 @@ class AdminMap {
       
       console.log('Map instance created:', this.map);
       
-      // Add a visible test element to confirm map is working
-      const testDiv = document.createElement('div');
-      testDiv.style.cssText = 'position: absolute; top: 10px; left: 10px; background: red; color: white; padding: 5px; z-index: 1000; font-size: 12px; cursor: pointer;';
-      testDiv.textContent = 'MAP LOADED - CLICK ME';
-      testDiv.addEventListener('click', () => {
-        alert('Test div clicked!');
-      });
-      container.appendChild(testDiv);
+      // Map loaded successfully
       
       // Add navigation controls
       this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
@@ -248,7 +241,6 @@ class AdminMap {
       // Add basic interaction test
       this.map.on('click', (e) => {
         console.log('Map clicked at:', e.lngLat);
-        alert(`Map clicked at: ${e.lngLat.lng.toFixed(4)}, ${e.lngLat.lat.toFixed(4)}`);
       });
       
       
@@ -669,8 +661,48 @@ class AdminMap {
   }
   
   setupClickHandlers() {
-    console.log('Setting up click handlers (disabled for testing)...');
-    // Temporarily disabled all click handlers to test basic map functionality
+    console.log('Setting up click handlers...');
+    
+    // POI click handler (symbol layer) - single click for popup
+    this.map.on('click', 'annotations-poi', (e) => {
+      const feature = e.features[0];
+      this.showAnnotationPopup(feature, e.lngLat);
+    });
+    
+    // Line click handler
+    this.map.on('click', 'annotations-line', (e) => {
+      const feature = e.features[0];
+      this.showAnnotationPopup(feature, e.lngLat);
+    });
+    
+    // Area click handler
+    this.map.on('click', 'annotations-area', (e) => {
+      const feature = e.features[0];
+      this.showAnnotationPopup(feature, e.lngLat);
+    });
+    
+    // Polygon click handler
+    this.map.on('click', 'annotations-polygon', (e) => {
+      const feature = e.features[0];
+      this.showAnnotationPopup(feature, e.lngLat);
+    });
+    
+    // Location click handler
+    this.map.on('click', 'locations', (e) => {
+      const feature = e.features[0];
+      this.showLocationPopup(feature, e.lngLat);
+    });
+    
+    // Change cursor on hover for all layers
+    const layers = ['annotations-poi', 'annotations-line', 'annotations-area', 'annotations-polygon', 'locations'];
+    layers.forEach(layerId => {
+      this.map.on('mouseenter', layerId, () => {
+        this.map.getCanvas().style.cursor = 'pointer';
+      });
+      this.map.on('mouseleave', layerId, () => {
+        this.map.getCanvas().style.cursor = '';
+      });
+    });
   }
   
   setupMapInteractionHandlers() {
@@ -681,8 +713,41 @@ class AdminMap {
       return;
     }
     
-    // For now, let's disable all custom interaction handlers to test basic map functionality
-    console.log('Map interaction handlers setup complete (disabled for testing)');
+    // Simple long press detection for annotation creation
+    let longPressTimer = null;
+    
+    this.map.on('mousedown', (e) => {
+      // Only handle if not clicking on existing annotations or UI elements
+      if (e.originalEvent.target.closest('.maplibregl-popup') || 
+          e.originalEvent.target.closest('.fan-menu') ||
+          e.originalEvent.target.closest('.color-menu') ||
+          e.originalEvent.target.closest('.annotation-edit-form') ||
+          e.originalEvent.target.closest('.modal-overlay')) {
+        return;
+      }
+      
+      longPressTimer = setTimeout(() => {
+        console.log('Long press detected, showing fan menu');
+        this.showFanMenu(e.point);
+        this.showFeedback('Long press detected - choose annotation type');
+      }, this.longPressThreshold);
+    });
+    
+    this.map.on('mouseup', (e) => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    });
+    
+    this.map.on('mouseleave', (e) => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    });
+    
+    console.log('Map interaction handlers setup complete');
   }
   
   startLongPress(e) {
