@@ -265,6 +265,13 @@ class AdminMap {
     this.modalOverlay = document.getElementById('modal_overlay');
     this.feedback = document.getElementById('map_feedback');
     
+    console.log('Annotation UI elements found:');
+    console.log('fanMenu:', this.fanMenu);
+    console.log('colorMenu:', this.colorMenu);
+    console.log('editForm:', this.editForm);
+    console.log('modalOverlay:', this.modalOverlay);
+    console.log('feedback:', this.feedback);
+    
     // Setup form event listeners
     this.setupFormEventListeners();
   }
@@ -808,7 +815,13 @@ class AdminMap {
   }
   
   showFanMenu(point) {
-    if (!this.fanMenu) return;
+    console.log('showFanMenu called with point:', point);
+    console.log('fanMenu element:', this.fanMenu);
+    
+    if (!this.fanMenu) {
+      console.error('fanMenu element not found!');
+      return;
+    }
     
     // Clear existing options
     this.fanMenu.innerHTML = '';
@@ -863,6 +876,14 @@ class AdminMap {
     
     // Show fan menu
     this.fanMenu.classList.add('visible');
+    console.log('Fan menu made visible, classes:', this.fanMenu.className);
+    console.log('Fan menu style:', this.fanMenu.style.cssText);
+    
+    // Force visibility for testing
+    this.fanMenu.style.opacity = '1';
+    this.fanMenu.style.pointerEvents = 'auto';
+    this.fanMenu.style.transform = 'scale(1)';
+    console.log('Fan menu forced visible');
     
     // Store the map coordinates for later use
     this.pendingAnnotation = this.map.unproject(point);
