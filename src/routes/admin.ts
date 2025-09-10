@@ -272,6 +272,211 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
     } catch (err) { next(err); }
   });
 
+  // Admin annotation management endpoints
+  router.post('/map/annotations', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!db) return res.status(500).json({ error: 'Database not initialized' });
+      
+      const schema = Joi.object({
+        teamId: Joi.string().uuid().required(),
+        type: Joi.string().valid('poi', 'line', 'area', 'polygon').required(),
+        data: Joi.object({
+          position: Joi.object({
+            lng: Joi.number().required(),
+            lt: Joi.number().required()
+          }).when('...type', {
+            is: 'poi',
+            then: Joi.required(),
+            otherwise: Joi.optional()
+          }),
+          points: Joi.array().items(Joi.object({
+            lng: Joi.number().required(),
+            lt: Joi.number().required()
+          })).when('...type', {
+            is: Joi.string().valid('line', 'polygon'),
+            then: Joi.required(),
+            otherwise: Joi.optional()
+          }),
+          center: Joi.object({
+            lng: Joi.number().required(),
+            lt: Joi.number().required()
+          }).when('...type', {
+            is: 'area',
+            then: Joi.required(),
+            otherwise: Joi.optional()
+          }),
+          radius: Joi.number().positive().when('...type', {
+            is: 'area',
+            then: Joi.required(),
+            otherwise: Joi.optional()
+          }),
+          color: Joi.string().valid('green', 'yellow', 'red', 'black', 'white').default('green'),
+          shape: Joi.string().valid('circle', 'square', 'triangle', 'exclamation').default('circle'),
+          label: Joi.string().max(100).optional(),
+          timestamp: Joi.number().default(() => Date.now())
+        }).required()
+      });
+      
+      const { teamId, type, data } = await schema.validateAsync(req.body);
+      
+      // Verify team exists
+      const team = await db.client('teams').where({ id: teamId }).first();
+      if (!team) {
+        return res.status(404).json({ error: 'Team not found' });
+      }
+      
+      const id = uuidv4();
+      const userId = (req.user as any)?.sub || 'admin';
+      
+      const row = {
+        id,
+        user_id: userId,
+        team_id: teamId,
+        type,
+        data: JSON.stringify(data),
+        created_at: db.client.fn.now(),
+        updated_at: db.client.fn.now()
+      };
+      
+      await db.client('annotations').insert(row);
+      
+      if (audit) await audit.log({ 
+        actorUserId: userId, 
+        action: 'annotation.create', 
+        resourceType: 'annotation', 
+        resourceId: id, 
+        metadata: { teamId, type } 
+      });
+      
+      // Emit real-time update to admin clients
+      if (io) {
+        io.emit('admin:annotation_update', {
+          id,
+          teamId,
+          type,
+          data,
+          userId,
+          userName: 'Admin',
+          userEmail: 'admin@system',
+          timestamp: data.timestamp
+        });
+      }
+      
+      res.json({ ...row, data });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/map/annotations/:annotationId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!db) return res.status(500).json({ error: 'Database not initialized' });
+      
+      const schema = Joi.object({
+        data: Joi.object({
+          position: Joi.object({
+            lng: Joi.number().required(),
+            lt: Joi.number().required()
+          }).optional(),
+          points: Joi.array().items(Joi.object({
+            lng: Joi.number().required(),
+            lt: Joi.number().required()
+          })).optional(),
+          center: Joi.object({
+            lng: Joi.number().required(),
+            lt: Joi.number().required()
+          }).optional(),
+          radius: Joi.number().positive().optional(),
+          color: Joi.string().valid('green', 'yellow', 'red', 'black', 'white').optional(),
+          shape: Joi.string().valid('circle', 'square', 'triangle', 'exclamation').optional(),
+          label: Joi.string().max(100).optional(),
+          timestamp: Joi.number().optional()
+        }).required()
+      });
+      
+      const { data } = await schema.validateAsync(req.body);
+      const annotationId = req.params.annotationId;
+      const userId = (req.user as any)?.sub || 'admin';
+      
+      // Check if annotation exists
+      const existing = await db.client('annotations').where({ id: annotationId }).first();
+      if (!existing) {
+        return res.status(404).json({ error: 'Annotation not found' });
+      }
+      
+      // Merge with existing data
+      const existingData = JSON.parse(existing.data);
+      const mergedData = { ...existingData, ...data };
+      
+      await db.client('annotations')
+        .where({ id: annotationId })
+        .update({
+          data: JSON.stringify(mergedData),
+          updated_at: db.client.fn.now()
+        });
+      
+      if (audit) await audit.log({ 
+        actorUserId: userId, 
+        action: 'annotation.update', 
+        resourceType: 'annotation', 
+        resourceId: annotationId, 
+        metadata: { teamId: existing.team_id, type: existing.type } 
+      });
+      
+      // Emit real-time update to admin clients
+      if (io) {
+        io.emit('admin:annotation_update', {
+          id: annotationId,
+          teamId: existing.team_id,
+          type: existing.type,
+          data: mergedData,
+          userId,
+          userName: 'Admin',
+          userEmail: 'admin@system',
+          timestamp: mergedData.timestamp || Date.now()
+        });
+      }
+      
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  });
+
+  router.delete('/map/annotations/:annotationId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!db) return res.status(500).json({ error: 'Database not initialized' });
+      
+      const annotationId = req.params.annotationId;
+      const userId = (req.user as any)?.sub || 'admin';
+      
+      // Check if annotation exists
+      const existing = await db.client('annotations').where({ id: annotationId }).first();
+      if (!existing) {
+        return res.status(404).json({ error: 'Annotation not found' });
+      }
+      
+      await db.client('annotations').where({ id: annotationId }).delete();
+      
+      if (audit) await audit.log({ 
+        actorUserId: userId, 
+        action: 'annotation.delete', 
+        resourceType: 'annotation', 
+        resourceId: annotationId, 
+        metadata: { teamId: existing.team_id, type: existing.type } 
+      });
+      
+      // Emit real-time update to admin clients
+      if (io) {
+        io.emit('admin:annotation_delete', {
+          annotationId,
+          teamId: existing.team_id,
+          userId,
+          userName: 'Admin',
+          userEmail: 'admin@system'
+        });
+      }
+      
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  });
+
   // --- Users management (admin) ---
   router.get('/users', async (_req: Request, res: Response, next: NextFunction) => {
     try {

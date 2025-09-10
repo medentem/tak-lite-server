@@ -13,6 +13,24 @@ class AdminMap {
     this.currentPopup = null;
     this.ageUpdateInterval = null;
     
+    // Annotation management state
+    this.isEditingMode = false;
+    this.pendingAnnotation = null;
+    this.fanMenu = null;
+    this.colorMenu = null;
+    this.editForm = null;
+    this.modalOverlay = null;
+    this.feedback = null;
+    this.longPressTimer = null;
+    this.longPressThreshold = 500; // ms
+    this.isLongPressing = false;
+    this.tempLinePoints = [];
+    this.tempAreaCenter = null;
+    this.tempAreaRadius = 0;
+    this.tempAreaRadiusPixels = 0;
+    this.currentColor = 'green';
+    this.currentShape = 'circle';
+    
     this.init();
   }
   
@@ -26,6 +44,7 @@ class AdminMap {
     console.log('Initializing admin map...');
     await this.loadTeams();
     await this.initializeMap();
+    this.initializeAnnotationUI();
     this.setupEventListeners();
     await this.loadMapData();
   }
@@ -115,6 +134,59 @@ class AdminMap {
     this.map.on('error', (e) => {
       console.error('Map error:', e);
     });
+  }
+  
+  initializeAnnotationUI() {
+    // Get references to UI elements
+    this.fanMenu = document.getElementById('fan_menu');
+    this.colorMenu = document.getElementById('color_menu');
+    this.editForm = document.getElementById('annotation_edit_form');
+    this.modalOverlay = document.getElementById('modal_overlay');
+    this.feedback = document.getElementById('map_feedback');
+    
+    // Setup form event listeners
+    this.setupFormEventListeners();
+  }
+  
+  setupFormEventListeners() {
+    // Edit form event listeners
+    const editForm = document.getElementById('edit_annotation_form');
+    const editCancel = document.getElementById('edit_cancel');
+    const editDelete = document.getElementById('edit_delete');
+    const editSave = document.getElementById('edit_save');
+    
+    if (editForm) {
+      editForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.saveAnnotationEdit();
+      });
+    }
+    
+    if (editCancel) {
+      editCancel.addEventListener('click', () => {
+        this.hideEditForm();
+      });
+    }
+    
+    if (editDelete) {
+      editDelete.addEventListener('click', () => {
+        this.deleteCurrentAnnotation();
+      });
+    }
+    
+    if (editSave) {
+      editSave.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.saveAnnotationEdit();
+      });
+    }
+    
+    // Modal overlay click to close
+    if (this.modalOverlay) {
+      this.modalOverlay.addEventListener('click', () => {
+        this.hideEditForm();
+      });
+    }
   }
   
   setupMapSources() {
@@ -465,10 +537,13 @@ class AdminMap {
     
     // Add click handlers
     this.setupClickHandlers();
+    
+    // Add map interaction handlers for annotation management
+    this.setupMapInteractionHandlers();
   }
   
   setupClickHandlers() {
-    // POI click handler (symbol layer)
+    // POI click handler (symbol layer) - single click for popup, long press for edit
     this.map.on('click', 'annotations-poi', (e) => {
       const feature = e.features[0];
       this.showAnnotationPopup(feature, e.lngLat);
@@ -498,6 +573,31 @@ class AdminMap {
       this.showLocationPopup(feature, e.lngLat);
     });
     
+    // Right-click handlers for edit/delete context menu
+    this.map.on('contextmenu', 'annotations-poi', (e) => {
+      e.preventDefault();
+      const feature = e.features[0];
+      this.showAnnotationContextMenu(feature, e.lngLat, e.point);
+    });
+    
+    this.map.on('contextmenu', 'annotations-line', (e) => {
+      e.preventDefault();
+      const feature = e.features[0];
+      this.showAnnotationContextMenu(feature, e.lngLat, e.point);
+    });
+    
+    this.map.on('contextmenu', 'annotations-area', (e) => {
+      e.preventDefault();
+      const feature = e.features[0];
+      this.showAnnotationContextMenu(feature, e.lngLat, e.point);
+    });
+    
+    this.map.on('contextmenu', 'annotations-polygon', (e) => {
+      e.preventDefault();
+      const feature = e.features[0];
+      this.showAnnotationContextMenu(feature, e.lngLat, e.point);
+    });
+    
     // Change cursor on hover for all layers
     const layers = ['annotations-poi', 'annotations-line', 'annotations-area', 'annotations-polygon', 'locations'];
     layers.forEach(layerId => {
@@ -508,6 +608,585 @@ class AdminMap {
         this.map.getCanvas().style.cursor = '';
       });
     });
+  }
+  
+  setupMapInteractionHandlers() {
+    // Long press detection for annotation creation
+    this.map.on('mousedown', (e) => {
+      // Only handle if not clicking on existing annotations
+      if (e.originalEvent.target.closest('.maplibregl-popup')) {
+        return;
+      }
+      
+      this.startLongPress(e);
+    });
+    
+    this.map.on('mouseup', (e) => {
+      this.endLongPress(e);
+    });
+    
+    this.map.on('mouseleave', (e) => {
+      this.cancelLongPress();
+    });
+    
+    // Handle map clicks for annotation creation
+    this.map.on('click', (e) => {
+      // Only handle if not clicking on existing annotations and not in editing mode
+      if (e.originalEvent.target.closest('.maplibregl-popup') || this.isEditingMode) {
+        return;
+      }
+      
+      // If we have temp line points, add to line
+      if (this.tempLinePoints.length > 0) {
+        this.addLinePoint(e.lngLat);
+        return;
+      }
+      
+      // If we're drawing an area, update radius
+      if (this.tempAreaCenter) {
+        this.updateAreaRadius(e.lngLat);
+        return;
+      }
+    });
+    
+    // Handle right-click for context menu (edit/delete)
+    this.map.on('contextmenu', (e) => {
+      e.preventDefault();
+      // This will be handled by the existing click handlers on annotations
+    });
+  }
+  
+  startLongPress(e) {
+    this.longPressTimer = setTimeout(() => {
+      this.isLongPressing = true;
+      this.showFanMenu(e.point);
+      this.showFeedback('Long press detected - choose annotation type');
+    }, this.longPressThreshold);
+  }
+  
+  endLongPress(e) {
+    if (this.longPressTimer) {
+      clearTimeout(this.longPressTimer);
+      this.longPressTimer = null;
+    }
+    
+    if (this.isLongPressing) {
+      this.isLongPressing = false;
+      // Long press was handled by fan menu
+      return;
+    }
+    
+    // Regular click - could be used for other interactions
+  }
+  
+  cancelLongPress() {
+    if (this.longPressTimer) {
+      clearTimeout(this.longPressTimer);
+      this.longPressTimer = null;
+    }
+    this.isLongPressing = false;
+  }
+  
+  showFeedback(message, duration = 3000) {
+    if (!this.feedback) return;
+    
+    this.feedback.textContent = message;
+    this.feedback.classList.add('visible');
+    
+    setTimeout(() => {
+      this.feedback.classList.remove('visible');
+    }, duration);
+  }
+  
+  showFanMenu(point) {
+    if (!this.fanMenu) return;
+    
+    // Clear existing options
+    this.fanMenu.innerHTML = '';
+    
+    // Create shape options (matching Android app)
+    const shapes = [
+      { type: 'circle', icon: '●', class: 'shape-circle' },
+      { type: 'square', icon: '■', class: 'shape-square' },
+      { type: 'triangle', icon: '▲', class: 'shape-triangle' },
+      { type: 'exclamation', icon: '!', class: 'shape-exclamation' }
+    ];
+    
+    // Create area and line options
+    const otherOptions = [
+      { type: 'area', icon: '◯', class: 'area' },
+      { type: 'line', icon: '━', class: 'line' }
+    ];
+    
+    const allOptions = [...shapes, ...otherOptions];
+    
+    // Position fan menu at click point
+    this.fanMenu.style.left = point.x + 'px';
+    this.fanMenu.style.top = point.y + 'px';
+    
+    // Create option elements
+    allOptions.forEach((option, index) => {
+      const optionEl = document.createElement('div');
+      optionEl.className = `fan-menu-option ${option.class}`;
+      optionEl.innerHTML = `<span class="icon">${option.icon}</span>`;
+      
+      // Position options in a fan pattern
+      const angle = (index * 360) / allOptions.length;
+      const radius = 80;
+      const x = Math.cos(angle * Math.PI / 180) * radius;
+      const y = Math.sin(angle * Math.PI / 180) * radius;
+      
+      optionEl.style.left = x + 'px';
+      optionEl.style.top = y + 'px';
+      
+      optionEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.handleFanMenuOption(option.type, point);
+      });
+      
+      this.fanMenu.appendChild(optionEl);
+    });
+    
+    // Show fan menu
+    this.fanMenu.classList.add('visible');
+    
+    // Store the map coordinates for later use
+    this.pendingAnnotation = this.map.unproject(point);
+  }
+  
+  hideFanMenu() {
+    if (this.fanMenu) {
+      this.fanMenu.classList.remove('visible');
+      this.fanMenu.innerHTML = '';
+    }
+  }
+  
+  handleFanMenuOption(optionType, point) {
+    this.hideFanMenu();
+    
+    if (['circle', 'square', 'triangle', 'exclamation'].includes(optionType)) {
+      // Show color menu for POI shapes
+      this.currentShape = optionType;
+      this.showColorMenu(point, 'poi');
+    } else if (optionType === 'area') {
+      // Start area drawing
+      this.startAreaDrawing(point);
+    } else if (optionType === 'line') {
+      // Start line drawing
+      this.startLineDrawing(point);
+    }
+  }
+  
+  showColorMenu(point, annotationType) {
+    if (!this.colorMenu) return;
+    
+    // Clear existing options
+    this.colorMenu.innerHTML = '';
+    
+    const colors = ['green', 'yellow', 'red', 'black', 'white'];
+    
+    // Position color menu at click point
+    this.colorMenu.style.left = point.x + 'px';
+    this.colorMenu.style.top = point.y + 'px';
+    
+    // Create color options
+    colors.forEach((color, index) => {
+      const colorEl = document.createElement('div');
+      colorEl.className = `color-option ${color}`;
+      
+      // Position colors in a smaller fan pattern
+      const angle = (index * 360) / colors.length;
+      const radius = 60;
+      const x = Math.cos(angle * Math.PI / 180) * radius;
+      const y = Math.sin(angle * Math.PI / 180) * radius;
+      
+      colorEl.style.left = x + 'px';
+      colorEl.style.top = y + 'px';
+      
+      colorEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.handleColorSelection(color, annotationType);
+      });
+      
+      this.colorMenu.appendChild(colorEl);
+    });
+    
+    // Show color menu
+    this.colorMenu.classList.add('visible');
+  }
+  
+  hideColorMenu() {
+    if (this.colorMenu) {
+      this.colorMenu.classList.remove('visible');
+      this.colorMenu.innerHTML = '';
+    }
+  }
+  
+  handleColorSelection(color, annotationType) {
+    this.hideColorMenu();
+    this.currentColor = color;
+    
+    if (annotationType === 'poi') {
+      this.createPOI();
+    } else if (annotationType === 'area') {
+      this.createArea();
+    } else if (annotationType === 'line') {
+      this.createLine();
+    }
+  }
+  
+  createPOI() {
+    if (!this.pendingAnnotation || !this.currentTeamId) {
+      this.showFeedback('Please select a team first', 3000);
+      return;
+    }
+    
+    const annotationData = {
+      teamId: this.currentTeamId,
+      type: 'poi',
+      data: {
+        position: {
+          lng: this.pendingAnnotation.lng,
+          lt: this.pendingAnnotation.lat
+        },
+        color: this.currentColor,
+        shape: this.currentShape,
+        label: '',
+        timestamp: Date.now()
+      }
+    };
+    
+    this.createAnnotation(annotationData);
+    this.pendingAnnotation = null;
+  }
+  
+  showAnnotationContextMenu(feature, lngLat, point) {
+    // Close any existing popups first
+    this.closeAllPopups();
+    
+    // Create context menu
+    const contextMenu = document.createElement('div');
+    contextMenu.className = 'fan-menu visible';
+    contextMenu.style.left = point.x + 'px';
+    contextMenu.style.top = point.y + 'px';
+    contextMenu.style.zIndex = '1001';
+    
+    // Create edit and delete options
+    const editOption = document.createElement('div');
+    editOption.className = 'fan-menu-option edit';
+    editOption.innerHTML = '<span class="icon">✏️</span>';
+    editOption.style.left = '-40px';
+    editOption.style.top = '0px';
+    
+    const deleteOption = document.createElement('div');
+    deleteOption.className = 'fan-menu-option delete';
+    deleteOption.innerHTML = '<span class="icon">🗑️</span>';
+    deleteOption.style.left = '40px';
+    deleteOption.style.top = '0px';
+    
+    editOption.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.editAnnotation(feature);
+      contextMenu.remove();
+    });
+    
+    deleteOption.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.deleteAnnotation(feature);
+      contextMenu.remove();
+    });
+    
+    contextMenu.appendChild(editOption);
+    contextMenu.appendChild(deleteOption);
+    
+    // Add to map container
+    const mapContainer = document.getElementById('map_container');
+    mapContainer.appendChild(contextMenu);
+    
+    // Remove context menu when clicking elsewhere
+    const removeContextMenu = (e) => {
+      if (!contextMenu.contains(e.target)) {
+        contextMenu.remove();
+        document.removeEventListener('click', removeContextMenu);
+      }
+    };
+    
+    setTimeout(() => {
+      document.addEventListener('click', removeContextMenu);
+    }, 100);
+  }
+  
+  editAnnotation(feature) {
+    const annotationId = feature.properties.id;
+    const annotation = this.annotations.find(a => a.id === annotationId);
+    
+    if (!annotation) {
+      this.showFeedback('Annotation not found', 3000);
+      return;
+    }
+    
+    this.currentEditingAnnotation = annotation;
+    this.showEditForm(annotation);
+  }
+  
+  showEditForm(annotation) {
+    if (!this.editForm || !this.modalOverlay) return;
+    
+    // Populate form with annotation data
+    const data = annotation.data;
+    
+    document.getElementById('edit_label').value = data.label || '';
+    document.getElementById('edit_color').value = data.color || 'green';
+    
+    // Show/hide relevant fields based on annotation type
+    const shapeGroup = document.getElementById('edit_shape_group');
+    const radiusGroup = document.getElementById('edit_radius_group');
+    
+    if (annotation.type === 'poi') {
+      shapeGroup.style.display = 'block';
+      document.getElementById('edit_shape').value = data.shape || 'circle';
+      radiusGroup.style.display = 'none';
+    } else if (annotation.type === 'area') {
+      shapeGroup.style.display = 'none';
+      radiusGroup.style.display = 'block';
+      document.getElementById('edit_radius').value = data.radius || 100;
+    } else {
+      shapeGroup.style.display = 'none';
+      radiusGroup.style.display = 'none';
+    }
+    
+    // Update form title
+    document.getElementById('edit_form_title').textContent = `Edit ${annotation.type.toUpperCase()} Annotation`;
+    
+    // Show form and overlay
+    this.modalOverlay.classList.add('visible');
+    this.editForm.style.display = 'block';
+  }
+  
+  hideEditForm() {
+    if (this.editForm) {
+      this.editForm.style.display = 'none';
+    }
+    if (this.modalOverlay) {
+      this.modalOverlay.classList.remove('visible');
+    }
+    this.currentEditingAnnotation = null;
+  }
+  
+  async saveAnnotationEdit() {
+    if (!this.currentEditingAnnotation) return;
+    
+    const formData = new FormData(document.getElementById('edit_annotation_form'));
+    const updateData = {
+      label: formData.get('label') || '',
+      color: formData.get('color') || 'green'
+    };
+    
+    // Add type-specific fields
+    if (this.currentEditingAnnotation.type === 'poi') {
+      updateData.shape = formData.get('shape') || 'circle';
+    } else if (this.currentEditingAnnotation.type === 'area') {
+      updateData.radius = parseFloat(formData.get('radius')) || 100;
+    }
+    
+    try {
+      const response = await fetch(`/api/admin/map/annotations/${this.currentEditingAnnotation.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('taklite:token')}`
+        },
+        body: JSON.stringify({ data: updateData })
+      });
+      
+      if (response.ok) {
+        this.showFeedback('Annotation updated successfully', 2000);
+        
+        // Update local annotation
+        const index = this.annotations.findIndex(a => a.id === this.currentEditingAnnotation.id);
+        if (index >= 0) {
+          this.annotations[index].data = { ...this.annotations[index].data, ...updateData };
+          this.updateMapData();
+        }
+        
+        this.hideEditForm();
+      } else {
+        const error = await response.json();
+        this.showFeedback(`Failed to update annotation: ${error.error}`, 5000);
+      }
+    } catch (error) {
+      console.error('Failed to update annotation:', error);
+      this.showFeedback('Failed to update annotation', 5000);
+    }
+  }
+  
+  async deleteCurrentAnnotation() {
+    if (!this.currentEditingAnnotation) return;
+    
+    if (confirm('Are you sure you want to delete this annotation?')) {
+      await this.deleteAnnotationById(this.currentEditingAnnotation.id);
+      this.hideEditForm();
+    }
+  }
+  
+  async deleteAnnotation(feature) {
+    const annotationId = feature.properties.id;
+    
+    if (confirm('Are you sure you want to delete this annotation?')) {
+      await this.deleteAnnotationById(annotationId);
+    }
+  }
+  
+  async deleteAnnotationById(annotationId) {
+    try {
+      const response = await fetch(`/api/admin/map/annotations/${annotationId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('taklite:token')}`
+        }
+      });
+      
+      if (response.ok) {
+        this.showFeedback('Annotation deleted successfully', 2000);
+        
+        // Remove from local annotations array
+        this.annotations = this.annotations.filter(a => a.id !== annotationId);
+        this.updateMapData();
+      } else {
+        const error = await response.json();
+        this.showFeedback(`Failed to delete annotation: ${error.error}`, 5000);
+      }
+    } catch (error) {
+      console.error('Failed to delete annotation:', error);
+      this.showFeedback('Failed to delete annotation', 5000);
+    }
+  }
+  
+  startAreaDrawing(point) {
+    this.tempAreaCenter = this.map.unproject(point);
+    this.tempAreaRadiusPixels = 0;
+    this.tempAreaRadius = 0;
+    this.isEditingMode = true;
+    
+    this.showFeedback('Click to set area radius', 3000);
+  }
+  
+  updateAreaRadius(lngLat) {
+    if (!this.tempAreaCenter) return;
+    
+    // Calculate radius in meters
+    const radius = this.calculateDistance(this.tempAreaCenter, lngLat);
+    this.tempAreaRadius = radius;
+    
+    // Show color menu for area
+    const point = this.map.project(lngLat);
+    this.showColorMenu(point, 'area');
+  }
+  
+  createArea() {
+    if (!this.tempAreaCenter || !this.currentTeamId) {
+      this.showFeedback('Please select a team first', 3000);
+      return;
+    }
+    
+    const annotationData = {
+      teamId: this.currentTeamId,
+      type: 'area',
+      data: {
+        center: {
+          lng: this.tempAreaCenter.lng,
+          lt: this.tempAreaCenter.lat
+        },
+        radius: this.tempAreaRadius,
+        color: this.currentColor,
+        label: '',
+        timestamp: Date.now()
+      }
+    };
+    
+    this.createAnnotation(annotationData);
+    this.finishAreaDrawing();
+  }
+  
+  finishAreaDrawing() {
+    this.tempAreaCenter = null;
+    this.tempAreaRadius = 0;
+    this.tempAreaRadiusPixels = 0;
+    this.isEditingMode = false;
+  }
+  
+  startLineDrawing(point) {
+    this.tempLinePoints = [this.map.unproject(point)];
+    this.isEditingMode = true;
+    
+    this.showFeedback('Click to add line points, right-click to finish', 3000);
+  }
+  
+  addLinePoint(lngLat) {
+    this.tempLinePoints.push(lngLat);
+    
+    if (this.tempLinePoints.length >= 2) {
+      // Show color menu for line
+      const point = this.map.project(lngLat);
+      this.showColorMenu(point, 'line');
+    }
+  }
+  
+  createLine() {
+    if (!this.tempLinePoints.length || this.tempLinePoints.length < 2 || !this.currentTeamId) {
+      this.showFeedback('Please select a team first', 3000);
+      return;
+    }
+    
+    const annotationData = {
+      teamId: this.currentTeamId,
+      type: 'line',
+      data: {
+        points: this.tempLinePoints.map(p => ({
+          lng: p.lng,
+          lt: p.lat
+        })),
+        color: this.currentColor,
+        label: '',
+        timestamp: Date.now()
+      }
+    };
+    
+    this.createAnnotation(annotationData);
+    this.finishLineDrawing();
+  }
+  
+  finishLineDrawing() {
+    this.tempLinePoints = [];
+    this.isEditingMode = false;
+  }
+  
+  async createAnnotation(annotationData) {
+    try {
+      const response = await fetch('/api/admin/map/annotations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('taklite:token')}`
+        },
+        body: JSON.stringify(annotationData)
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        this.showFeedback('Annotation created successfully', 2000);
+        
+        // Add to local annotations array
+        this.annotations.unshift(result);
+        this.updateMapData();
+      } else {
+        const error = await response.json();
+        this.showFeedback(`Failed to create annotation: ${error.error}`, 5000);
+      }
+    } catch (error) {
+      console.error('Failed to create annotation:', error);
+      this.showFeedback('Failed to create annotation', 5000);
+    }
   }
   
   showAnnotationPopup(feature, lngLat) {
@@ -1570,6 +2249,23 @@ class AdminMap {
     this.centerMapOnData();
   }
   
+  // Calculate distance between two points using Haversine formula
+  calculateDistance(point1, point2) {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = this.toRadians(point2.lat - point1.lat);
+    const dLon = this.toRadians(point2.lng - point1.lng);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(this.toRadians(point1.lat)) * Math.cos(this.toRadians(point2.lat)) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+  
+  // Convert degrees to radians
+  toRadians(degrees) {
+    return degrees * (Math.PI / 180);
+  }
+  
   // Cleanup method to prevent memory leaks
   cleanup() {
     // Disconnect WebSocket listeners
@@ -1577,6 +2273,16 @@ class AdminMap {
     
     // Close any open popups
     this.closeAllPopups();
+    
+    // Hide any open menus
+    this.hideFanMenu();
+    this.hideColorMenu();
+    this.hideEditForm();
+    
+    // Clear any timers
+    if (this.longPressTimer) {
+      clearTimeout(this.longPressTimer);
+    }
     
     console.log('AdminMap cleaned up');
   }

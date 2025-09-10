@@ -305,6 +305,240 @@
           grid-template-columns: 1fr;
         }
       }
+      
+      /* Fan Menu Styles (matching Android app) */
+      .fan-menu {
+        position: absolute;
+        z-index: 1000;
+        pointer-events: none;
+        opacity: 0;
+        transform: scale(0.8);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      
+      .fan-menu.visible {
+        pointer-events: auto;
+        opacity: 1;
+        transform: scale(1);
+      }
+      
+      .fan-menu-option {
+        position: absolute;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.8);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+      
+      .fan-menu-option:hover {
+        background: rgba(0, 0, 0, 0.9);
+        border-color: rgba(255, 255, 255, 0.6);
+        transform: scale(1.1);
+      }
+      
+      .fan-menu-option.shape-circle {
+        background: linear-gradient(135deg, #4CAF50, #45a049);
+      }
+      
+      .fan-menu-option.shape-square {
+        background: linear-gradient(135deg, #FBC02D, #F57F17);
+      }
+      
+      .fan-menu-option.shape-triangle {
+        background: linear-gradient(135deg, #F44336, #D32F2F);
+      }
+      
+      .fan-menu-option.shape-exclamation {
+        background: linear-gradient(135deg, #000000, #424242);
+      }
+      
+      .fan-menu-option.area {
+        background: linear-gradient(135deg, #2196F3, #1976D2);
+      }
+      
+      .fan-menu-option.line {
+        background: linear-gradient(135deg, #9C27B0, #7B1FA2);
+      }
+      
+      .fan-menu-option.polygon {
+        background: linear-gradient(135deg, #FF9800, #F57C00);
+      }
+      
+      .fan-menu-option.edit {
+        background: linear-gradient(135deg, #607D8B, #455A64);
+      }
+      
+      .fan-menu-option.delete {
+        background: linear-gradient(135deg, #E91E63, #C2185B);
+      }
+      
+      .fan-menu-option .icon {
+        color: white;
+        font-size: 20px;
+        font-weight: bold;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      }
+      
+      /* Color Menu Styles */
+      .color-menu {
+        position: absolute;
+        z-index: 1001;
+        pointer-events: none;
+        opacity: 0;
+        transform: scale(0.8);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      
+      .color-menu.visible {
+        pointer-events: auto;
+        opacity: 1;
+        transform: scale(1);
+      }
+      
+      .color-option {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 3px solid rgba(255, 255, 255, 0.8);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      }
+      
+      .color-option:hover {
+        transform: scale(1.15);
+        border-color: white;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      }
+      
+      .color-option.green { background: #4CAF50; }
+      .color-option.yellow { background: #FBC02D; }
+      .color-option.red { background: #F44336; }
+      .color-option.black { background: #000000; }
+      .color-option.white { background: #FFFFFF; border-color: #CCCCCC; }
+      
+      /* Annotation Edit Form Styles */
+      .annotation-edit-form {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--panel);
+        border: 1px solid #1f2a44;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        z-index: 2000;
+        min-width: 320px;
+        max-width: 500px;
+      }
+      
+      .annotation-edit-form h3 {
+        margin: 0 0 16px;
+        color: var(--text);
+        font-size: 18px;
+      }
+      
+      .annotation-edit-form .form-group {
+        margin-bottom: 16px;
+      }
+      
+      .annotation-edit-form label {
+        display: block;
+        margin-bottom: 8px;
+        color: #cbd5e1;
+        font-weight: 500;
+      }
+      
+      .annotation-edit-form input,
+      .annotation-edit-form select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #233153;
+        border-radius: 6px;
+        background: #0c1527;
+        color: var(--text);
+        font-size: 14px;
+      }
+      
+      .annotation-edit-form .form-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        margin-top: 20px;
+      }
+      
+      .annotation-edit-form .form-actions button {
+        padding: 8px 16px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s ease;
+      }
+      
+      .annotation-edit-form .form-actions .btn-primary {
+        background: linear-gradient(180deg, #2563eb, #1d4ed8);
+        color: white;
+      }
+      
+      .annotation-edit-form .form-actions .btn-secondary {
+        background: #0c1527;
+        border: 1px solid #223056;
+        color: var(--text);
+      }
+      
+      .annotation-edit-form .form-actions button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      }
+      
+      /* Overlay for modal forms */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 1999;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+      
+      .modal-overlay.visible {
+        opacity: 1;
+      }
+      
+      /* Map interaction feedback */
+      .map-interaction-feedback {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 1000;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+      
+      .map-interaction-feedback.visible {
+        opacity: 1;
+      }
     </style>
   </head>
   <body>
@@ -418,7 +652,21 @@
             </div>
           </div>
           
-          <div id="map_container" style="height: 500px; border-radius: 8px; overflow: hidden; background: #0c1527; border: 1px solid #1f2a44;">
+          <div id="map_container" style="height: 500px; border-radius: 8px; overflow: hidden; background: #0c1527; border: 1px solid #1f2a44; position: relative;">
+            <!-- Fan Menu for Annotation Creation -->
+            <div id="fan_menu" class="fan-menu">
+              <!-- Shape options will be dynamically added here -->
+            </div>
+            
+            <!-- Color Menu for Annotation Creation -->
+            <div id="color_menu" class="color-menu">
+              <!-- Color options will be dynamically added here -->
+            </div>
+            
+            <!-- Map Interaction Feedback -->
+            <div id="map_feedback" class="map-interaction-feedback">
+              <!-- Feedback messages will be shown here -->
+            </div>
           </div>
           
           <div style="margin-top: 16px; font-size: 13px;">
@@ -427,6 +675,8 @@
               • Click and drag to pan<br>
               • Scroll to zoom<br>
               • Click annotations for details<br>
+              • <strong>Long press</strong> to create annotations<br>
+              • <strong>Right-click</strong> annotations to edit/delete<br>
               • Use team filter to focus on specific teams
             </div>
           </div>
@@ -570,6 +820,52 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Modal Overlay for Forms -->
+    <div id="modal_overlay" class="modal-overlay"></div>
+    
+    <!-- Annotation Edit Form -->
+    <div id="annotation_edit_form" class="annotation-edit-form" style="display: none;">
+      <h3 id="edit_form_title">Edit Annotation</h3>
+      <form id="edit_annotation_form">
+        <div class="form-group">
+          <label for="edit_label">Label</label>
+          <input type="text" id="edit_label" name="label" placeholder="Enter annotation label">
+        </div>
+        
+        <div class="form-group">
+          <label for="edit_color">Color</label>
+          <select id="edit_color" name="color">
+            <option value="green">Green</option>
+            <option value="yellow">Yellow</option>
+            <option value="red">Red</option>
+            <option value="black">Black</option>
+            <option value="white">White</option>
+          </select>
+        </div>
+        
+        <div class="form-group" id="edit_shape_group" style="display: none;">
+          <label for="edit_shape">Shape</label>
+          <select id="edit_shape" name="shape">
+            <option value="circle">Circle</option>
+            <option value="square">Square</option>
+            <option value="triangle">Triangle</option>
+            <option value="exclamation">Exclamation</option>
+          </select>
+        </div>
+        
+        <div class="form-group" id="edit_radius_group" style="display: none;">
+          <label for="edit_radius">Radius (meters)</label>
+          <input type="number" id="edit_radius" name="radius" min="1" max="10000" step="1">
+        </div>
+        
+        <div class="form-actions">
+          <button type="button" id="edit_cancel" class="btn-secondary">Cancel</button>
+          <button type="button" id="edit_delete" class="btn-secondary" style="background: #E91E63; color: white;">Delete</button>
+          <button type="submit" id="edit_save" class="btn-primary">Save Changes</button>
+        </div>
+      </form>
     </div>
 
     <script>
