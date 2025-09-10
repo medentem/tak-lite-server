@@ -179,8 +179,11 @@ class AdminMap {
       
       // Add a visible test element to confirm map is working
       const testDiv = document.createElement('div');
-      testDiv.style.cssText = 'position: absolute; top: 10px; left: 10px; background: red; color: white; padding: 5px; z-index: 1000; font-size: 12px;';
-      testDiv.textContent = 'MAP LOADED';
+      testDiv.style.cssText = 'position: absolute; top: 10px; left: 10px; background: red; color: white; padding: 5px; z-index: 1000; font-size: 12px; cursor: pointer;';
+      testDiv.textContent = 'MAP LOADED - CLICK ME';
+      testDiv.addEventListener('click', () => {
+        alert('Test div clicked!');
+      });
       container.appendChild(testDiv);
       
       // Add navigation controls
@@ -207,6 +210,33 @@ class AdminMap {
           offsetHeight: canvas.offsetHeight
         });
         
+        // Add direct canvas click test
+        canvas.addEventListener('click', (e) => {
+          console.log('Canvas clicked directly!', e);
+          alert('Canvas clicked directly!');
+        });
+        
+        // Test if canvas is interactive
+        canvas.style.pointerEvents = 'auto';
+        console.log('Canvas pointer events set to auto');
+        
+        // Check for any overlaying elements
+        const container = this.map.getContainer();
+        const elements = container.querySelectorAll('*');
+        console.log('Elements in map container:', elements.length);
+        elements.forEach((el, i) => {
+          if (i < 5) { // Only log first 5 elements
+            const style = window.getComputedStyle(el);
+            console.log(`Element ${i}:`, {
+              tagName: el.tagName,
+              className: el.className,
+              pointerEvents: style.pointerEvents,
+              position: style.position,
+              zIndex: style.zIndex
+            });
+          }
+        });
+        
         // Ensure map is properly sized
         this.map.resize();
         
@@ -224,6 +254,7 @@ class AdminMap {
         console.log('Map clicked at:', e.lngLat);
         alert(`Map clicked at: ${e.lngLat.lng.toFixed(4)}, ${e.lngLat.lat.toFixed(4)}`);
       });
+      
       
       // Test if map is interactive
       this.map.on('mousemove', (e) => {
