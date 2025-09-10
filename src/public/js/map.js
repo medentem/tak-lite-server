@@ -646,8 +646,12 @@ class AdminMap {
   setupMapInteractionHandlers() {
     // Long press detection for annotation creation
     this.map.on('mousedown', (e) => {
-      // Only handle if not clicking on existing annotations
-      if (e.originalEvent.target.closest('.maplibregl-popup')) {
+      // Only handle if not clicking on existing annotations or UI elements
+      if (e.originalEvent.target.closest('.maplibregl-popup') || 
+          e.originalEvent.target.closest('.fan-menu') ||
+          e.originalEvent.target.closest('.color-menu') ||
+          e.originalEvent.target.closest('.annotation-edit-form') ||
+          e.originalEvent.target.closest('.modal-overlay')) {
         return;
       }
       
@@ -662,10 +666,24 @@ class AdminMap {
       this.cancelLongPress();
     });
     
-    // Handle map clicks for annotation creation
+    // Handle map clicks for annotation creation (only when in editing mode)
     this.map.on('click', (e) => {
-      // Only handle if not clicking on existing annotations and not in editing mode
-      if (e.originalEvent.target.closest('.maplibregl-popup') || this.isEditingMode) {
+      // Only handle if not clicking on existing annotations, UI elements, or if we're in editing mode
+      if (e.originalEvent.target.closest('.maplibregl-popup') || 
+          e.originalEvent.target.closest('.fan-menu') ||
+          e.originalEvent.target.closest('.color-menu') ||
+          e.originalEvent.target.closest('.annotation-edit-form') ||
+          e.originalEvent.target.closest('.modal-overlay')) {
+        return;
+      }
+      
+      // If we just had a long press, don't handle this click
+      if (this.isLongPressing) {
+        return;
+      }
+      
+      // Only handle clicks for annotation creation if we're in editing mode
+      if (!this.isEditingMode) {
         return;
       }
       
@@ -687,11 +705,34 @@ class AdminMap {
       e.preventDefault();
       // This will be handled by the existing click handlers on annotations
     });
+    
+    // Add global click handler to close menus when clicking outside
+    document.addEventListener('click', (e) => {
+      // Close fan menu if clicking outside
+      if (this.fanMenu && this.fanMenu.classList.contains('visible')) {
+        if (!this.fanMenu.contains(e.target)) {
+          this.hideFanMenu();
+        }
+      }
+      
+      // Close color menu if clicking outside
+      if (this.colorMenu && this.colorMenu.classList.contains('visible')) {
+        if (!this.colorMenu.contains(e.target)) {
+          this.hideColorMenu();
+        }
+      }
+    });
   }
   
   startLongPress(e) {
+    // Store the original event for later use
+    this.longPressStartEvent = e;
+    
+    console.log('Starting long press detection at:', e.point);
+    
     this.longPressTimer = setTimeout(() => {
       this.isLongPressing = true;
+      console.log('Long press detected, showing fan menu');
       this.showFanMenu(e.point);
       this.showFeedback('Long press detected - choose annotation type');
     }, this.longPressThreshold);
@@ -701,15 +742,20 @@ class AdminMap {
     if (this.longPressTimer) {
       clearTimeout(this.longPressTimer);
       this.longPressTimer = null;
+      console.log('Long press cancelled');
     }
     
     if (this.isLongPressing) {
       this.isLongPressing = false;
-      // Long press was handled by fan menu
-      return;
+      console.log('Long press completed');
+      // Long press was handled by fan menu - prevent default click behavior
+      e.preventDefault();
+      return false;
     }
     
-    // Regular click - could be used for other interactions
+    // Regular click - allow normal map behavior
+    console.log('Regular click detected');
+    return true;
   }
   
   cancelLongPress() {
@@ -718,6 +764,7 @@ class AdminMap {
       this.longPressTimer = null;
     }
     this.isLongPressing = false;
+    this.longPressStartEvent = null;
   }
   
   showFeedback(message, duration = 3000) {
@@ -725,6 +772,9 @@ class AdminMap {
     
     this.feedback.textContent = message;
     this.feedback.classList.add('visible');
+    
+    // Also log to console for debugging
+    console.log('Map feedback:', message);
     
     setTimeout(() => {
       this.feedback.classList.remove('visible');
@@ -753,9 +803,14 @@ class AdminMap {
     
     const allOptions = [...shapes, ...otherOptions];
     
-    // Position fan menu at click point
+    // Get map container position for relative positioning
+    const mapContainer = document.getElementById('map_container');
+    const containerRect = mapContainer.getBoundingClientRect();
+    
+    // Position fan menu at click point relative to map container
     this.fanMenu.style.left = point.x + 'px';
     this.fanMenu.style.top = point.y + 'px';
+    this.fanMenu.style.position = 'absolute';
     
     // Create option elements
     allOptions.forEach((option, index) => {
@@ -818,9 +873,10 @@ class AdminMap {
     
     const colors = ['green', 'yellow', 'red', 'black', 'white'];
     
-    // Position color menu at click point
+    // Position color menu at click point relative to map container
     this.colorMenu.style.left = point.x + 'px';
     this.colorMenu.style.top = point.y + 'px';
+    this.colorMenu.style.position = 'absolute';
     
     // Create color options
     colors.forEach((color, index) => {
@@ -869,7 +925,12 @@ class AdminMap {
   }
   
   createPOI() {
-    if (!this.pendingAnnotation || !this.currentTeamId) {
+    if (!this.pendingAnnotation) {
+      this.showFeedback('No location selected', 3000);
+      return;
+    }
+    
+    if (!this.currentTeamId) {
       this.showFeedback('Please select a team first', 3000);
       return;
     }
