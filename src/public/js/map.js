@@ -116,6 +116,14 @@ class AdminMap {
       return;
     }
     
+    console.log('Map container found, initializing map...');
+    console.log('Map container dimensions:', {
+      width: container.offsetWidth,
+      height: container.offsetHeight,
+      clientWidth: container.clientWidth,
+      clientHeight: container.clientHeight
+    });
+    
     // Remove loading text
     container.innerHTML = '';
     
@@ -144,29 +152,69 @@ class AdminMap {
       glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf'
     };
     
-    this.map = new maplibregl.Map({
-      container: 'map_container',
-      style: darkStyle,
-      center: [0, 0], // Default center, will be updated based on data or user location
-      zoom: 2,
-      attributionControl: false
-    });
-    
-    // Add navigation controls
-    this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
-    
-    // Add fullscreen control
-    this.map.addControl(new maplibregl.FullscreenControl(), 'top-right');
-    
-    // Wait for map to load
-    this.map.on('load', () => {
-      console.log('Map loaded successfully');
-      this.setupMapSources();
-    });
-    
-    this.map.on('error', (e) => {
-      console.error('Map error:', e);
-    });
+    try {
+      this.map = new maplibregl.Map({
+        container: 'map_container',
+        style: darkStyle,
+        center: [0, 0], // Default center, will be updated based on data or user location
+        zoom: 2,
+        attributionControl: false
+      });
+      
+      console.log('Map instance created:', this.map);
+      
+      // Add navigation controls
+      this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
+      
+      // Add fullscreen control
+      this.map.addControl(new maplibregl.FullscreenControl(), 'top-right');
+      
+      // Wait for map to load
+      this.map.on('load', () => {
+        console.log('Map loaded successfully');
+        console.log('Map dimensions after load:', {
+          width: this.map.getContainer().offsetWidth,
+          height: this.map.getContainer().offsetHeight
+        });
+        
+        // Ensure map is properly sized
+        this.map.resize();
+        
+        this.setupMapSources();
+        // Setup interaction handlers after map is loaded
+        this.setupMapInteractionHandlers();
+      });
+      
+      this.map.on('error', (e) => {
+        console.error('Map error:', e);
+      });
+      
+      // Add basic interaction test
+      this.map.on('click', (e) => {
+        console.log('Map clicked at:', e.lngLat);
+        alert(`Map clicked at: ${e.lngLat.lng.toFixed(4)}, ${e.lngLat.lat.toFixed(4)}`);
+      });
+      
+      // Test if map is interactive
+      this.map.on('mousemove', (e) => {
+        // Only log occasionally to avoid spam
+        if (Math.random() < 0.01) {
+          console.log('Map mousemove:', e.lngLat);
+        }
+      });
+      
+      // Test drag
+      this.map.on('dragstart', () => {
+        console.log('Map drag started');
+      });
+      
+      this.map.on('dragend', () => {
+        console.log('Map drag ended');
+      });
+      
+    } catch (error) {
+      console.error('Failed to create map:', error);
+    }
   }
   
   initializeAnnotationUI() {
@@ -570,9 +618,6 @@ class AdminMap {
     
     // Add click handlers
     this.setupClickHandlers();
-    
-    // Add map interaction handlers for annotation management
-    this.setupMapInteractionHandlers();
   }
   
   setupClickHandlers() {
@@ -644,17 +689,28 @@ class AdminMap {
   }
   
   setupMapInteractionHandlers() {
+    console.log('Setting up map interaction handlers...');
+    
+    if (!this.map) {
+      console.error('Map not initialized, cannot setup interaction handlers');
+      return;
+    }
+    
     // Long press detection for annotation creation
     this.map.on('mousedown', (e) => {
+      console.log('Map mousedown event:', e);
+      
       // Only handle if not clicking on existing annotations or UI elements
       if (e.originalEvent.target.closest('.maplibregl-popup') || 
           e.originalEvent.target.closest('.fan-menu') ||
           e.originalEvent.target.closest('.color-menu') ||
           e.originalEvent.target.closest('.annotation-edit-form') ||
           e.originalEvent.target.closest('.modal-overlay')) {
+        console.log('Click on UI element, ignoring');
         return;
       }
       
+      console.log('Starting long press detection');
       this.startLongPress(e);
     });
     
