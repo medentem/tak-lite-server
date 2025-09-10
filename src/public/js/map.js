@@ -1,6 +1,7 @@
 // Map functionality for TAK Lite Admin Dashboard
 class AdminMap {
   constructor() {
+    console.log('AdminMap constructor called');
     this.map = null;
     this.annotations = [];
     this.locations = [];
@@ -31,12 +32,15 @@ class AdminMap {
     this.currentColor = 'green';
     this.currentShape = 'circle';
     
+    console.log('Calling init() method...');
     this.init();
   }
   
   async init() {
+    console.log('AdminMap init() method called');
     // Wait for MapLibre to load
     if (typeof maplibregl === 'undefined') {
+      console.log('MapLibre not ready, retrying in 100ms...');
       setTimeout(() => this.init(), 100);
       return;
     }
@@ -48,6 +52,7 @@ class AdminMap {
     
     // Only load data if we have authentication
     if (this.isAuthenticated()) {
+      console.log('User is authenticated, loading data...');
       await this.loadTeams();
       await this.loadMapData();
     } else {
@@ -124,6 +129,15 @@ class AdminMap {
       clientHeight: container.clientHeight
     });
     
+    // Check if container is visible
+    const containerStyle = window.getComputedStyle(container);
+    console.log('Map container visibility:', {
+      display: containerStyle.display,
+      visibility: containerStyle.visibility,
+      opacity: containerStyle.opacity,
+      position: containerStyle.position
+    });
+    
     // Remove loading text
     container.innerHTML = '';
     
@@ -163,6 +177,12 @@ class AdminMap {
       
       console.log('Map instance created:', this.map);
       
+      // Add a visible test element to confirm map is working
+      const testDiv = document.createElement('div');
+      testDiv.style.cssText = 'position: absolute; top: 10px; left: 10px; background: red; color: white; padding: 5px; z-index: 1000; font-size: 12px;';
+      testDiv.textContent = 'MAP LOADED';
+      container.appendChild(testDiv);
+      
       // Add navigation controls
       this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
       
@@ -175,6 +195,16 @@ class AdminMap {
         console.log('Map dimensions after load:', {
           width: this.map.getContainer().offsetWidth,
           height: this.map.getContainer().offsetHeight
+        });
+        
+        // Check if map canvas exists
+        const canvas = this.map.getCanvas();
+        console.log('Map canvas:', canvas);
+        console.log('Canvas dimensions:', {
+          width: canvas.width,
+          height: canvas.height,
+          offsetWidth: canvas.offsetWidth,
+          offsetHeight: canvas.offsetHeight
         });
         
         // Ensure map is properly sized
@@ -2452,14 +2482,17 @@ class AdminMap {
 let adminMap = null;
 
 window.addEventListener('load', function() {
+  console.log('Page loaded, checking libraries...');
   // Wait for both Socket.IO and MapLibre to load
   const checkLibraries = () => {
+    console.log('Checking libraries - io:', typeof io, 'maplibregl:', typeof maplibregl);
     if (typeof io !== 'undefined' && typeof maplibregl !== 'undefined') {
       console.log('Both libraries loaded, initializing map...');
       adminMap = new AdminMap();
       // Make adminMap globally accessible
       window.adminMap = adminMap;
     } else {
+      console.log('Libraries not ready, retrying...');
       setTimeout(checkLibraries, 100);
     }
   };
