@@ -210,11 +210,7 @@ class AdminMap {
           offsetHeight: canvas.offsetHeight
         });
         
-        // Add direct canvas click test
-        canvas.addEventListener('click', (e) => {
-          console.log('Canvas clicked directly!', e);
-          alert('Canvas clicked directly!');
-        });
+        // Canvas click test removed to avoid conflicts
         
         // Test if canvas is interactive
         canvas.style.pointerEvents = 'auto';
@@ -256,21 +252,12 @@ class AdminMap {
       });
       
       
-      // Test if map is interactive
+      // Test if map is interactive (simplified)
       this.map.on('mousemove', (e) => {
         // Only log occasionally to avoid spam
         if (Math.random() < 0.01) {
           console.log('Map mousemove:', e.lngLat);
         }
-      });
-      
-      // Test drag
-      this.map.on('dragstart', () => {
-        console.log('Map drag started');
-      });
-      
-      this.map.on('dragend', () => {
-        console.log('Map drag ended');
       });
       
     } catch (error) {
@@ -682,71 +669,8 @@ class AdminMap {
   }
   
   setupClickHandlers() {
-    // POI click handler (symbol layer) - single click for popup, long press for edit
-    this.map.on('click', 'annotations-poi', (e) => {
-      const feature = e.features[0];
-      this.showAnnotationPopup(feature, e.lngLat);
-    });
-    
-    // Line click handler
-    this.map.on('click', 'annotations-line', (e) => {
-      const feature = e.features[0];
-      this.showAnnotationPopup(feature, e.lngLat);
-    });
-    
-    // Area click handler
-    this.map.on('click', 'annotations-area', (e) => {
-      const feature = e.features[0];
-      this.showAnnotationPopup(feature, e.lngLat);
-    });
-    
-    // Polygon click handler
-    this.map.on('click', 'annotations-polygon', (e) => {
-      const feature = e.features[0];
-      this.showAnnotationPopup(feature, e.lngLat);
-    });
-    
-    // Location click handler
-    this.map.on('click', 'locations', (e) => {
-      const feature = e.features[0];
-      this.showLocationPopup(feature, e.lngLat);
-    });
-    
-    // Right-click handlers for edit/delete context menu
-    this.map.on('contextmenu', 'annotations-poi', (e) => {
-      e.preventDefault();
-      const feature = e.features[0];
-      this.showAnnotationContextMenu(feature, e.lngLat, e.point);
-    });
-    
-    this.map.on('contextmenu', 'annotations-line', (e) => {
-      e.preventDefault();
-      const feature = e.features[0];
-      this.showAnnotationContextMenu(feature, e.lngLat, e.point);
-    });
-    
-    this.map.on('contextmenu', 'annotations-area', (e) => {
-      e.preventDefault();
-      const feature = e.features[0];
-      this.showAnnotationContextMenu(feature, e.lngLat, e.point);
-    });
-    
-    this.map.on('contextmenu', 'annotations-polygon', (e) => {
-      e.preventDefault();
-      const feature = e.features[0];
-      this.showAnnotationContextMenu(feature, e.lngLat, e.point);
-    });
-    
-    // Change cursor on hover for all layers
-    const layers = ['annotations-poi', 'annotations-line', 'annotations-area', 'annotations-polygon', 'locations'];
-    layers.forEach(layerId => {
-      this.map.on('mouseenter', layerId, () => {
-        this.map.getCanvas().style.cursor = 'pointer';
-      });
-      this.map.on('mouseleave', layerId, () => {
-        this.map.getCanvas().style.cursor = '';
-      });
-    });
+    console.log('Setting up click handlers (disabled for testing)...');
+    // Temporarily disabled all click handlers to test basic map functionality
   }
   
   setupMapInteractionHandlers() {
@@ -757,88 +681,8 @@ class AdminMap {
       return;
     }
     
-    // Long press detection for annotation creation
-    this.map.on('mousedown', (e) => {
-      console.log('Map mousedown event:', e);
-      
-      // Only handle if not clicking on existing annotations or UI elements
-      if (e.originalEvent.target.closest('.maplibregl-popup') || 
-          e.originalEvent.target.closest('.fan-menu') ||
-          e.originalEvent.target.closest('.color-menu') ||
-          e.originalEvent.target.closest('.annotation-edit-form') ||
-          e.originalEvent.target.closest('.modal-overlay')) {
-        console.log('Click on UI element, ignoring');
-        return;
-      }
-      
-      console.log('Starting long press detection');
-      this.startLongPress(e);
-    });
-    
-    this.map.on('mouseup', (e) => {
-      this.endLongPress(e);
-    });
-    
-    this.map.on('mouseleave', (e) => {
-      this.cancelLongPress();
-    });
-    
-    // Handle map clicks for annotation creation (only when in editing mode)
-    this.map.on('click', (e) => {
-      // Only handle if not clicking on existing annotations, UI elements, or if we're in editing mode
-      if (e.originalEvent.target.closest('.maplibregl-popup') || 
-          e.originalEvent.target.closest('.fan-menu') ||
-          e.originalEvent.target.closest('.color-menu') ||
-          e.originalEvent.target.closest('.annotation-edit-form') ||
-          e.originalEvent.target.closest('.modal-overlay')) {
-        return;
-      }
-      
-      // If we just had a long press, don't handle this click
-      if (this.isLongPressing) {
-        return;
-      }
-      
-      // Only handle clicks for annotation creation if we're in editing mode
-      if (!this.isEditingMode) {
-        return;
-      }
-      
-      // If we have temp line points, add to line
-      if (this.tempLinePoints.length > 0) {
-        this.addLinePoint(e.lngLat);
-        return;
-      }
-      
-      // If we're drawing an area, update radius
-      if (this.tempAreaCenter) {
-        this.updateAreaRadius(e.lngLat);
-        return;
-      }
-    });
-    
-    // Handle right-click for context menu (edit/delete)
-    this.map.on('contextmenu', (e) => {
-      e.preventDefault();
-      // This will be handled by the existing click handlers on annotations
-    });
-    
-    // Add global click handler to close menus when clicking outside
-    document.addEventListener('click', (e) => {
-      // Close fan menu if clicking outside
-      if (this.fanMenu && this.fanMenu.classList.contains('visible')) {
-        if (!this.fanMenu.contains(e.target)) {
-          this.hideFanMenu();
-        }
-      }
-      
-      // Close color menu if clicking outside
-      if (this.colorMenu && this.colorMenu.classList.contains('visible')) {
-        if (!this.colorMenu.contains(e.target)) {
-          this.hideColorMenu();
-        }
-      }
-    });
+    // For now, let's disable all custom interaction handlers to test basic map functionality
+    console.log('Map interaction handlers setup complete (disabled for testing)');
   }
   
   startLongPress(e) {
