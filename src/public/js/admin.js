@@ -172,8 +172,12 @@ function connectWebSocket() {
   // Clean up any existing connection first
   if (socket) {
     console.log('Cleaning up existing WebSocket connection');
-    socket.removeAllListeners();
-    socket.disconnect();
+    try {
+      socket.removeAllListeners();
+      socket.disconnect();
+    } catch (e) {
+      console.log('Error during socket cleanup:', e);
+    }
     socket = null;
     window.socket = null;
   }
@@ -285,9 +289,13 @@ function connectWebSocket() {
 function disconnectWebSocket() {
   if (socket) {
     console.log('Disconnecting WebSocket:', socket.id);
-    // Remove all event listeners to prevent memory leaks
-    socket.removeAllListeners();
-    socket.disconnect();
+    try {
+      // Remove all event listeners to prevent memory leaks
+      socket.removeAllListeners();
+      socket.disconnect();
+    } catch (e) {
+      console.log('Error during socket disconnect:', e);
+    }
     socket = null;
     window.socket = null;
   }
@@ -428,7 +436,10 @@ function showDash(show) {
     
     // Wait for Socket.IO library if not available, then connect
     if (typeof io !== 'undefined') {
-      connectWebSocket();
+      // Add a small delay to ensure authentication is fully processed
+      setTimeout(() => {
+        connectWebSocket();
+      }, 100);
     } else {
       console.log('Socket.IO not ready, waiting...');
       updateWebSocketStatus('Loading Library...', '#f59e0b');
@@ -660,6 +671,13 @@ q('#login').onclick = async () => {
     q('#who').textContent = email;
     showDash(true);
     await refresh();
+    
+    // Refresh map data if map is initialized
+    if (window.adminMap && window.adminMap.isAuthenticated()) {
+      await window.adminMap.loadTeams();
+      await window.adminMap.loadMapData();
+    }
+    
     showMessage('Login successful!', 'success', 3000);
   } catch (e) { 
     console.error('Login failed:', e);
@@ -923,6 +941,13 @@ async function checkExistingAuth() {
           // Try to refresh the dashboard
           try {
             await refresh();
+            
+            // Refresh map data if map is initialized
+            if (window.adminMap && window.adminMap.isAuthenticated()) {
+              await window.adminMap.loadTeams();
+              await window.adminMap.loadMapData();
+            }
+            
             showMessage('Welcome back!', 'success', 3000);
           } catch (refreshError) {
             console.log('Dashboard refresh failed, but user is authenticated:', refreshError);
@@ -954,6 +979,13 @@ async function checkExistingAuth() {
       // Try to refresh the dashboard
       try {
         await refresh();
+        
+        // Refresh map data if map is initialized
+        if (window.adminMap && window.adminMap.isAuthenticated()) {
+          await window.adminMap.loadTeams();
+          await window.adminMap.loadMapData();
+        }
+        
         showMessage('Welcome back!', 'success', 3000);
       } catch (refreshError) {
         console.log('Dashboard refresh failed, but user is authenticated:', refreshError);

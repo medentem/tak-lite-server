@@ -42,19 +42,52 @@ class AdminMap {
     }
     
     console.log('Initializing admin map...');
-    await this.loadTeams();
     await this.initializeMap();
     this.initializeAnnotationUI();
     this.setupEventListeners();
-    await this.loadMapData();
+    
+    // Only load data if we have authentication
+    if (this.isAuthenticated()) {
+      await this.loadTeams();
+      await this.loadMapData();
+    } else {
+      console.log('Not authenticated yet, waiting for login...');
+      // Wait for authentication
+      this.waitForAuthentication();
+    }
+  }
+  
+  isAuthenticated() {
+    const token = localStorage.getItem('taklite:token');
+    return token && token.length > 0;
+  }
+  
+  async waitForAuthentication() {
+    // Check every 500ms for authentication
+    const checkAuth = () => {
+      if (this.isAuthenticated()) {
+        console.log('Authentication detected, loading map data...');
+        this.loadTeams().then(() => this.loadMapData());
+      } else {
+        setTimeout(checkAuth, 500);
+      }
+    };
+    checkAuth();
   }
   
   async loadTeams() {
     try {
-      const response = await fetch('/api/admin/teams');
+      const token = localStorage.getItem('taklite:token');
+      const response = await fetch('/api/admin/teams', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (response.ok) {
         this.teams = await response.json();
         this.populateTeamSelect();
+      } else {
+        console.error('Failed to load teams:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Failed to load teams:', error);
@@ -1908,6 +1941,7 @@ class AdminMap {
   
   async loadAnnotations() {
     try {
+      const token = localStorage.getItem('taklite:token');
       const params = new URLSearchParams();
       if (this.currentTeamId) {
         params.append('teamId', this.currentTeamId);
@@ -1917,7 +1951,11 @@ class AdminMap {
       const url = `/api/admin/map/annotations?${params}`;
       console.log(`Loading annotations from: ${url}`);
       
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (response.ok) {
         this.annotations = await response.json();
         console.log(`Loaded ${this.annotations.length} annotations`);
@@ -1933,6 +1971,11 @@ class AdminMap {
   
   async loadLocations() {
     try {
+      const token = localStorage.getItem('taklite:token');
+      const headers = {
+        'Authorization': `Bearer ${token}`
+      };
+      
       // If no team is selected, load locations from all teams by using the regular locations endpoint
       if (!this.currentTeamId) {
         const params = new URLSearchParams();
@@ -1941,7 +1984,7 @@ class AdminMap {
         const url = `/api/admin/map/locations?${params}`;
         console.log(`Loading locations from: ${url}`);
         
-        const response = await fetch(url);
+        const response = await fetch(url, { headers });
         if (response.ok) {
           this.locations = await response.json();
           console.log(`Loaded ${this.locations.length} locations from all teams`);
@@ -1957,7 +2000,7 @@ class AdminMap {
         const url = `/api/admin/map/locations/latest?${params}`;
         console.log(`Loading latest locations from: ${url}`);
         
-        const response = await fetch(url);
+        const response = await fetch(url, { headers });
         if (response.ok) {
           this.locations = await response.json();
           console.log(`Loaded ${this.locations.length} latest locations for team ${this.currentTeamId}`);
@@ -2297,6 +2340,8 @@ window.addEventListener('load', function() {
     if (typeof io !== 'undefined' && typeof maplibregl !== 'undefined') {
       console.log('Both libraries loaded, initializing map...');
       adminMap = new AdminMap();
+      // Make adminMap globally accessible
+      window.adminMap = adminMap;
     } else {
       setTimeout(checkLibraries, 100);
     }
