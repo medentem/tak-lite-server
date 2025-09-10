@@ -545,9 +545,9 @@ async function refresh() {
     updateStatsDisplay(stats);
     updateConnectionsDisplay(stats.sockets);
     
-    // Update version display
+    // Update version display in header
     if (version) {
-      q('#k_version').textContent = version.version || '-';
+      q('#header_version').textContent = version.version || '-';
     }
 
     // Populate users table

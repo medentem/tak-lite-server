@@ -11,6 +11,17 @@
       .container { max-width:1100px; margin:0 auto; padding:24px; }
       header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
       .brand { font-weight:700; letter-spacing:.3px; }
+      .version-separator { 
+        margin: 0 8px; 
+        color: var(--muted); 
+        font-weight: 400; 
+      }
+      .version-text { 
+        font-size: 12px; 
+        color: var(--muted); 
+        font-weight: 400; 
+        letter-spacing: 0.5px;
+      }
       .card { background:var(--panel); border:1px solid #1f2a44; border-radius:12px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
       .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:16px; }
       input,button { height:40px; border-radius:8px; border:1px solid #233153; background:#0c1527; color:var(--text); padding:0 12px; }
@@ -299,7 +310,11 @@
   <body>
     <div class="container">
       <header>
-        <div class="brand">TAK Lite Admin</div>
+        <div class="brand">
+          TAK Lite Admin
+          <span class="version-separator">|</span>
+          <span id="header_version" class="version-text">-</span>
+        </div>
         <div class="row">
           <span id="who" class="muted hidden"></span>
           <button id="logout" class="secondary hidden">Logout</button>
@@ -374,10 +389,6 @@
             <div class="stat-row">
               <span class="stat-label">Memory</span>
               <span class="stat-value" id="k_mem">-</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Version</span>
-              <span class="stat-value" id="k_version">-</span>
             </div>
           </div>
         </div>
