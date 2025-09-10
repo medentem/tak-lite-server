@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from 'express-serve-static-core';
 const { Router } = require('express');
 import os from 'os';
+import path from 'path';
+import fs from 'fs';
 import { Server } from 'socket.io';
 import { DatabaseService } from '../services/database';
 import Joi from 'joi';
@@ -50,13 +52,52 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
   });
 
   router.get('/version', async (_req: Request, res: Response) => {
-    const packageJson = require('../../package.json');
-    res.json({ 
-      version: packageJson.version,
-      name: packageJson.name,
-      description: packageJson.description,
-      buildTime: new Date().toISOString()
-    });
+    try {
+      // Try multiple possible locations for package.json
+      const possiblePaths = [
+        path.resolve(__dirname, '../../package.json'),
+        path.resolve(__dirname, '../../../package.json'),
+        path.resolve(process.cwd(), 'package.json'),
+        path.resolve(process.cwd(), '../package.json')
+      ];
+      
+      let packageJson: any = null;
+      for (const packagePath of possiblePaths) {
+        try {
+          if (fs.existsSync(packagePath)) {
+            packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+            break;
+          }
+        } catch (err) {
+          // Continue to next path
+          continue;
+        }
+      }
+      
+      if (!packageJson) {
+        // Fallback to hardcoded values if package.json cannot be found
+        packageJson = {
+          version: '1.0.0',
+          name: 'tak-lite-server',
+          description: 'Cloud-native backend server for TAK Lite situational awareness platform'
+        };
+      }
+      
+      res.json({ 
+        version: packageJson.version,
+        name: packageJson.name,
+        description: packageJson.description,
+        buildTime: new Date().toISOString()
+      });
+    } catch (error) {
+      // Fallback response if anything goes wrong
+      res.json({ 
+        version: '1.0.0',
+        name: 'tak-lite-server',
+        description: 'Cloud-native backend server for TAK Lite situational awareness platform',
+        buildTime: new Date().toISOString()
+      });
+    }
   });
 
   // Lightweight team/user reads to support visibility and credential distribution
