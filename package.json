@@ -15,7 +15,14 @@
     "db:rollback": "knex migrate:rollback",
     "db:seed": "knex seed:run",
     "db:make-migration": "knex migrate:make",
-    "db:make-seed": "knex seed:make"
+    "db:make-seed": "knex seed:make",
+    "version:patch": "npm version patch && git push origin main --tags",
+    "version:minor": "npm version minor && git push origin main --tags",
+    "version:major": "npm version major && git push origin main --tags",
+    "version:prerelease": "npm version prerelease && git push origin main --tags",
+    "release:patch": "npm run test && npm run build && npm run version:patch",
+    "release:minor": "npm run test && npm run build && npm run version:minor",
+    "release:major": "npm run test && npm run build && npm run version:major"
   },
   "keywords": [
     "tak-lite",

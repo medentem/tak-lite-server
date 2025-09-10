@@ -528,11 +528,12 @@ function updateConnectionsDisplay(data) {
 async function refresh() {
   try {
     setLoading(true);
-    const [cfg, stats, teams, users] = await Promise.all([
+    const [cfg, stats, teams, users, version] = await Promise.all([
       jget('/api/admin/config'),
       jget('/api/admin/stats'),
       jget('/api/admin/teams'),
-      jget('/api/admin/users')
+      jget('/api/admin/users'),
+      jget('/api/admin/version')
     ]);
     
     // Update configuration fields
@@ -543,6 +544,11 @@ async function refresh() {
     // Update stats using real-time function
     updateStatsDisplay(stats);
     updateConnectionsDisplay(stats.sockets);
+    
+    // Update version display
+    if (version) {
+      q('#k_version').textContent = version.version || '-';
+    }
 
     // Populate users table
     const utb = q('#u_table tbody'); 

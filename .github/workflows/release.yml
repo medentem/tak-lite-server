@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run tests
+      run: npm test
+      
+    - name: Build project
+      run: npm run build
+      
+    - name: Extract version from tag
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "version_clean=${VERSION#v}" >> $GITHUB_OUTPUT
+        
+    - name: Update package.json version
+      run: |
+        npm version ${{ steps.version.outputs.version_clean }} --no-git-tag-version
+        
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        release_name: Release ${{ steps.version.outputs.version }}
+        body: |
+          ## TAK Lite Server ${{ steps.version.outputs.version }}
+          
+          ### Changes in this release:
+          - See commit history for detailed changes
+          
+          ### Installation:
+          ```bash
+          npm install tak-lite-server@${{ steps.version.outputs.version_clean }}
+          ```
+          
+          ### Docker:
+          ```bash
+          docker pull your-registry/tak-lite-server:${{ steps.version.outputs.version_clean }}
+          ```
+        draft: false
+        prerelease: false
+        
+    - name: Upload build artifacts
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist
+        asset_name: tak-lite-server-${{ steps.version.outputs.version_clean }}.tar.gz
+        asset_content_type: application/gzip
+        
+    - name: Build and push Docker image
+      if: github.event_name == 'push'
+      run: |
+        echo "Building Docker image for version ${{ steps.version.outputs.version_clean }}"
+        # Add your Docker registry push commands here
+        # docker build -t your-registry/tak-lite-server:${{ steps.version.outputs.version_clean }} .
+        # docker push your-registry/tak-lite-server:${{ steps.version.outputs.version_clean }}
+

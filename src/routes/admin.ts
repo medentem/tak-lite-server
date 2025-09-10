@@ -49,6 +49,16 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
     res.json({ setupCompleted: !!(await config.get('setup.completed')) });
   });
 
+  router.get('/version', async (_req: Request, res: Response) => {
+    const packageJson = require('../../package.json');
+    res.json({ 
+      version: packageJson.version,
+      name: packageJson.name,
+      description: packageJson.description,
+      buildTime: new Date().toISOString()
+    });
+  });
+
   // Lightweight team/user reads to support visibility and credential distribution
   router.get('/teams', async (_req: Request, res: Response, next: NextFunction) => {
     try {
