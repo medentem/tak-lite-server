@@ -843,6 +843,12 @@ class AdminMap {
       }
     }
     
+    // Check if a team is selected
+    if (!this.currentTeamId) {
+      this.showFeedback('Please select a specific team from the dropdown before creating annotations', 5000);
+      return;
+    }
+    
     // Clear existing options
     this.fanMenu.innerHTML = '';
     
@@ -991,7 +997,7 @@ class AdminMap {
     }
     
     if (!this.currentTeamId) {
-      this.showFeedback('Please select a team first', 3000);
+      this.showFeedback('Please select a specific team from the dropdown before creating annotations', 5000);
       return;
     }
     
@@ -1238,8 +1244,13 @@ class AdminMap {
   }
   
   createArea() {
-    if (!this.tempAreaCenter || !this.currentTeamId) {
-      this.showFeedback('Please select a team first', 3000);
+    if (!this.tempAreaCenter) {
+      this.showFeedback('No area center selected', 3000);
+      return;
+    }
+    
+    if (!this.currentTeamId) {
+      this.showFeedback('Please select a specific team from the dropdown before creating annotations', 5000);
       return;
     }
     
@@ -1287,8 +1298,13 @@ class AdminMap {
   }
   
   createLine() {
-    if (!this.tempLinePoints.length || this.tempLinePoints.length < 2 || !this.currentTeamId) {
-      this.showFeedback('Please select a team first', 3000);
+    if (!this.tempLinePoints.length || this.tempLinePoints.length < 2) {
+      this.showFeedback('Need at least 2 points for a line', 3000);
+      return;
+    }
+    
+    if (!this.currentTeamId) {
+      this.showFeedback('Please select a specific team from the dropdown before creating annotations', 5000);
       return;
     }
     
