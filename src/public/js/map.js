@@ -137,8 +137,17 @@ class AdminMap {
       position: containerStyle.position
     });
     
-    // Remove loading text
+    // Remove loading text but preserve annotation UI elements
+    const fanMenu = container.querySelector('#fan_menu');
+    const colorMenu = container.querySelector('#color_menu');
+    const feedback = container.querySelector('#map_feedback');
+    
     container.innerHTML = '';
+    
+    // Restore annotation UI elements
+    if (fanMenu) container.appendChild(fanMenu);
+    if (colorMenu) container.appendChild(colorMenu);
+    if (feedback) container.appendChild(feedback);
     
     // Dark mode style configuration (matching Android app)
     const darkStyle = {
@@ -259,6 +268,9 @@ class AdminMap {
   }
   
   initializeAnnotationUI() {
+    console.log('Initializing annotation UI...');
+    console.log('Document ready state:', document.readyState);
+    
     // Get references to UI elements
     this.fanMenu = document.getElementById('fan_menu');
     this.colorMenu = document.getElementById('color_menu');
@@ -272,6 +284,8 @@ class AdminMap {
     console.log('editForm:', this.editForm);
     console.log('modalOverlay:', this.modalOverlay);
     console.log('feedback:', this.feedback);
+    
+    // Elements should now be found since they're preserved during map initialization
     
     // Setup form event listeners
     this.setupFormEventListeners();
@@ -883,13 +897,6 @@ class AdminMap {
     // Show fan menu
     this.fanMenu.classList.add('visible');
     console.log('Fan menu made visible, classes:', this.fanMenu.className);
-    console.log('Fan menu style:', this.fanMenu.style.cssText);
-    
-    // Force visibility for testing
-    this.fanMenu.style.opacity = '1';
-    this.fanMenu.style.pointerEvents = 'auto';
-    this.fanMenu.style.transform = 'scale(1)';
-    console.log('Fan menu forced visible');
     
     // Store the map coordinates for later use
     this.pendingAnnotation = this.map.unproject(point);
