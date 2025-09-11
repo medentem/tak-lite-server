@@ -843,12 +843,6 @@ class AdminMap {
       }
     }
     
-    // Check if a team is selected
-    if (!this.currentTeamId) {
-      this.showFeedback('Please select a specific team from the dropdown before creating annotations', 5000);
-      return;
-    }
-    
     // Clear existing options
     this.fanMenu.innerHTML = '';
     
