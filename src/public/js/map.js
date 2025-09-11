@@ -47,7 +47,6 @@ class AdminMap {
     
     console.log('Initializing admin map...');
     await this.initializeMap();
-    this.initializeAnnotationUI();
     this.setupEventListeners();
     
     // Only load data if we have authentication
@@ -230,6 +229,8 @@ class AdminMap {
         this.map.resize();
         
         this.setupMapSources();
+        // Initialize annotation UI after map is loaded and DOM is ready
+        this.initializeAnnotationUI();
         // Setup interaction handlers after map is loaded
         this.setupMapInteractionHandlers();
       });
@@ -819,8 +820,13 @@ class AdminMap {
     console.log('fanMenu element:', this.fanMenu);
     
     if (!this.fanMenu) {
-      console.error('fanMenu element not found!');
-      return;
+      console.error('fanMenu element not found! Attempting to re-initialize...');
+      this.initializeAnnotationUI();
+      
+      if (!this.fanMenu) {
+        console.error('fanMenu element still not found after re-initialization!');
+        return;
+      }
     }
     
     // Clear existing options
