@@ -362,7 +362,15 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         });
       }
       
-      res.json({ ...row, data });
+      res.json({ 
+        id,
+        user_id: userId,
+        team_id: teamId,
+        type,
+        data,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
     } catch (err) { next(err); }
   });
 
