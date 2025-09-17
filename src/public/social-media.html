@@ -1,0 +1,1132 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Social Media Monitoring - TAK Lite Admin</title>
+    <style>
+      :root { 
+        --bg:#0b1220; 
+        --panel:#111a2b; 
+        --text:#e6edf3; 
+        --muted:#8b97a7; 
+        --accent:#3b82f6; 
+        --ok:#22c55e; 
+        --bad:#ef4444; 
+        --warning:#f59e0b;
+        --critical:#dc2626;
+      }
+      html,body { height:100%; }
+      body { 
+        margin:0; 
+        background:linear-gradient(180deg,#0b1220,#0a0f1a); 
+        color:var(--text); 
+        font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; 
+      }
+      .container { max-width:1200px; margin:0 auto; padding:24px; }
+      header { 
+        display:flex; 
+        align-items:center; 
+        justify-content:space-between; 
+        margin-bottom:24px; 
+        padding-bottom:16px;
+        border-bottom:1px solid #1f2a44;
+      }
+      .brand { font-weight:700; letter-spacing:.3px; font-size:24px; }
+      .nav-links { display:flex; gap:16px; }
+      .nav-links a { 
+        color:var(--muted); 
+        text-decoration:none; 
+        padding:8px 16px; 
+        border-radius:8px; 
+        transition:all 0.2s;
+      }
+      .nav-links a:hover, .nav-links a.active { 
+        background:var(--panel); 
+        color:var(--text); 
+      }
+      .card { 
+        background:var(--panel); 
+        border:1px solid #1f2a44; 
+        border-radius:12px; 
+        padding:20px; 
+        box-shadow:0 10px 30px rgba(0,0,0,.35); 
+        margin-bottom:20px;
+      }
+      .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:20px; }
+      input,button,select,textarea { 
+        height:40px; 
+        border-radius:8px; 
+        border:1px solid #233153; 
+        background:#0c1527; 
+        color:var(--text); 
+        padding:0 12px; 
+        font-size:14px;
+      }
+      textarea { 
+        height:auto; 
+        min-height:80px; 
+        padding:12px; 
+        resize:vertical;
+      }
+      input::placeholder, textarea::placeholder { color:#6b7280; }
+      button { 
+        background:linear-gradient(180deg,#2563eb,#1d4ed8); 
+        border:0; 
+        cursor:pointer; 
+        font-weight:600; 
+        transition:all 0.2s;
+      }
+      button:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(37,99,235,0.3); }
+      button.secondary { background:#0c1527; border:1px solid #223056; }
+      button.danger { background:linear-gradient(180deg,#dc2626,#b91c1c); }
+      button.success { background:linear-gradient(180deg,#22c55e,#16a34a); }
+      .row { display:flex; gap:12px; align-items:center; }
+      .section { margin-top:20px; }
+      h2 { margin:0 0 16px; font-size:20px; color:#cbd5e1; }
+      h3 { margin:0 0 12px; font-size:16px; color:#cbd5e1; }
+      .kpi { 
+        display:flex; 
+        flex-direction: column; 
+        align-items:center; 
+        text-align: center; 
+        gap:8px; 
+        padding:20px;
+        background:var(--panel);
+        border-radius:12px;
+        border:1px solid #1f2a44;
+      }
+      .kpi .value { font-size:32px; font-weight:700; color: var(--accent); line-height: 1; }
+      .kpi .label { font-size:12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+      table { width:100%; border-collapse:collapse; font-size:14px; }
+      th, td { border-bottom:1px solid #1f2a44; padding:12px; text-align:left; }
+      th { background:#0d1b34; font-weight:600; color:#cbd5e1; }
+      .muted { color:var(--muted); }
+      .pill { 
+        padding:4px 12px; 
+        border-radius:9999px; 
+        background:#0d1b34; 
+        border:1px solid #223056; 
+        font-size:12px; 
+        font-weight:500;
+      }
+      .pill.active { background:#22c55e; color:#000; }
+      .pill.inactive { background:#ef4444; color:#fff; }
+      .pill.critical { background:#dc2626; color:#fff; }
+      .pill.high { background:#f59e0b; color:#000; }
+      .pill.medium { background:#3b82f6; color:#fff; }
+      .pill.low { background:#6b7280; color:#fff; }
+      .spacer { height:16px; }
+      .right { text-align:right; }
+      .hidden { display:none; }
+      .loading { opacity:0.6; pointer-events:none; }
+      
+      /* Modal styles */
+      .modal { 
+        position:fixed; 
+        top:0; 
+        left:0; 
+        width:100%; 
+        height:100%; 
+        background:rgba(0,0,0,0.8); 
+        display:flex; 
+        align-items:center; 
+        justify-content:center; 
+        z-index:1000;
+      }
+      .modal-content { 
+        background:var(--panel); 
+        border:1px solid #1f2a44; 
+        border-radius:12px; 
+        padding:24px; 
+        max-width:600px; 
+        width:90%; 
+        max-height:90vh; 
+        overflow-y:auto;
+      }
+      .modal-header { 
+        display:flex; 
+        justify-content:space-between; 
+        align-items:center; 
+        margin-bottom:20px; 
+        padding-bottom:16px; 
+        border-bottom:1px solid #1f2a44;
+      }
+      .modal-header h3 { margin:0; }
+      .close { 
+        background:none; 
+        border:none; 
+        color:var(--muted); 
+        font-size:24px; 
+        cursor:pointer; 
+        padding:0; 
+        width:32px; 
+        height:32px;
+      }
+      .form-group { margin-bottom:16px; }
+      .form-group label { 
+        display:block; 
+        margin-bottom:8px; 
+        font-weight:500; 
+        color:#cbd5e1; 
+      }
+      .form-group input, .form-group select, .form-group textarea { 
+        width:100%; 
+        box-sizing:border-box; 
+      }
+      .help-text { 
+        background:#0d1b34; 
+        border:1px solid #223056; 
+        border-radius:6px; 
+        padding:8px 12px; 
+        margin-top:8px; 
+        font-size:12px; 
+        color:var(--muted);
+      }
+      .form-actions { 
+        display:flex; 
+        gap:12px; 
+        justify-content:flex-end; 
+        margin-top:24px; 
+        padding-top:16px; 
+        border-top:1px solid #1f2a44;
+      }
+      
+      /* Threat cards */
+      .threat-card { 
+        background:var(--panel); 
+        border:1px solid #1f2a44; 
+        border-radius:12px; 
+        padding:16px; 
+        margin-bottom:12px;
+        transition:all 0.2s;
+      }
+      .threat-card:hover { border-color:var(--accent); }
+      .threat-card.critical { border-left:4px solid var(--critical); }
+      .threat-card.high { border-left:4px solid var(--warning); }
+      .threat-card.medium { border-left:4px solid var(--accent); }
+      .threat-card.low { border-left:4px solid var(--muted); }
+      .threat-header { 
+        display:flex; 
+        justify-content:space-between; 
+        align-items:center; 
+        margin-bottom:12px;
+      }
+      .threat-level-badge { 
+        padding:4px 12px; 
+        border-radius:9999px; 
+        font-size:12px; 
+        font-weight:600; 
+        text-transform:uppercase;
+      }
+      .threat-level-badge.critical { background:var(--critical); color:#fff; }
+      .threat-level-badge.high { background:var(--warning); color:#000; }
+      .threat-level-badge.medium { background:var(--accent); color:#fff; }
+      .threat-level-badge.low { background:var(--muted); color:#fff; }
+      .threat-time { font-size:12px; color:var(--muted); }
+      .threat-content h4 { margin:0 0 8px; color:#cbd5e1; }
+      .threat-summary { margin:0 0 12px; color:var(--text); line-height:1.5; }
+      .threat-source { 
+        margin:8px 0; 
+        font-size:12px; 
+        color:var(--muted); 
+      }
+      .threat-source a { color:var(--accent); text-decoration:none; }
+      .threat-actions { 
+        display:flex; 
+        gap:8px; 
+        margin-top:12px; 
+      }
+      .threat-actions button { 
+        padding:6px 12px; 
+        font-size:12px; 
+        height:auto; 
+      }
+      
+      /* Status indicators */
+      .status-indicator { 
+        width:8px; 
+        height:8px; 
+        border-radius:50%; 
+        display:inline-block; 
+        margin-right:8px;
+      }
+      .status-indicator.active { background:var(--ok); }
+      .status-indicator.inactive { background:var(--bad); }
+      
+      /* Responsive */
+      @media (max-width: 768px) {
+        .container { padding:16px; }
+        .grid { grid-template-columns: 1fr; }
+        .row { flex-direction:column; align-items:stretch; }
+        .form-actions { flex-direction:column; }
+        .threat-header { flex-direction:column; align-items:flex-start; gap:8px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div class="brand">TAK Lite Admin</div>
+        <nav class="nav-links">
+          <a href="/admin">Dashboard</a>
+          <a href="/admin/users">Users</a>
+          <a href="/admin/teams">Teams</a>
+          <a href="/admin/system">System</a>
+          <a href="/social-media" class="active">Social Media</a>
+        </nav>
+      </header>
+
+      <!-- Main Content -->
+      <div id="main-content">
+        <!-- Service Status Section -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h2>Service Status</h2>
+            <div style="display:flex; gap:12px; align-items:center;">
+              <div id="service-status-indicator" class="status-indicator inactive"></div>
+              <span id="service-status-text">Service Disabled</span>
+              <button id="service-toggle-btn" onclick="toggleService()" class="success">Enable Service</button>
+            </div>
+          </div>
+          
+          <div id="service-status-details" class="grid" style="margin-bottom:20px;">
+            <div class="kpi">
+              <div class="value" id="service-active-monitors">0</div>
+              <div class="label">Active Monitors</div>
+            </div>
+            <div class="kpi">
+              <div class="value" id="service-total-monitors">0</div>
+              <div class="label">Total Monitors</div>
+            </div>
+            <div class="kpi">
+              <div class="value" id="service-estimated-cost">$0</div>
+              <div class="label">Est. Monthly Cost</div>
+            </div>
+            <div class="kpi">
+              <div class="value" id="service-posts-today">0</div>
+              <div class="label">Posts Today</div>
+            </div>
+          </div>
+          
+          <div style="display:flex; gap:12px;">
+            <button onclick="startAllMonitors()" class="secondary" id="start-all-btn" disabled>Start All Monitors</button>
+            <button onclick="stopAllMonitors()" class="danger" id="stop-all-btn" disabled>Stop All Monitors</button>
+            <button onclick="showServiceConfigModal()" class="secondary">Service Settings</button>
+          </div>
+        </div>
+
+        <!-- Monitors Section -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h2>Social Media Monitors</h2>
+            <button onclick="showCreateMonitorModal()" class="success" id="create-monitor-btn" disabled>Create Monitor</button>
+          </div>
+          
+          <div id="monitors-grid" class="grid">
+            <!-- Monitors will be loaded here -->
+          </div>
+        </div>
+
+        <!-- AI Configuration Section -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h2>AI Configuration</h2>
+            <button onclick="showAIConfigModal()" class="secondary">Configure AI</button>
+          </div>
+          
+          <div id="ai-config-status">
+            <!-- AI config status will be loaded here -->
+          </div>
+        </div>
+
+        <!-- Threat Dashboard -->
+        <div class="card">
+          <h2>Threat Dashboard</h2>
+          
+          <div class="grid" style="margin-bottom:20px;">
+            <div class="kpi">
+              <div class="value" id="total-threats">0</div>
+              <div class="label">Total Threats</div>
+            </div>
+            <div class="kpi">
+              <div class="value" id="critical-threats">0</div>
+              <div class="label">Critical</div>
+            </div>
+            <div class="kpi">
+              <div class="value" id="high-threats">0</div>
+              <div class="label">High</div>
+            </div>
+            <div class="kpi">
+              <div class="value" id="posts-analyzed">0</div>
+              <div class="label">Posts Analyzed</div>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:12px; margin-bottom:20px;">
+            <select id="threat-level-filter">
+              <option value="">All Threat Levels</option>
+              <option value="CRITICAL">Critical</option>
+              <option value="HIGH">High</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="LOW">Low</option>
+            </select>
+            <select id="threat-type-filter">
+              <option value="">All Types</option>
+              <option value="VIOLENCE">Violence</option>
+              <option value="TERRORISM">Terrorism</option>
+              <option value="NATURAL_DISASTER">Natural Disaster</option>
+              <option value="CIVIL_UNREST">Civil Unrest</option>
+              <option value="INFRASTRUCTURE">Infrastructure</option>
+            </select>
+            <input type="text" id="search-threats" placeholder="Search threats...">
+          </div>
+
+          <div id="threats-list">
+            <!-- Threats will be loaded here -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create/Edit Monitor Modal -->
+    <div id="monitor-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="monitor-modal-title">Create Monitor</h3>
+          <button class="close" onclick="closeModal()">&times;</button>
+        </div>
+        
+        <form id="monitor-form">
+          <div class="form-group">
+            <label>Monitor Name</label>
+            <input type="text" name="name" placeholder="Emergency Services Monitor" required>
+          </div>
+          
+          <div class="form-group">
+            <label>Advanced Search Query</label>
+            <textarea name="search_query" placeholder='"emergency" OR "police" OR "fire" near:Seattle within:10mi' required></textarea>
+            <div class="help-text">
+              Use Twitter's advanced search operators. 
+              <a href="https://github.com/igorbrigadir/twitter-advanced-search" target="_blank" style="color:var(--accent);">See examples</a>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>Query Type</label>
+            <select name="query_type">
+              <option value="Latest">Latest (Real-time)</option>
+              <option value="Top">Top (Popular)</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label>Monitoring Interval (seconds)</label>
+            <input type="number" name="monitoring_interval" value="300" min="60" max="3600">
+            <div class="help-text">How often to check for new posts (60-3600 seconds)</div>
+          </div>
+          
+          <div class="form-group">
+            <label>TwitterAPI.io API Key</label>
+            <input type="password" name="api_key" placeholder="Your twitterapi.io API key" required>
+            <div class="help-text">
+              Get your API key from <a href="https://twitterapi.io" target="_blank" style="color:var(--accent);">twitterapi.io</a>
+            </div>
+          </div>
+          
+          <div class="form-actions">
+            <button type="button" onclick="testConnection()" class="secondary">Test Connection</button>
+            <button type="submit">Save Monitor</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- AI Configuration Modal -->
+    <div id="ai-config-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>AI Configuration</h3>
+          <button class="close" onclick="closeModal()">&times;</button>
+        </div>
+        
+        <form id="ai-config-form">
+          <div class="form-group">
+            <label>OpenAI API Key</label>
+            <input type="password" name="api_key_encrypted" placeholder="sk-..." required>
+            <div class="help-text">Your OpenAI API key for threat analysis</div>
+          </div>
+          
+          <div class="form-group">
+            <label>Model</label>
+            <select name="model">
+              <option value="gpt-4">GPT-4 (Recommended)</option>
+              <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Faster/Cheaper)</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label>Max Tokens</label>
+            <input type="number" name="max_tokens" value="1000" min="100" max="4000">
+          </div>
+          
+          <div class="form-group">
+            <label>Temperature</label>
+            <input type="range" name="temperature" min="0" max="1" step="0.1" value="0.3">
+            <div class="help-text">Lower values = more focused, Higher values = more creative</div>
+          </div>
+          
+          <div class="form-actions">
+            <button type="button" onclick="testAI()" class="secondary">Test AI</button>
+            <button type="submit">Save Configuration</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Service Configuration Modal -->
+    <div id="service-config-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Service Configuration</h3>
+          <button class="close" onclick="closeModal()">&times;</button>
+        </div>
+        
+        <form id="service-config-form">
+          <div class="form-group">
+            <label>
+              <input type="checkbox" name="auto_start_monitors" style="width:auto; margin-right:8px;">
+              Auto-start monitors when service is enabled
+            </label>
+          </div>
+          
+          <div class="form-group">
+            <label>Max Monitors per Team</label>
+            <input type="number" name="max_monitors_per_team" value="5" min="1" max="20">
+            <div class="help-text">Limit the number of monitors each team can create</div>
+          </div>
+          
+          <div class="form-group">
+            <label>Default Monitoring Interval (seconds)</label>
+            <input type="number" name="default_monitoring_interval" value="300" min="60" max="3600">
+            <div class="help-text">Default interval for new monitors</div>
+          </div>
+          
+          <div class="form-group">
+            <label>Cost Warning Threshold ($)</label>
+            <input type="number" name="cost_warning_threshold" value="100" min="10" max="1000" step="10">
+            <div class="help-text">Monthly cost threshold for warnings</div>
+          </div>
+          
+          <div class="form-group">
+            <label>Max Posts per Hour</label>
+            <input type="number" name="max_posts_per_hour" value="1000" min="100" max="10000">
+            <div class="help-text">Rate limit for API calls</div>
+          </div>
+          
+          <div class="form-group">
+            <label>
+              <input type="checkbox" name="enable_cost_tracking" checked style="width:auto; margin-right:8px;">
+              Enable cost tracking and warnings
+            </label>
+          </div>
+          
+          <div class="form-actions">
+            <button type="submit">Save Configuration</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      // Global state
+      let currentMonitorId = null;
+      let monitors = [];
+      let threats = [];
+      let aiConfig = null;
+      let serviceStatus = null;
+      let serviceConfig = null;
+
+      // Initialize the page
+      document.addEventListener('DOMContentLoaded', function() {
+        loadServiceStatus();
+        loadServiceConfig();
+        loadMonitors();
+        loadAIConfig();
+        loadThreats();
+        loadThreatStatistics();
+        
+        // Set up event listeners
+        document.getElementById('threat-level-filter').addEventListener('change', filterThreats);
+        document.getElementById('threat-type-filter').addEventListener('change', filterThreats);
+        document.getElementById('search-threats').addEventListener('input', filterThreats);
+        
+        // Set up form handlers
+        document.getElementById('monitor-form').addEventListener('submit', handleMonitorSubmit);
+        document.getElementById('ai-config-form').addEventListener('submit', handleAIConfigSubmit);
+        document.getElementById('service-config-form').addEventListener('submit', handleServiceConfigSubmit);
+      });
+
+      // API functions
+      async function apiCall(endpoint, options = {}) {
+        const token = localStorage.getItem('admin_token');
+        const response = await fetch(endpoint, {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            ...options.headers
+          }
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'API call failed');
+        }
+        
+        return response.json();
+      }
+
+      // Load service status
+      async function loadServiceStatus() {
+        try {
+          const data = await apiCall('/api/social-media/service/status');
+          serviceStatus = data.status;
+          renderServiceStatus();
+        } catch (error) {
+          console.error('Failed to load service status:', error);
+          showError('Failed to load service status: ' + error.message);
+        }
+      }
+
+      // Load service configuration
+      async function loadServiceConfig() {
+        try {
+          const data = await apiCall('/api/social-media/service/config');
+          serviceConfig = data.config;
+        } catch (error) {
+          console.error('Failed to load service config:', error);
+        }
+      }
+
+      // Render service status
+      function renderServiceStatus() {
+        if (!serviceStatus) return;
+
+        const statusIndicator = document.getElementById('service-status-indicator');
+        const statusText = document.getElementById('service-status-text');
+        const toggleBtn = document.getElementById('service-toggle-btn');
+        const startAllBtn = document.getElementById('start-all-btn');
+        const stopAllBtn = document.getElementById('stop-all-btn');
+        const createMonitorBtn = document.getElementById('create-monitor-btn');
+
+        // Update status indicator and text
+        if (serviceStatus.service_enabled) {
+          statusIndicator.className = 'status-indicator active';
+          statusText.textContent = 'Service Enabled';
+          toggleBtn.textContent = 'Disable Service';
+          toggleBtn.className = 'danger';
+          startAllBtn.disabled = false;
+          stopAllBtn.disabled = false;
+          createMonitorBtn.disabled = false;
+        } else {
+          statusIndicator.className = 'status-indicator inactive';
+          statusText.textContent = 'Service Disabled';
+          toggleBtn.textContent = 'Enable Service';
+          toggleBtn.className = 'success';
+          startAllBtn.disabled = true;
+          stopAllBtn.disabled = true;
+          createMonitorBtn.disabled = true;
+        }
+
+        // Update service metrics
+        document.getElementById('service-active-monitors').textContent = serviceStatus.active_monitors;
+        document.getElementById('service-total-monitors').textContent = serviceStatus.total_monitors;
+        document.getElementById('service-estimated-cost').textContent = `$${serviceStatus.estimated_monthly_cost}`;
+        document.getElementById('service-posts-today').textContent = serviceStatus.posts_processed_today;
+      }
+
+      // Load monitors
+      async function loadMonitors() {
+        try {
+          const data = await apiCall('/api/social-media/monitors');
+          monitors = data.monitors;
+          renderMonitors();
+        } catch (error) {
+          console.error('Failed to load monitors:', error);
+          showError('Failed to load monitors: ' + error.message);
+        }
+      }
+
+      // Render monitors
+      function renderMonitors() {
+        const grid = document.getElementById('monitors-grid');
+        if (monitors.length === 0) {
+          grid.innerHTML = '<div style="text-align:center; color:var(--muted); padding:40px;">No monitors configured. Create one to get started.</div>';
+          return;
+        }
+
+        grid.innerHTML = monitors.map(monitor => `
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <h3>${monitor.name}</h3>
+              <div class="pill ${monitor.is_active ? 'active' : 'inactive'}">
+                <span class="status-indicator ${monitor.is_active ? 'active' : 'inactive'}"></span>
+                ${monitor.is_active ? 'Active' : 'Inactive'}
+              </div>
+            </div>
+            
+            <div style="margin-bottom:12px;">
+              <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">Query:</div>
+              <div style="font-size:14px; background:#0d1b34; padding:8px; border-radius:6px; border:1px solid #223056;">
+                ${monitor.search_query}
+              </div>
+            </div>
+            
+            <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:16px;">
+              <span>Interval: ${monitor.monitoring_interval}s</span>
+              <span>Type: ${monitor.query_type}</span>
+              <span>Last: ${monitor.last_checked_at ? new Date(monitor.last_checked_at).toLocaleString() : 'Never'}</span>
+            </div>
+            
+            <div style="display:flex; gap:8px;">
+              <button onclick="editMonitor('${monitor.id}')" class="secondary" style="flex:1;">Edit</button>
+              <button onclick="toggleMonitor('${monitor.id}')" class="${monitor.is_active ? 'secondary' : 'success'}" style="flex:1;">
+                ${monitor.is_active ? 'Pause' : 'Start'}
+              </button>
+              <button onclick="deleteMonitor('${monitor.id}')" class="danger">Delete</button>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // Load AI configuration
+      async function loadAIConfig() {
+        try {
+          const data = await apiCall('/api/social-media/ai-config');
+          aiConfig = data.config;
+          renderAIConfig();
+        } catch (error) {
+          console.error('Failed to load AI config:', error);
+          document.getElementById('ai-config-status').innerHTML = 
+            '<div style="text-align:center; color:var(--muted); padding:20px;">No AI configuration found. Configure AI to enable threat detection.</div>';
+        }
+      }
+
+      // Render AI configuration
+      function renderAIConfig() {
+        if (!aiConfig) return;
+        
+        document.getElementById('ai-config-status').innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:16px; background:#0d1b34; border-radius:8px; border:1px solid #223056;">
+            <div>
+              <div style="font-weight:600; margin-bottom:4px;">AI Configuration Active</div>
+              <div style="font-size:12px; color:var(--muted);">
+                Model: ${aiConfig.model} | Max Tokens: ${aiConfig.max_tokens} | Temperature: ${aiConfig.temperature}
+              </div>
+            </div>
+            <button onclick="showAIConfigModal()" class="secondary">Edit</button>
+          </div>
+        `;
+      }
+
+      // Load threats
+      async function loadThreats() {
+        try {
+          const data = await apiCall('/api/social-media/threats?limit=50');
+          threats = data.threats;
+          renderThreats();
+        } catch (error) {
+          console.error('Failed to load threats:', error);
+          showError('Failed to load threats: ' + error.message);
+        }
+      }
+
+      // Render threats
+      function renderThreats() {
+        const container = document.getElementById('threats-list');
+        if (threats.length === 0) {
+          container.innerHTML = '<div style="text-align:center; color:var(--muted); padding:40px;">No threats detected yet.</div>';
+          return;
+        }
+
+        container.innerHTML = threats.map(threat => `
+          <div class="threat-card ${threat.threat_level.toLowerCase()}">
+            <div class="threat-header">
+              <div class="threat-level-badge ${threat.threat_level.toLowerCase()}">${threat.threat_level}</div>
+              <div style="font-size:12px; color:var(--muted);">${threat.threat_type || 'Unknown'}</div>
+              <div class="threat-time">${new Date(threat.created_at).toLocaleString()}</div>
+            </div>
+            
+            <div class="threat-content">
+              <h4>${threat.ai_summary || 'Threat Detected'}</h4>
+              <div class="threat-summary">
+                Confidence: ${(threat.confidence_score * 100).toFixed(1)}% | 
+                Keywords: ${(threat.keywords || []).join(', ')}
+              </div>
+            </div>
+            
+            <div class="threat-actions">
+              <button onclick="viewThreatDetails('${threat.id}')" class="secondary">View Details</button>
+              <button onclick="verifyThreat('${threat.id}', true)" class="success">Verify</button>
+              <button onclick="verifyThreat('${threat.id}', false)" class="danger">Dismiss</button>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // Load threat statistics
+      async function loadThreatStatistics() {
+        try {
+          const data = await apiCall('/api/social-media/threats/statistics');
+          const stats = data.statistics;
+          
+          document.getElementById('total-threats').textContent = stats.total_threats;
+          document.getElementById('critical-threats').textContent = stats.by_level.CRITICAL || 0;
+          document.getElementById('high-threats').textContent = stats.by_level.HIGH || 0;
+          document.getElementById('posts-analyzed').textContent = stats.total_threats; // Simplified for now
+        } catch (error) {
+          console.error('Failed to load threat statistics:', error);
+        }
+      }
+
+      // Modal functions
+      function showCreateMonitorModal() {
+        currentMonitorId = null;
+        document.getElementById('monitor-modal-title').textContent = 'Create Monitor';
+        document.getElementById('monitor-form').reset();
+        document.getElementById('monitor-modal').classList.remove('hidden');
+      }
+
+      function showAIConfigModal() {
+        document.getElementById('ai-config-form').reset();
+        if (aiConfig) {
+          document.getElementById('ai-config-form').querySelector('[name="model"]').value = aiConfig.model;
+          document.getElementById('ai-config-form').querySelector('[name="max_tokens"]').value = aiConfig.max_tokens;
+          document.getElementById('ai-config-form').querySelector('[name="temperature"]').value = aiConfig.temperature;
+        }
+        document.getElementById('ai-config-modal').classList.remove('hidden');
+      }
+
+      function closeModal() {
+        document.querySelectorAll('.modal').forEach(modal => modal.classList.add('hidden'));
+      }
+
+      // Form handlers
+      async function handleMonitorSubmit(e) {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+        
+        try {
+          if (currentMonitorId) {
+            await apiCall(`/api/social-media/monitors/${currentMonitorId}`, {
+              method: 'PUT',
+              body: JSON.stringify(data)
+            });
+          } else {
+            await apiCall('/api/social-media/monitors', {
+              method: 'POST',
+              body: JSON.stringify(data)
+            });
+          }
+          
+          closeModal();
+          loadMonitors();
+          showSuccess('Monitor saved successfully');
+        } catch (error) {
+          showError('Failed to save monitor: ' + error.message);
+        }
+      }
+
+      async function handleAIConfigSubmit(e) {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+        
+        try {
+          if (aiConfig) {
+            await apiCall(`/api/social-media/ai-config/${aiConfig.id}`, {
+              method: 'PUT',
+              body: JSON.stringify(data)
+            });
+          } else {
+            await apiCall('/api/social-media/ai-config', {
+              method: 'POST',
+              body: JSON.stringify(data)
+            });
+          }
+          
+          closeModal();
+          loadAIConfig();
+          showSuccess('AI configuration saved successfully');
+        } catch (error) {
+          showError('Failed to save AI configuration: ' + error.message);
+        }
+      }
+
+      // Monitor actions
+      async function editMonitor(id) {
+        const monitor = monitors.find(m => m.id === id);
+        if (!monitor) return;
+        
+        currentMonitorId = id;
+        document.getElementById('monitor-modal-title').textContent = 'Edit Monitor';
+        
+        const form = document.getElementById('monitor-form');
+        form.querySelector('[name="name"]').value = monitor.name;
+        form.querySelector('[name="search_query"]').value = monitor.search_query;
+        form.querySelector('[name="query_type"]').value = monitor.query_type;
+        form.querySelector('[name="monitoring_interval"]').value = monitor.monitoring_interval;
+        
+        document.getElementById('monitor-modal').classList.remove('hidden');
+      }
+
+      async function toggleMonitor(id) {
+        try {
+          const monitor = monitors.find(m => m.id === id);
+          if (!monitor) return;
+          
+          if (monitor.is_active) {
+            await apiCall(`/api/social-media/monitors/${id}/stop`, { method: 'POST' });
+          } else {
+            await apiCall(`/api/social-media/monitors/${id}/start`, { method: 'POST' });
+          }
+          
+          loadMonitors();
+          showSuccess(`Monitor ${monitor.is_active ? 'stopped' : 'started'} successfully`);
+        } catch (error) {
+          showError('Failed to toggle monitor: ' + error.message);
+        }
+      }
+
+      async function deleteMonitor(id) {
+        if (!confirm('Are you sure you want to delete this monitor?')) return;
+        
+        try {
+          await apiCall(`/api/social-media/monitors/${id}`, { method: 'DELETE' });
+          loadMonitors();
+          showSuccess('Monitor deleted successfully');
+        } catch (error) {
+          showError('Failed to delete monitor: ' + error.message);
+        }
+      }
+
+      // Test functions
+      async function testConnection() {
+        const form = document.getElementById('monitor-form');
+        const apiKey = form.querySelector('[name="api_key"]').value;
+        const searchQuery = form.querySelector('[name="search_query"]').value;
+        
+        if (!apiKey || !searchQuery) {
+          showError('Please enter API key and search query');
+          return;
+        }
+        
+        try {
+          const result = await apiCall('/api/social-media/test-connection', {
+            method: 'POST',
+            body: JSON.stringify({ api_key: apiKey, search_query: searchQuery })
+          });
+          
+          if (result.success) {
+            showSuccess(`Connection successful! Found ${result.samplePosts} sample posts.`);
+          } else {
+            showError('Connection failed: ' + result.error);
+          }
+        } catch (error) {
+          showError('Connection test failed: ' + error.message);
+        }
+      }
+
+      async function testAI() {
+        const form = document.getElementById('ai-config-form');
+        const apiKey = form.querySelector('[name="api_key_encrypted"]').value;
+        const model = form.querySelector('[name="model"]').value;
+        
+        if (!apiKey) {
+          showError('Please enter OpenAI API key');
+          return;
+        }
+        
+        try {
+          const result = await apiCall('/api/social-media/test-ai', {
+            method: 'POST',
+            body: JSON.stringify({ api_key: apiKey, model: model })
+          });
+          
+          if (result.success) {
+            showSuccess(`AI connection successful! Using model: ${result.model}`);
+          } else {
+            showError('AI connection failed: ' + result.error);
+          }
+        } catch (error) {
+          showError('AI test failed: ' + error.message);
+        }
+      }
+
+      // Threat actions
+      async function verifyThreat(id, verified) {
+        try {
+          await apiCall(`/api/social-media/threat-annotations/${id}/verify`, {
+            method: 'POST',
+            body: JSON.stringify({ is_verified: verified })
+          });
+          
+          loadThreats();
+          showSuccess(`Threat ${verified ? 'verified' : 'dismissed'}`);
+        } catch (error) {
+          showError('Failed to update threat: ' + error.message);
+        }
+      }
+
+      function viewThreatDetails(id) {
+        // TODO: Implement threat details modal
+        showError('Threat details view not implemented yet');
+      }
+
+      // Filter functions
+      function filterThreats() {
+        const levelFilter = document.getElementById('threat-level-filter').value;
+        const typeFilter = document.getElementById('threat-type-filter').value;
+        const searchFilter = document.getElementById('search-threats').value.toLowerCase();
+        
+        const filtered = threats.filter(threat => {
+          if (levelFilter && threat.threat_level !== levelFilter) return false;
+          if (typeFilter && threat.threat_type !== typeFilter) return false;
+          if (searchFilter && !threat.ai_summary?.toLowerCase().includes(searchFilter)) return false;
+          return true;
+        });
+        
+        // Re-render with filtered threats
+        const originalThreats = threats;
+        threats = filtered;
+        renderThreats();
+        threats = originalThreats;
+      }
+
+      // Utility functions
+      function showSuccess(message) {
+        // Simple success notification
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+          position: fixed; top: 20px; right: 20px; background: var(--ok); color: #000; 
+          padding: 12px 20px; border-radius: 8px; z-index: 1001; font-weight: 600;
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 3000);
+      }
+
+      function showError(message) {
+        // Simple error notification
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+          position: fixed; top: 20px; right: 20px; background: var(--bad); color: #fff; 
+          padding: 12px 20px; border-radius: 8px; z-index: 1001; font-weight: 600;
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 5000);
+      }
+
+      // Service control functions
+      async function toggleService() {
+        try {
+          const enabled = !serviceStatus.service_enabled;
+          await apiCall('/api/social-media/service/toggle', {
+            method: 'POST',
+            body: JSON.stringify({ enabled })
+          });
+          
+          loadServiceStatus();
+          showSuccess(`Service ${enabled ? 'enabled' : 'disabled'} successfully`);
+        } catch (error) {
+          showError('Failed to toggle service: ' + error.message);
+        }
+      }
+
+      async function startAllMonitors() {
+        try {
+          const result = await apiCall('/api/social-media/service/start-all', {
+            method: 'POST'
+          });
+          
+          loadServiceStatus();
+          loadMonitors();
+          showSuccess(`Started ${result.result.started} monitors`);
+          
+          if (result.result.failed > 0) {
+            showError(`Failed to start ${result.result.failed} monitors: ${result.result.errors.join(', ')}`);
+          }
+        } catch (error) {
+          showError('Failed to start monitors: ' + error.message);
+        }
+      }
+
+      async function stopAllMonitors() {
+        try {
+          const result = await apiCall('/api/social-media/service/stop-all', {
+            method: 'POST'
+          });
+          
+          loadServiceStatus();
+          loadMonitors();
+          showSuccess(`Stopped ${result.result.stopped} monitors`);
+        } catch (error) {
+          showError('Failed to stop monitors: ' + error.message);
+        }
+      }
+
+      function showServiceConfigModal() {
+        if (!serviceConfig) return;
+        
+        const form = document.getElementById('service-config-form');
+        form.querySelector('[name="auto_start_monitors"]').checked = serviceConfig.auto_start_monitors;
+        form.querySelector('[name="max_monitors_per_team"]').value = serviceConfig.max_monitors_per_team;
+        form.querySelector('[name="default_monitoring_interval"]').value = serviceConfig.default_monitoring_interval;
+        form.querySelector('[name="cost_warning_threshold"]').value = serviceConfig.service_settings.cost_warning_threshold;
+        form.querySelector('[name="max_posts_per_hour"]').value = serviceConfig.service_settings.max_posts_per_hour;
+        form.querySelector('[name="enable_cost_tracking"]').checked = serviceConfig.service_settings.enable_cost_tracking;
+        
+        document.getElementById('service-config-modal').classList.remove('hidden');
+      }
+
+      async function handleServiceConfigSubmit(e) {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+        
+        // Convert checkbox values to booleans
+        data.auto_start_monitors = data.auto_start_monitors === 'on';
+        data.enable_cost_tracking = data.enable_cost_tracking === 'on';
+        
+        // Convert numeric values
+        data.max_monitors_per_team = parseInt(data.max_monitors_per_team);
+        data.default_monitoring_interval = parseInt(data.default_monitoring_interval);
+        data.cost_warning_threshold = parseInt(data.cost_warning_threshold);
+        data.max_posts_per_hour = parseInt(data.max_posts_per_hour);
+        
+        try {
+          await apiCall('/api/social-media/service/config', {
+            method: 'PUT',
+            body: JSON.stringify(data)
+          });
+          
+          closeModal();
+          loadServiceConfig();
+          showSuccess('Service configuration updated successfully');
+        } catch (error) {
+          showError('Failed to update service configuration: ' + error.message);
+        }
+      }
+
+      // Close modals when clicking outside
+      document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('modal')) {
+          closeModal();
+        }
+      });
+    </script>
+  </body>
+</html>

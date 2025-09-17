@@ -25,6 +25,10 @@ import { SocketGateway } from './services/sockets';
 import { RetentionService } from './services/retention';
 import { AuditService } from './services/audit';
 import { SecurityService } from './services/security';
+import { SocialMediaMonitoringService } from './services/socialMediaMonitoring';
+import { ThreatDetectionService } from './services/threatDetection';
+import { SocialMediaConfigService } from './services/socialMediaConfig';
+import { createSocialMediaRouter } from './routes/socialMedia';
 
 // Placeholder imports for future optional services/routes
 // import { RedisService } from './services/redis';
@@ -64,6 +68,9 @@ const securityService = new SecurityService(configService);
 const syncService = new SyncService(io, databaseService);
 const auditService = new AuditService(databaseService);
 const retentionService = new RetentionService(databaseService, configService);
+const threatDetectionService = new ThreatDetectionService(databaseService);
+const socialMediaConfigService = new SocialMediaConfigService(databaseService);
+const socialMediaService = new SocialMediaMonitoringService(databaseService, threatDetectionService, syncService, socialMediaConfigService);
 
 // Security middleware
 app.use(helmet());
@@ -238,6 +245,9 @@ app.use('/api/auth', createAuthRouter(databaseService, configService));
 const auth = createAuthMiddleware(configService);
 app.use('/api/admin', auth.authenticate, auth.adminOnly, createAdminRouter(configService, databaseService, io));
 
+// Social media monitoring routes (admin only)
+app.use('/api/social-media', auth.authenticate, auth.adminOnly, createSocialMediaRouter(databaseService, socialMediaService, threatDetectionService, socialMediaConfigService));
+
 // Sync routes (auth required)
 app.use('/api/sync', auth.authenticate, createSyncRouter(syncService));
 
@@ -248,6 +258,17 @@ app.get('/admin', (_req: Request, res: Response) => {
   res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.socket.io https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net; worker-src 'self' blob:; connect-src 'self' https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://fonts.openmaptiles.org");
   const primary = path.resolve(__dirname, 'public', 'admin.html');
   const fallback = path.resolve(__dirname, '..', 'public', 'admin.html');
+  const file = fs.existsSync(primary) ? primary : fallback;
+  res.sendFile(file);
+});
+
+// Serve social media monitoring UI
+app.get('/social-media', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/html');
+  // CSP for social media admin: allow external APIs and CDNs
+  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.twitterapi.io https://api.openai.com");
+  const primary = path.resolve(__dirname, 'public', 'social-media.html');
+  const fallback = path.resolve(__dirname, '..', 'public', 'social-media.html');
   const file = fs.existsSync(primary) ? primary : fallback;
   res.sendFile(file);
 });
@@ -276,6 +297,9 @@ process.on('SIGTERM', async () => {
     logger.info('HTTP server closed');
   });
 
+  // Shutdown social media monitoring
+  await socialMediaService.shutdown();
+
   // Close database connections
   await databaseService.close();
 
@@ -289,6 +313,9 @@ process.on('SIGINT', async () => {
   server.close(() => {
     logger.info('HTTP server closed');
   });
+
+  // Shutdown social media monitoring
+  await socialMediaService.shutdown();
 
   // Close database connections
   await databaseService.close();

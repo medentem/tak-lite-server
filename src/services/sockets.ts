@@ -440,6 +440,15 @@ export class SocketGateway {
     }
   }
 
+  // Emit threat alert to team members
+  public emitThreatAlert(teamId: string, threatData: any) {
+    console.log('[SOCKET] Emitting threat alert:', { teamId, threatData });
+    this.io.to(`team:${teamId}`).emit('threat:new', {
+      ...threatData,
+      timestamp: new Date().toISOString()
+    });
+  }
+
   // Cleanup method to stop intervals
   public cleanup() {
     if (this.connectionCleanupInterval) {
