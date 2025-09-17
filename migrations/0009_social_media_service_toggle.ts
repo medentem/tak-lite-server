@@ -21,9 +21,7 @@ export async function up(knex: Knex): Promise<void> {
     max_monitors_per_team: 5,
     default_monitoring_interval: 300,
     service_settings: {
-      cost_warning_threshold: 100, // USD per month
-      max_posts_per_hour: 1000,
-      enable_cost_tracking: true
+      max_posts_per_hour: 1000
     }
   });
 

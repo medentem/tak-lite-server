@@ -316,11 +316,20 @@
           </div>
         </div>
 
+        <!-- Create Monitor Section -->
+        <div class="card">
+          <h2>Create New Monitor</h2>
+          <p style="color: var(--muted); margin-bottom: 20px;">Set up a new social media monitor to track threats and emergencies in real-time.</p>
+          <button onclick="showCreateMonitorModal()" class="success" id="create-monitor-btn" disabled style="padding: 12px 24px; font-size: 16px;">
+            + Create New Monitor
+          </button>
+        </div>
+
         <!-- Monitors Section -->
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h2>Social Media Monitors</h2>
-            <button onclick="showCreateMonitorModal()" class="success" id="create-monitor-btn" disabled>Create Monitor</button>
+            <h2>Active Monitors</h2>
+            <span id="monitor-count" class="pill">0 monitors</span>
           </div>
           
           <div id="monitors-grid" class="grid">
@@ -401,6 +410,12 @@
           <div class="form-group">
             <label>Monitor Name</label>
             <input type="text" name="name" placeholder="Emergency Services Monitor" required>
+          </div>
+          
+          <div class="form-group">
+            <label>TwitterAPI.io API Key</label>
+            <input type="password" name="api_credentials" placeholder="Your TwitterAPI.io API key" required>
+            <div class="help-text">Get your API key from <a href="https://twitterapi.io" target="_blank" style="color:var(--accent);">twitterapi.io</a></div>
           </div>
           
           <div class="form-group">
@@ -494,9 +509,9 @@
         
         <form id="service-config-form">
           <div class="form-group">
-            <label>
-              <input type="checkbox" name="auto_start_monitors" style="width:auto; margin-right:8px;">
-              Auto-start monitors when service is enabled
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" name="auto_start_monitors" style="width: auto; margin: 0;">
+              <span>Auto-start monitors when service is enabled</span>
             </label>
           </div>
           
@@ -513,22 +528,9 @@
           </div>
           
           <div class="form-group">
-            <label>Cost Warning Threshold ($)</label>
-            <input type="number" name="cost_warning_threshold" value="100" min="10" max="1000" step="10">
-            <div class="help-text">Monthly cost threshold for warnings</div>
-          </div>
-          
-          <div class="form-group">
             <label>Max Posts per Hour</label>
             <input type="number" name="max_posts_per_hour" value="1000" min="100" max="10000">
-            <div class="help-text">Rate limit for API calls</div>
-          </div>
-          
-          <div class="form-group">
-            <label>
-              <input type="checkbox" name="enable_cost_tracking" checked style="width:auto; margin-right:8px;">
-              Enable cost tracking and warnings
-            </label>
+            <div class="help-text">Rate limit for API calls to prevent excessive usage</div>
           </div>
           
           <div class="form-actions">
@@ -661,6 +663,13 @@
       // Render monitors
       function renderMonitors() {
         const grid = document.getElementById('monitors-grid');
+        const countEl = document.getElementById('monitor-count');
+        
+        // Update monitor count
+        if (countEl) {
+          countEl.textContent = `${monitors.length} monitor${monitors.length !== 1 ? 's' : ''}`;
+        }
+        
         if (monitors.length === 0) {
           grid.innerHTML = '<div style="text-align:center; color:var(--muted); padding:40px;">No monitors configured. Create one to get started.</div>';
           return;
@@ -875,6 +884,7 @@
         
         const form = document.getElementById('monitor-form');
         form.querySelector('[name="name"]').value = monitor.name;
+        form.querySelector('[name="api_credentials"]').value = ''; // Don't show existing API key for security
         form.querySelector('[name="search_query"]').value = monitor.search_query;
         form.querySelector('[name="query_type"]').value = monitor.query_type;
         form.querySelector('[name="monitoring_interval"]').value = monitor.monitoring_interval;
@@ -915,7 +925,7 @@
       // Test functions
       async function testConnection() {
         const form = document.getElementById('monitor-form');
-        const apiKey = form.querySelector('[name="api_key"]').value;
+        const apiKey = form.querySelector('[name="api_credentials"]').value;
         const searchQuery = form.querySelector('[name="search_query"]').value;
         
         if (!apiKey || !searchQuery) {
@@ -1085,9 +1095,7 @@
         form.querySelector('[name="auto_start_monitors"]').checked = serviceConfig.auto_start_monitors;
         form.querySelector('[name="max_monitors_per_team"]').value = serviceConfig.max_monitors_per_team;
         form.querySelector('[name="default_monitoring_interval"]').value = serviceConfig.default_monitoring_interval;
-        form.querySelector('[name="cost_warning_threshold"]').value = serviceConfig.service_settings.cost_warning_threshold;
         form.querySelector('[name="max_posts_per_hour"]').value = serviceConfig.service_settings.max_posts_per_hour;
-        form.querySelector('[name="enable_cost_tracking"]').checked = serviceConfig.service_settings.enable_cost_tracking;
         
         document.getElementById('service-config-modal').classList.remove('hidden');
       }
@@ -1099,12 +1107,10 @@
         
         // Convert checkbox values to booleans
         data.auto_start_monitors = data.auto_start_monitors === 'on';
-        data.enable_cost_tracking = data.enable_cost_tracking === 'on';
         
         // Convert numeric values
         data.max_monitors_per_team = parseInt(data.max_monitors_per_team);
         data.default_monitoring_interval = parseInt(data.default_monitoring_interval);
-        data.cost_warning_threshold = parseInt(data.cost_warning_threshold);
         data.max_posts_per_hour = parseInt(data.max_posts_per_hour);
         
         try {

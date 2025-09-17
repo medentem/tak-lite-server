@@ -464,9 +464,7 @@ export function createSocialMediaRouter(
         auto_start_monitors, 
         max_monitors_per_team, 
         default_monitoring_interval,
-        cost_warning_threshold,
-        max_posts_per_hour,
-        enable_cost_tracking
+        max_posts_per_hour
       } = req.body;
 
       const updates: any = {};
@@ -479,15 +477,8 @@ export function createSocialMediaRouter(
         await configService.updateServiceConfig(updates);
       }
 
-      if (cost_warning_threshold !== undefined || max_posts_per_hour !== undefined || enable_cost_tracking !== undefined) {
-        await configService.updateCostSettings({
-          warning_threshold: cost_warning_threshold,
-          tracking_enabled: enable_cost_tracking
-        });
-        
-        if (max_posts_per_hour !== undefined) {
-          await configService.updateUsageLimits({ max_posts_per_hour });
-        }
+      if (max_posts_per_hour !== undefined) {
+        await configService.updateUsageLimits({ max_posts_per_hour });
       }
 
       const config = await configService.getServiceConfig();

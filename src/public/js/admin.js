@@ -429,6 +429,7 @@ function showDash(show) {
   q('#dash').classList.toggle('hidden', !show);
   q('#logout').classList.toggle('hidden', !show);
   q('#who').classList.toggle('hidden', !show);
+  q('#adminNav').classList.toggle('hidden', !show);
   
   if (show) {
     // Initialize message monitoring controls

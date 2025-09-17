@@ -70,25 +70,6 @@ export class SocialMediaConfigService {
     return config.service_enabled;
   }
 
-  async getCostSettings(): Promise<{ warning_threshold: number; tracking_enabled: boolean }> {
-    const config = await this.getServiceConfig();
-    return {
-      warning_threshold: config.service_settings.cost_warning_threshold,
-      tracking_enabled: config.service_settings.enable_cost_tracking
-    };
-  }
-
-  async updateCostSettings(settings: { warning_threshold?: number; tracking_enabled?: boolean }): Promise<void> {
-    const currentConfig = await this.getServiceConfig();
-    const updatedSettings = {
-      ...currentConfig.service_settings,
-      ...settings
-    };
-
-    await this.updateServiceConfig({
-      service_settings: updatedSettings
-    });
-  }
 
   async getUsageLimits(): Promise<{ max_monitors_per_team: number; max_posts_per_hour: number }> {
     const config = await this.getServiceConfig();
@@ -176,9 +157,7 @@ export class SocialMediaConfigService {
         max_monitors_per_team: 5,
         default_monitoring_interval: 300,
         service_settings: {
-          cost_warning_threshold: 100,
-          max_posts_per_hour: 1000,
-          enable_cost_tracking: true
+          max_posts_per_hour: 1000
         },
         created_at: new Date(),
         updated_at: new Date()
@@ -215,22 +194,4 @@ export class SocialMediaConfigService {
     logger.info('Reset daily usage counters for social media monitors');
   }
 
-  // Check if service should be paused due to cost limits
-  async shouldPauseService(): Promise<{ should_pause: boolean; reason?: string }> {
-    const config = await this.getServiceConfig();
-    const status = await this.getServiceStatus();
-
-    if (!config.service_settings.enable_cost_tracking) {
-      return { should_pause: false };
-    }
-
-    if (status.estimated_monthly_cost > config.service_settings.cost_warning_threshold) {
-      return {
-        should_pause: true,
-        reason: `Estimated monthly cost ($${status.estimated_monthly_cost}) exceeds threshold ($${config.service_settings.cost_warning_threshold})`
-      };
-    }
-
-    return { should_pause: false };
-  }
 }
