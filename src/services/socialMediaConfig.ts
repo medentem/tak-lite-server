@@ -8,9 +8,7 @@ export interface SocialMediaServiceConfig {
   max_monitors_per_team: number;
   default_monitoring_interval: number;
   service_settings: {
-    cost_warning_threshold: number;
     max_posts_per_hour: number;
-    enable_cost_tracking: boolean;
   };
   created_at: Date;
   updated_at: Date;
