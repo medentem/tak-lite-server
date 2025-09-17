@@ -268,17 +268,27 @@
     <div class="container">
       <header>
         <div class="brand">TAK Lite Admin</div>
-        <nav class="nav-links">
-          <a href="/admin">Dashboard</a>
-          <a href="/admin/users">Users</a>
-          <a href="/admin/teams">Teams</a>
-          <a href="/admin/system">System</a>
-          <a href="/social-media" class="active">Social Media</a>
-        </nav>
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <nav class="nav-links">
+            <a href="/admin">Dashboard</a>
+            <a href="/admin/users">Users</a>
+            <a href="/admin/teams">Teams</a>
+            <a href="/social-media" class="active">Social Media</a>
+          </nav>
+          <button onclick="logout()" class="secondary" style="padding: 8px 16px;">Logout</button>
+        </div>
       </header>
 
+      <!-- Loading Overlay -->
+      <div id="loading-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(11, 18, 32, 0.9); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+        <div style="text-align: center; color: var(--text);">
+          <div style="font-size: 18px; margin-bottom: 16px;">Loading Social Media Monitoring...</div>
+          <div style="font-size: 14px; color: var(--muted);">Please wait while we authenticate and load your data.</div>
+        </div>
+      </div>
+
       <!-- Main Content -->
-      <div id="main-content">
+      <div id="main-content" style="display: none;">
         <!-- Service Status Section -->
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -441,13 +451,6 @@
             <div class="help-text">How often to check for new posts (60-3600 seconds)</div>
           </div>
           
-          <div class="form-group">
-            <label>TwitterAPI.io API Key</label>
-            <input type="password" name="api_key" placeholder="Your twitterapi.io API key" required>
-            <div class="help-text">
-              Get your API key from <a href="https://twitterapi.io" target="_blank" style="color:var(--accent);">twitterapi.io</a>
-            </div>
-          </div>
           
           <div class="form-actions">
             <button type="button" onclick="testConnection()" class="secondary">Test Connection</button>
@@ -549,14 +552,46 @@
       let serviceStatus = null;
       let serviceConfig = null;
 
+      // Check authentication
+      function checkAuth() {
+        const token = localStorage.getItem('taklite:token');
+        if (!token) {
+          window.location.href = '/admin';
+          return false;
+        }
+        return true;
+      }
+
+      // Logout function
+      function logout() {
+        localStorage.removeItem('taklite:token');
+        window.location.href = '/admin';
+      }
+
       // Initialize the page
-      document.addEventListener('DOMContentLoaded', function() {
-        loadServiceStatus();
-        loadServiceConfig();
-        loadMonitors();
-        loadAIConfig();
-        loadThreats();
-        loadThreatStatistics();
+      document.addEventListener('DOMContentLoaded', async function() {
+        if (!checkAuth()) return;
+        
+        try {
+          // Load all data in parallel
+          await Promise.all([
+            loadServiceStatus(),
+            loadServiceConfig(),
+            loadMonitors(),
+            loadAIConfig(),
+            loadThreats(),
+            loadThreatStatistics()
+          ]);
+          
+          // Hide loading overlay and show main content
+          document.getElementById('loading-overlay').style.display = 'none';
+          document.getElementById('main-content').style.display = 'block';
+        } catch (error) {
+          console.error('Failed to load page data:', error);
+          // Still show the page even if some data fails to load
+          document.getElementById('loading-overlay').style.display = 'none';
+          document.getElementById('main-content').style.display = 'block';
+        }
         
         // Set up event listeners
         document.getElementById('threat-level-filter').addEventListener('change', filterThreats);
@@ -571,7 +606,7 @@
 
       // API functions
       async function apiCall(endpoint, options = {}) {
-        const token = localStorage.getItem('admin_token');
+        const token = localStorage.getItem('taklite:token');
         const response = await fetch(endpoint, {
           ...options,
           headers: {
@@ -582,6 +617,12 @@
         });
         
         if (!response.ok) {
+          if (response.status === 401) {
+            // Token expired or invalid, redirect to login
+            localStorage.removeItem('taklite:token');
+            window.location.href = '/admin';
+            return;
+          }
           const error = await response.json();
           throw new Error(error.error || 'API call failed');
         }
