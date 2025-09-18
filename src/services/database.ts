@@ -53,8 +53,8 @@ export class DatabaseService {
         ssl: sslConfig
       },
       migrations: {
-        // When compiled, this file lives at dist/src/services, so go up to dist/migrations
-        directory: path.resolve(__dirname, '..', '..', 'migrations')
+        // Use the same path as knexfile.ts - migrations are in the root migrations folder
+        directory: path.resolve(process.cwd(), 'migrations')
       }
     });
   }
@@ -65,11 +65,25 @@ export class DatabaseService {
 
   async migrateToLatest(): Promise<void> {
     try {
-      await this.knexInstance.migrate.latest();
-      logger.info('Database migrations applied');
+      // Check current migration status
+      const currentVersion = await this.knexInstance.migrate.currentVersion();
+      logger.info('Current migration version', { currentVersion });
+      
+      // Get pending migrations
+      const pendingMigrations = await this.knexInstance.migrate.list();
+      logger.info('Migration status', { pendingMigrations });
+      
+      // Run migrations
+      const result = await this.knexInstance.migrate.latest();
+      logger.info('Database migrations applied', { result });
     } catch (err) {
       const e = err as any;
-      logger.error('Failed to apply migrations', { message: e?.message, code: e?.code, stack: e?.stack });
+      logger.error('Failed to apply migrations', { 
+        message: e?.message, 
+        code: e?.code, 
+        stack: e?.stack,
+        migrationPath: path.resolve(process.cwd(), 'migrations')
+      });
       throw err;
     }
   }
