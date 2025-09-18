@@ -874,6 +874,13 @@
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
         
+        // Convert api_credentials string to object format expected by API
+        if (data.api_credentials) {
+          data.api_credentials = {
+            api_key: data.api_credentials
+          };
+        }
+        
         try {
           if (currentMonitorId) {
             await apiCall(`/api/social-media/monitors/${currentMonitorId}`, {
