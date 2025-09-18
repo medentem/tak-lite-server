@@ -61,16 +61,18 @@ const io = new Server(server, {
   }
 });
 
-// Initialize services
+// Initialize core services (before migrations)
 const databaseService = new DatabaseService();
 const configService = new ConfigService(databaseService);
 const securityService = new SecurityService(configService);
 const syncService = new SyncService(io, databaseService);
 const auditService = new AuditService(databaseService);
 const retentionService = new RetentionService(databaseService, configService);
-const threatDetectionService = new ThreatDetectionService(databaseService);
-const socialMediaConfigService = new SocialMediaConfigService(databaseService);
-const socialMediaService = new SocialMediaMonitoringService(databaseService, threatDetectionService, syncService, socialMediaConfigService);
+
+// Social media services will be initialized after migrations
+let threatDetectionService: ThreatDetectionService;
+let socialMediaConfigService: SocialMediaConfigService;
+let socialMediaService: SocialMediaMonitoringService;
 
 // Security middleware
 app.use(helmet());
@@ -245,8 +247,7 @@ app.use('/api/auth', createAuthRouter(databaseService, configService));
 const auth = createAuthMiddleware(configService);
 app.use('/api/admin', auth.authenticate, auth.adminOnly, createAdminRouter(configService, databaseService, io));
 
-// Social media monitoring routes (admin only)
-app.use('/api/social-media', auth.authenticate, auth.adminOnly, createSocialMediaRouter(databaseService, socialMediaService, threatDetectionService, socialMediaConfigService));
+// Social media monitoring routes will be registered after migrations
 
 // Sync routes (auth required)
 app.use('/api/sync', auth.authenticate, createSyncRouter(syncService));
@@ -327,6 +328,14 @@ process.on('SIGINT', async () => {
 (async () => {
   try {
     await databaseService.migrateToLatest();
+    
+    // Initialize social media services after migrations
+    threatDetectionService = new ThreatDetectionService(databaseService);
+    socialMediaConfigService = new SocialMediaConfigService(databaseService);
+    socialMediaService = new SocialMediaMonitoringService(databaseService, threatDetectionService, syncService, socialMediaConfigService);
+    
+    // Register social media routes after services are initialized
+    app.use('/api/social-media', auth.authenticate, auth.adminOnly, createSocialMediaRouter(databaseService, socialMediaService, threatDetectionService, socialMediaConfigService));
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, () => {
       logger.info(`TAK Lite Server running on port ${PORT}`);
