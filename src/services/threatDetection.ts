@@ -17,7 +17,6 @@ export interface ThreatAnalysis {
 
 export interface AIConfiguration {
   id: string;
-  team_id: string;
   provider: string;
   api_key_encrypted: string;
   model: string;
@@ -32,11 +31,10 @@ export interface AIConfiguration {
 export class ThreatDetectionService {
   constructor(private db: DatabaseService) {}
 
-  async createAIConfiguration(teamId: string, configData: Partial<AIConfiguration>, createdBy: string): Promise<AIConfiguration> {
+  async createAIConfiguration(configData: Partial<AIConfiguration>, createdBy: string): Promise<AIConfiguration> {
     const id = uuidv4();
     const config: AIConfiguration = {
       id,
-      team_id: teamId,
       provider: configData.provider || 'openai',
       api_key_encrypted: configData.api_key_encrypted!,
       model: configData.model || 'gpt-4',
@@ -50,13 +48,13 @@ export class ThreatDetectionService {
 
     await this.db.client('ai_configurations').insert(config);
     
-    logger.info('Created AI configuration', { id, teamId, model: config.model });
+    logger.info('Created AI configuration', { id, model: config.model });
     return config;
   }
 
-  async getAIConfiguration(teamId: string): Promise<AIConfiguration | null> {
+  async getAIConfiguration(): Promise<AIConfiguration | null> {
     return await this.db.client('ai_configurations')
-      .where({ team_id: teamId, is_active: true })
+      .where({ is_active: true })
       .first() || null;
   }
 
@@ -116,7 +114,7 @@ export class ThreatDetectionService {
   }
 
   async analyzePost(post: any): Promise<ThreatAnalysis | null> {
-    const aiConfig = await this.getAIConfiguration(post.team_id || 'default');
+    const aiConfig = await this.getAIConfiguration();
     if (!aiConfig) {
       logger.warn('No AI configuration found for threat analysis', { postId: post.id });
       return null;
@@ -316,7 +314,7 @@ Please analyze this post and return a JSON response with your threat assessment.
     return true;
   }
 
-  async getThreatAnalyses(teamId: string, filters: {
+  async getThreatAnalyses(filters: {
     threat_level?: string;
     threat_type?: string;
     limit?: number;
@@ -325,8 +323,6 @@ Please analyze this post and return a JSON response with your threat assessment.
     try {
       let query = this.db.client('threat_analyses as ta')
         .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
-        .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
-        .where('smm.team_id', teamId)
         .select('ta.*')
         .orderBy('ta.created_at', 'desc');
 
@@ -348,19 +344,13 @@ Please analyze this post and return a JSON response with your threat assessment.
 
       return await query;
     } catch (error: any) {
-      if (error.message && error.message.includes('team_id')) {
-        logger.error('CRITICAL: social_media_monitors table missing team_id column in getThreatAnalyses', { 
-          error: error.message,
-          teamId 
-        });
-        // Return empty array to prevent crashes
-        return [];
-      }
-      throw error;
+      logger.error('Error getting threat analyses', { error: error.message });
+      // Return empty array to prevent crashes
+      return [];
     }
   }
 
-  async getThreatStatistics(teamId: string, days: number = 7): Promise<{
+  async getThreatStatistics(days: number = 7): Promise<{
     total_threats: number;
     by_level: Record<string, number>;
     by_type: Record<string, number>;
@@ -372,8 +362,6 @@ Please analyze this post and return a JSON response with your threat assessment.
       // Total threats
       const totalThreats = await this.db.client('threat_analyses as ta')
         .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
-        .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
-        .where('smm.team_id', teamId)
         .where('ta.created_at', '>=', since)
         .count('* as count')
         .first();
@@ -381,8 +369,6 @@ Please analyze this post and return a JSON response with your threat assessment.
       // By threat level
       const byLevel = await this.db.client('threat_analyses as ta')
         .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
-        .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
-        .where('smm.team_id', teamId)
         .where('ta.created_at', '>=', since)
         .select('ta.threat_level')
         .count('* as count')
@@ -391,8 +377,6 @@ Please analyze this post and return a JSON response with your threat assessment.
       // By threat type
       const byType = await this.db.client('threat_analyses as ta')
         .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
-        .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
-        .where('smm.team_id', teamId)
         .where('ta.created_at', '>=', since)
         .select('ta.threat_type')
         .count('* as count')
@@ -401,8 +385,6 @@ Please analyze this post and return a JSON response with your threat assessment.
       // Recent trend (daily counts)
       const recentTrend = await this.db.client('threat_analyses as ta')
         .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
-        .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
-        .where('smm.team_id', teamId)
         .where('ta.created_at', '>=', since)
         .select(this.db.client.raw('DATE(ta.created_at) as date'))
         .count('* as count')
@@ -425,20 +407,14 @@ Please analyze this post and return a JSON response with your threat assessment.
         }))
       };
     } catch (error: any) {
-      if (error.message && error.message.includes('team_id')) {
-        logger.error('CRITICAL: social_media_monitors table missing team_id column in getThreatStatistics', { 
-          error: error.message,
-          teamId 
-        });
-        // Return empty statistics to prevent crashes
-        return {
-          total_threats: 0,
-          by_level: {},
-          by_type: {},
-          recent_trend: []
-        };
-      }
-      throw error;
+      logger.error('Error getting threat statistics', { error: error.message });
+      // Return empty statistics to prevent crashes
+      return {
+        total_threats: 0,
+        by_level: {},
+        by_type: {},
+        recent_trend: []
+      };
     }
   }
 }

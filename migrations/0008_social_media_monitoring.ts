@@ -4,7 +4,6 @@ export async function up(knex: Knex): Promise<void> {
   // Social media monitoring configurations
   await knex.schema.createTable('social_media_monitors', (t) => {
     t.uuid('id').primary();
-    t.uuid('team_id').notNullable().references('teams.id').onDelete('CASCADE');
     t.string('name').notNullable();
     t.string('platform').defaultTo('twitter');
     t.string('api_provider').defaultTo('twitterapi_io');
@@ -52,7 +51,6 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('threat_annotations', (t) => {
     t.uuid('id').primary();
     t.uuid('threat_analysis_id').notNullable().references('threat_analyses.id').onDelete('CASCADE');
-    t.uuid('team_id').notNullable().references('teams.id').onDelete('CASCADE');
     t.string('annotation_type').defaultTo('threat_poi');
     t.jsonb('position').notNullable(); // {lat, lng, accuracy}
     t.string('threat_level').notNullable();
@@ -72,7 +70,6 @@ export async function up(knex: Knex): Promise<void> {
   // OpenAI API configuration
   await knex.schema.createTable('ai_configurations', (t) => {
     t.uuid('id').primary();
-    t.uuid('team_id').notNullable().references('teams.id').onDelete('CASCADE');
     t.string('provider').defaultTo('openai');
     t.text('api_key_encrypted').notNullable(); // Encrypted OpenAI API key
     t.string('model').defaultTo('gpt-4');
@@ -86,7 +83,6 @@ export async function up(knex: Knex): Promise<void> {
 
   // Add indexes for performance
   await knex.schema.alterTable('social_media_monitors', (t) => {
-    t.index(['team_id']);
     t.index(['is_active']);
   });
 
@@ -102,14 +98,12 @@ export async function up(knex: Knex): Promise<void> {
   });
 
   await knex.schema.alterTable('threat_annotations', (t) => {
-    t.index(['team_id']);
     t.index(['threat_level']);
     t.index(['is_verified']);
     t.index(['expires_at']);
   });
 
   await knex.schema.alterTable('ai_configurations', (t) => {
-    t.index(['team_id']);
     t.index(['is_active']);
   });
 }

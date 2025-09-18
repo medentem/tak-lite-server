@@ -48,11 +48,10 @@ export function createSocialMediaRouter(
     is_active: Joi.boolean().default(true)
   });
 
-  // Get all monitors for a team
+  // Get all monitors (global)
   router.get('/monitors', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const teamId = (req as any).user.teamId;
-      const monitors = await socialMediaService.getMonitors(teamId);
+      const monitors = await socialMediaService.getMonitors();
       
       // Remove sensitive API credentials from response
       const safeMonitors = monitors.map(monitor => ({
@@ -73,7 +72,7 @@ export function createSocialMediaRouter(
       const teamId = (req as any).user.teamId;
       
       const monitor = await socialMediaService.getMonitor(id);
-      if (!monitor || monitor.team_id !== teamId) {
+      if (!monitor) {
         return res.status(404).json({ error: 'Monitor not found' });
       }
 
@@ -100,7 +99,7 @@ export function createSocialMediaRouter(
         return res.status(400).json({ error: error.details[0].message });
       }
 
-      const monitor = await socialMediaService.createMonitor(teamId, value, userId);
+      const monitor = await socialMediaService.createMonitor(value, userId);
       
       // Remove sensitive API credentials from response
       const safeMonitor = {
@@ -126,7 +125,7 @@ export function createSocialMediaRouter(
       }
 
       const monitor = await socialMediaService.getMonitor(id);
-      if (!monitor || monitor.team_id !== teamId) {
+      if (!monitor) {
         return res.status(404).json({ error: 'Monitor not found' });
       }
 
@@ -151,7 +150,7 @@ export function createSocialMediaRouter(
       const teamId = (req as any).user.teamId;
       
       const monitor = await socialMediaService.getMonitor(id);
-      if (!monitor || monitor.team_id !== teamId) {
+      if (!monitor) {
         return res.status(404).json({ error: 'Monitor not found' });
       }
 
@@ -185,7 +184,7 @@ export function createSocialMediaRouter(
       const teamId = (req as any).user.teamId;
       
       const monitor = await socialMediaService.getMonitor(id);
-      if (!monitor || monitor.team_id !== teamId) {
+      if (!monitor) {
         return res.status(404).json({ error: 'Monitor not found' });
       }
 
@@ -202,7 +201,7 @@ export function createSocialMediaRouter(
       const teamId = (req as any).user.teamId;
       
       const monitor = await socialMediaService.getMonitor(id);
-      if (!monitor || monitor.team_id !== teamId) {
+      if (!monitor) {
         return res.status(404).json({ error: 'Monitor not found' });
       }
 
@@ -217,7 +216,7 @@ export function createSocialMediaRouter(
   router.get('/ai-config', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const teamId = (req as any).user.teamId;
-      const config = await threatDetectionService.getAIConfiguration(teamId);
+      const config = await threatDetectionService.getAIConfiguration();
       
       if (!config) {
         return res.status(404).json({ error: 'AI configuration not found' });
@@ -245,7 +244,7 @@ export function createSocialMediaRouter(
         return res.status(400).json({ error: error.details[0].message });
       }
 
-      const config = await threatDetectionService.createAIConfiguration(teamId, value, userId);
+      const config = await threatDetectionService.createAIConfiguration(value, userId);
       
       // Remove sensitive API key from response
       const safeConfig = {
@@ -309,7 +308,7 @@ export function createSocialMediaRouter(
       if (threat_level) filters.threat_level = threat_level as string;
       if (threat_type) filters.threat_type = threat_type as string;
 
-      const threats = await threatDetectionService.getThreatAnalyses(teamId, filters);
+      const threats = await threatDetectionService.getThreatAnalyses(filters);
       res.json({ threats });
     } catch (error) {
       next(error);
@@ -322,7 +321,7 @@ export function createSocialMediaRouter(
       const teamId = (req as any).user.teamId;
       const { days = 7 } = req.query;
       
-      const stats = await threatDetectionService.getThreatStatistics(teamId, parseInt(days as string));
+      const stats = await threatDetectionService.getThreatStatistics(parseInt(days as string));
       res.json({ statistics: stats });
     } catch (error) {
       next(error);

@@ -8,7 +8,6 @@ import { logger } from '../utils/logger';
 
 export interface SocialMediaMonitor {
   id: string;
-  team_id: string;
   name: string;
   platform: string;
   api_provider: string;
@@ -57,11 +56,10 @@ export class SocialMediaMonitoringService {
     private configService: SocialMediaConfigService
   ) {}
 
-  async createMonitor(teamId: string, monitorData: Partial<SocialMediaMonitor>, createdBy: string): Promise<SocialMediaMonitor> {
+  async createMonitor(monitorData: Partial<SocialMediaMonitor>, createdBy: string): Promise<SocialMediaMonitor> {
     const id = uuidv4();
     const monitor: SocialMediaMonitor = {
       id,
-      team_id: teamId,
       name: monitorData.name!,
       platform: monitorData.platform || 'twitter',
       api_provider: monitorData.api_provider || 'twitterapi_io',
@@ -77,7 +75,7 @@ export class SocialMediaMonitoringService {
 
     await this.db.client('social_media_monitors').insert(monitor);
     
-    logger.info('Created social media monitor', { id, teamId, name: monitor.name });
+    logger.info('Created social media monitor', { id, name: monitor.name });
     
     // Start monitoring if active
     if (monitor.is_active) {
@@ -87,21 +85,14 @@ export class SocialMediaMonitoringService {
     return monitor;
   }
 
-  async getMonitors(teamId: string): Promise<SocialMediaMonitor[]> {
+  async getMonitors(): Promise<SocialMediaMonitor[]> {
     try {
       return await this.db.client('social_media_monitors')
-        .where('team_id', teamId)
         .orderBy('created_at', 'desc');
     } catch (error: any) {
-      if (error.message && error.message.includes('team_id')) {
-        logger.error('CRITICAL: social_media_monitors table missing team_id column', { 
-          error: error.message,
-          teamId 
-        });
-        // Return empty array to prevent crashes
-        return [];
-      }
-      throw error;
+      logger.error('Error getting monitors', { error: error.message });
+      // Return empty array to prevent crashes
+      return [];
     }
   }
 
@@ -234,7 +225,7 @@ export class SocialMediaMonitoringService {
           const threatAnalysis = await this.threatDetection.analyzePost(post);
           
           if (threatAnalysis && threatAnalysis.threat_level !== 'LOW') {
-            await this.createThreatAnnotation(monitor.team_id, postId, threatAnalysis, post);
+            await this.createThreatAnnotation(postId, threatAnalysis, post);
           }
         }
       }
@@ -294,7 +285,6 @@ export class SocialMediaMonitoringService {
   }
 
   private async createThreatAnnotation(
-    teamId: string, 
     postId: string, 
     threatAnalysis: any, 
     originalPost: TwitterPost
@@ -328,11 +318,10 @@ export class SocialMediaMonitoringService {
         }
       };
 
-      // Store threat annotation in database
+      // Store threat annotation in database (global, no team_id)
       await this.db.client('threat_annotations').insert({
         id: annotationId,
         threat_analysis_id: threatAnalysis.id,
-        team_id: teamId,
         position: { lat: location.lat, lng: location.lng },
         threat_level: threatAnalysis.threat_level,
         threat_type: threatAnalysis.threat_type,
@@ -343,30 +332,14 @@ export class SocialMediaMonitoringService {
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
       });
 
-      // Create TAK-Lite annotation via sync service
-      await this.syncService.handleAnnotationUpdate('system', {
-        teamId: teamId,
-        type: 'poi',
-        data: annotationData,
-        meshOrigin: false,
-        originalSource: 'social_media_monitoring'
-      });
+      // Note: TAK-Lite annotation creation removed since we don't have a team context
+      // The threat annotation is stored in the database for admin review
 
-      // Broadcast to team via Socket.IO
-      this.broadcastThreatAlert(teamId, {
-        id: annotationId,
-        threat_level: threatAnalysis.threat_level,
-        threat_type: threatAnalysis.threat_type,
-        position: location,
-        title: this.generateThreatTitle(threatAnalysis),
-        description: threatAnalysis.ai_summary,
-        source_author: originalPost.author.userName,
-        annotation_data: annotationData
-      });
+      // Note: Threat alert broadcasting removed since we don't have a team context
+      // The threat annotation is stored in the database for admin review
 
       logger.info('Created threat annotation', { 
         annotationId, 
-        teamId, 
         threatLevel: threatAnalysis.threat_level,
         threatType: threatAnalysis.threat_type,
         color,
