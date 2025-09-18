@@ -219,7 +219,8 @@ export function createSocialMediaRouter(
       const config = await threatDetectionService.getAIConfiguration();
       
       if (!config) {
-        return res.status(404).json({ error: 'AI configuration not found' });
+        // Return null config instead of 404 - frontend can handle this
+        return res.json({ config: null });
       }
 
       // Remove sensitive API key from response

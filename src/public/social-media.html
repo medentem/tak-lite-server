@@ -755,7 +755,14 @@
         try {
           const data = await apiCall('/api/social-media/ai-config');
           aiConfig = data.config;
-          renderAIConfig();
+          
+          if (!aiConfig) {
+            // No AI configuration exists yet
+            document.getElementById('ai-config-status').innerHTML = 
+              '<div style="text-align:center; color:var(--muted); padding:20px;">No AI configuration found. Configure AI to enable threat detection.</div>';
+          } else {
+            renderAIConfig();
+          }
         } catch (error) {
           console.error('Failed to load AI config:', error);
           document.getElementById('ai-config-status').innerHTML = 
