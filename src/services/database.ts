@@ -76,6 +76,10 @@ export class DatabaseService {
       // Run migrations
       const result = await this.knexInstance.migrate.latest();
       logger.info('Database migrations applied', { result });
+      
+      // Verify critical tables exist after migrations
+      await this.verifyTablesExist();
+      
     } catch (err) {
       const e = err as any;
       logger.error('Failed to apply migrations', { 
@@ -85,6 +89,39 @@ export class DatabaseService {
         migrationPath: path.resolve(process.cwd(), 'migrations')
       });
       throw err;
+    }
+  }
+
+  private async verifyTablesExist(): Promise<void> {
+    try {
+      // Check if social media tables exist and have expected columns
+      const tables = ['social_media_monitors', 'social_media_posts', 'threat_analyses', 'threat_annotations', 'ai_configurations'];
+      
+      for (const table of tables) {
+        const exists = await this.knexInstance.schema.hasTable(table);
+        logger.info(`Table ${table} exists`, { exists });
+        
+        if (exists) {
+          // Check for critical columns
+          const columns = await this.knexInstance(table).columnInfo();
+          logger.info(`Table ${table} columns`, { columns: Object.keys(columns) });
+          
+          // Check for team_id column specifically
+          if (table === 'social_media_monitors' || table === 'ai_configurations') {
+            const hasTeamId = columns.hasOwnProperty('team_id');
+            logger.info(`Table ${table} has team_id column`, { hasTeamId });
+            
+            if (!hasTeamId) {
+              logger.error(`CRITICAL: Table ${table} missing team_id column!`, { 
+                table, 
+                existingColumns: Object.keys(columns) 
+              });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      logger.error('Error verifying tables', { error: err });
     }
   }
 

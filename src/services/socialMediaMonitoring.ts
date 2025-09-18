@@ -88,9 +88,21 @@ export class SocialMediaMonitoringService {
   }
 
   async getMonitors(teamId: string): Promise<SocialMediaMonitor[]> {
-    return await this.db.client('social_media_monitors')
-      .where('team_id', teamId)
-      .orderBy('created_at', 'desc');
+    try {
+      return await this.db.client('social_media_monitors')
+        .where('team_id', teamId)
+        .orderBy('created_at', 'desc');
+    } catch (error: any) {
+      if (error.message && error.message.includes('team_id')) {
+        logger.error('CRITICAL: social_media_monitors table missing team_id column', { 
+          error: error.message,
+          teamId 
+        });
+        // Return empty array to prevent crashes
+        return [];
+      }
+      throw error;
+    }
   }
 
   async getMonitor(monitorId: string): Promise<SocialMediaMonitor | null> {

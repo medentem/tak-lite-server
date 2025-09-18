@@ -322,30 +322,42 @@ Please analyze this post and return a JSON response with your threat assessment.
     limit?: number;
     offset?: number;
   } = {}): Promise<ThreatAnalysis[]> {
-    let query = this.db.client('threat_analyses as ta')
-      .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
-      .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
-      .where('smm.team_id', teamId)
-      .select('ta.*')
-      .orderBy('ta.created_at', 'desc');
+    try {
+      let query = this.db.client('threat_analyses as ta')
+        .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
+        .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
+        .where('smm.team_id', teamId)
+        .select('ta.*')
+        .orderBy('ta.created_at', 'desc');
 
-    if (filters.threat_level) {
-      query = query.where('ta.threat_level', filters.threat_level);
+      if (filters.threat_level) {
+        query = query.where('ta.threat_level', filters.threat_level);
+      }
+
+      if (filters.threat_type) {
+        query = query.where('ta.threat_type', filters.threat_type);
+      }
+
+      if (filters.limit) {
+        query = query.limit(filters.limit);
+      }
+
+      if (filters.offset) {
+        query = query.offset(filters.offset);
+      }
+
+      return await query;
+    } catch (error: any) {
+      if (error.message && error.message.includes('team_id')) {
+        logger.error('CRITICAL: social_media_monitors table missing team_id column in getThreatAnalyses', { 
+          error: error.message,
+          teamId 
+        });
+        // Return empty array to prevent crashes
+        return [];
+      }
+      throw error;
     }
-
-    if (filters.threat_type) {
-      query = query.where('ta.threat_type', filters.threat_type);
-    }
-
-    if (filters.limit) {
-      query = query.limit(filters.limit);
-    }
-
-    if (filters.offset) {
-      query = query.offset(filters.offset);
-    }
-
-    return await query;
   }
 
   async getThreatStatistics(teamId: string, days: number = 7): Promise<{
@@ -354,62 +366,79 @@ Please analyze this post and return a JSON response with your threat assessment.
     by_type: Record<string, number>;
     recent_trend: Array<{ date: string; count: number }>;
   }> {
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    try {
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-    // Total threats
-    const totalThreats = await this.db.client('threat_analyses as ta')
-      .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
-      .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
-      .where('smm.team_id', teamId)
-      .where('ta.created_at', '>=', since)
-      .count('* as count')
-      .first();
+      // Total threats
+      const totalThreats = await this.db.client('threat_analyses as ta')
+        .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
+        .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
+        .where('smm.team_id', teamId)
+        .where('ta.created_at', '>=', since)
+        .count('* as count')
+        .first();
 
-    // By threat level
-    const byLevel = await this.db.client('threat_analyses as ta')
-      .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
-      .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
-      .where('smm.team_id', teamId)
-      .where('ta.created_at', '>=', since)
-      .select('ta.threat_level')
-      .count('* as count')
-      .groupBy('ta.threat_level');
+      // By threat level
+      const byLevel = await this.db.client('threat_analyses as ta')
+        .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
+        .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
+        .where('smm.team_id', teamId)
+        .where('ta.created_at', '>=', since)
+        .select('ta.threat_level')
+        .count('* as count')
+        .groupBy('ta.threat_level');
 
-    // By threat type
-    const byType = await this.db.client('threat_analyses as ta')
-      .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
-      .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
-      .where('smm.team_id', teamId)
-      .where('ta.created_at', '>=', since)
-      .select('ta.threat_type')
-      .count('* as count')
-      .groupBy('ta.threat_type');
+      // By threat type
+      const byType = await this.db.client('threat_analyses as ta')
+        .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
+        .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
+        .where('smm.team_id', teamId)
+        .where('ta.created_at', '>=', since)
+        .select('ta.threat_type')
+        .count('* as count')
+        .groupBy('ta.threat_type');
 
-    // Recent trend (daily counts)
-    const recentTrend = await this.db.client('threat_analyses as ta')
-      .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
-      .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
-      .where('smm.team_id', teamId)
-      .where('ta.created_at', '>=', since)
-      .select(this.db.client.raw('DATE(ta.created_at) as date'))
-      .count('* as count')
-      .groupBy(this.db.client.raw('DATE(ta.created_at)'))
-      .orderBy('date', 'asc');
+      // Recent trend (daily counts)
+      const recentTrend = await this.db.client('threat_analyses as ta')
+        .join('social_media_posts as smp', 'ta.post_id', 'smp.id')
+        .join('social_media_monitors as smm', 'smp.monitor_id', 'smm.id')
+        .where('smm.team_id', teamId)
+        .where('ta.created_at', '>=', since)
+        .select(this.db.client.raw('DATE(ta.created_at) as date'))
+        .count('* as count')
+        .groupBy(this.db.client.raw('DATE(ta.created_at)'))
+        .orderBy('date', 'asc');
 
-    return {
-      total_threats: parseInt(totalThreats?.count as string) || 0,
-      by_level: byLevel.reduce((acc: any, row: any) => {
-        acc[row.threat_level] = parseInt(row.count);
-        return acc;
-      }, {}),
-      by_type: byType.reduce((acc: any, row: any) => {
-        acc[row.threat_type] = parseInt(row.count);
-        return acc;
-      }, {}),
-      recent_trend: recentTrend.map((row: any) => ({
-        date: row.date,
-        count: parseInt(row.count)
-      }))
-    };
+      return {
+        total_threats: parseInt(totalThreats?.count as string) || 0,
+        by_level: byLevel.reduce((acc: any, row: any) => {
+          acc[row.threat_level] = parseInt(row.count);
+          return acc;
+        }, {}),
+        by_type: byType.reduce((acc: any, row: any) => {
+          acc[row.threat_type] = parseInt(row.count);
+          return acc;
+        }, {}),
+        recent_trend: recentTrend.map((row: any) => ({
+          date: row.date,
+          count: parseInt(row.count)
+        }))
+      };
+    } catch (error: any) {
+      if (error.message && error.message.includes('team_id')) {
+        logger.error('CRITICAL: social_media_monitors table missing team_id column in getThreatStatistics', { 
+          error: error.message,
+          teamId 
+        });
+        // Return empty statistics to prevent crashes
+        return {
+          total_threats: 0,
+          by_level: {},
+          by_type: {},
+          recent_trend: []
+        };
+      }
+      throw error;
+    }
   }
 }
