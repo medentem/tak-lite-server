@@ -9,6 +9,7 @@ export async function up(knex: Knex): Promise<void> {
     t.timestamp('reviewed_at').nullable(); // When it was reviewed
     t.uuid('annotation_id').nullable().references('annotations.id'); // Link to created annotation
     t.jsonb('reasoning').nullable(); // AI reasoning for the threat assessment
+    t.timestamp('updated_at').defaultTo(knex.fn.now()); // Track when record was last updated
   });
 
   // Add index for efficient querying by admin status
@@ -38,5 +39,6 @@ export async function down(knex: Knex): Promise<void> {
     t.dropColumn('reviewed_at');
     t.dropColumn('annotation_id');
     t.dropColumn('reasoning');
+    t.dropColumn('updated_at');
   });
 }
