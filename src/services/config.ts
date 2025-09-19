@@ -3,6 +3,7 @@ import { DatabaseService } from './database';
 type ConfigKey =
   | 'setup.completed'
   | 'security.jwt_secret'
+  | 'security.encryption_key'
   | 'security.cors_origin'
   | 'org.name'
   | 'features.redis_enabled'

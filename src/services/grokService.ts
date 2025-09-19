@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from './database';
+import { SecurityService } from './security';
+import { ConfigService } from './config';
 import { logger } from '../utils/logger';
 
 export interface GrokConfiguration {
@@ -55,13 +57,20 @@ export interface GeographicalSearch {
 }
 
 export class GrokService {
-  constructor(private db: DatabaseService) {}
+  private securityService: SecurityService;
+
+  constructor(private db: DatabaseService) {
+    const configService = new ConfigService(db);
+    this.securityService = new SecurityService(configService);
+  }
 
   async createGrokConfiguration(configData: Partial<GrokConfiguration>, createdBy: string): Promise<GrokConfiguration> {
     const id = uuidv4();
+    const encryptedApiKey = await this.securityService.encryptApiKey(configData.api_key_encrypted!);
+    
     const config: GrokConfiguration = {
       id,
-      api_key_encrypted: configData.api_key_encrypted!,
+      api_key_encrypted: encryptedApiKey,
       model: configData.model || 'grok-4-latest',
       max_tokens: configData.max_tokens || 2000,
       temperature: configData.temperature || 0.3,
@@ -89,6 +98,11 @@ export class GrokService {
       ...updates,
       updated_at: new Date()
     };
+
+    // Encrypt API key if it's being updated
+    if (updateData.api_key_encrypted) {
+      updateData.api_key_encrypted = await this.securityService.encryptApiKey(updateData.api_key_encrypted);
+    }
 
     await this.db.client('grok_configurations')
       .where('id', configId)
@@ -224,9 +238,11 @@ export class GrokService {
             requestBody
         );
 
+        const decryptedApiKey = await this.securityService.decryptApiKey(grokConfig.api_key_encrypted);
+        
         const response = await axios.post('https://api.x.ai/v1/chat/completions', requestBody, {
           headers: {
-            'Authorization': `Bearer ${grokConfig.api_key_encrypted}`,
+            'Authorization': `Bearer ${decryptedApiKey}`,
             'Content-Type': 'application/json'
           },
           timeout: 60000 // 60 second timeout for complex searches
@@ -381,7 +397,7 @@ export class GrokService {
         }
       });
       
-      const response = await axios.post('https://api.x.ai/v1/chat/completions', {
+      const response = await axios.post('https://api.x.ai/v1/completions', {
         model: grokConfig.model,
         messages: [
           {
@@ -401,7 +417,7 @@ export class GrokService {
         }
       }, {
         headers: {
-          'Authorization': `Bearer ${grokConfig.api_key_encrypted}`,
+          'Authorization': `Bearer ${await this.securityService.decryptApiKey(grokConfig.api_key_encrypted)}`,
           'Content-Type': 'application/json'
         },
         timeout: 30000

@@ -44,6 +44,38 @@ export class SecurityService {
     const ok = await bcrypt.compare(plain, hash);
     return { ok, needsRehash: ok };
   }
+
+  // API key encryption/decryption
+  async getEncryptionKey(): Promise<string> {
+    const env = process.env.ENCRYPTION_KEY?.trim();
+    if (env) return env;
+    const stored = await this.config.get<string>('security.encryption_key');
+    if (stored && stored.trim().length >= 32) return stored;
+    throw new Error('Server not configured: missing encryption key');
+  }
+
+  async encryptApiKey(apiKey: string): Promise<string> {
+    const key = await this.getEncryptionKey();
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipher('aes-256-cbc', key);
+    let encrypted = cipher.update(apiKey, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return iv.toString('hex') + ':' + encrypted;
+  }
+
+  async decryptApiKey(encryptedApiKey: string): Promise<string> {
+    const key = await this.getEncryptionKey();
+    const parts = encryptedApiKey.split(':');
+    if (parts.length !== 2) {
+      throw new Error('Invalid encrypted API key format');
+    }
+    const iv = Buffer.from(parts[0], 'hex');
+    const encrypted = parts[1];
+    const decipher = crypto.createDecipher('aes-256-cbc', key);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  }
 }
 
 
