@@ -114,9 +114,23 @@ export class GrokService {
 
   async testGrokConnection(apiKey: string, model: string = 'grok-4-latest'): Promise<{ success: boolean; error?: string; model?: string }> {
     try {
+      // Clean the API key to remove any potential formatting issues
+      const cleanApiKey = apiKey.trim().replace(/[\r\n\t]/g, '');
+      
+      // Debug: Log API key info (without exposing the actual key)
+      logger.info('Grok test API key debug', {
+        originalLength: apiKey.length,
+        cleanLength: cleanApiKey.length,
+        keyPrefix: cleanApiKey.substring(0, 8),
+        hadNewlines: apiKey.includes('\n'),
+        hadCarriageReturns: apiKey.includes('\r'),
+        hadTabs: apiKey.includes('\t'),
+        hasInvalidChars: /[^\x20-\x7E]/.test(cleanApiKey)
+      });
+
       const axiosConfig = {
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${cleanApiKey}`,
           'Content-Type': 'application/json'
         },
         timeout: 10000
@@ -236,9 +250,23 @@ export class GrokService {
 
         const decryptedApiKey = await this.securityService.decryptApiKey(grokConfig.api_key_encrypted);
         
+        // Clean the API key to remove any potential formatting issues
+        const cleanApiKey = decryptedApiKey.trim().replace(/[\r\n\t]/g, '');
+        
+        // Debug: Log API key info (without exposing the actual key)
+        logger.info('Grok API key debug', {
+          originalLength: decryptedApiKey.length,
+          cleanLength: cleanApiKey.length,
+          keyPrefix: cleanApiKey.substring(0, 8),
+          hadNewlines: decryptedApiKey.includes('\n'),
+          hadCarriageReturns: decryptedApiKey.includes('\r'),
+          hadTabs: decryptedApiKey.includes('\t'),
+          hasInvalidChars: /[^\x20-\x7E]/.test(cleanApiKey)
+        });
+        
         const response = await axios.post('https://api.x.ai/v1/completions', requestBody, {
           headers: {
-            'Authorization': `Bearer ${decryptedApiKey}`,
+            'Authorization': `Bearer ${cleanApiKey}`,
             'Content-Type': 'application/json'
           },
           timeout: 120000 // 120 second timeout for complex searches
