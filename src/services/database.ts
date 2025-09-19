@@ -106,18 +106,7 @@ export class DatabaseService {
           const columns = await this.knexInstance(table).columnInfo();
           logger.info(`Table ${table} columns`, { columns: Object.keys(columns) });
           
-          // Check for team_id column specifically
-          if (table === 'social_media_monitors' || table === 'ai_configurations') {
-            const hasTeamId = columns.hasOwnProperty('team_id');
-            logger.info(`Table ${table} has team_id column`, { hasTeamId });
-            
-            if (!hasTeamId) {
-              logger.error(`CRITICAL: Table ${table} missing team_id column!`, { 
-                table, 
-                existingColumns: Object.keys(columns) 
-              });
-            }
-          }
+          // Note: social_media_monitors and ai_configurations are global tables, not team-scoped
         }
       }
     } catch (err) {

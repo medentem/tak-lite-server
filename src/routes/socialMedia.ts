@@ -40,11 +40,18 @@ export function createSocialMediaRouter(
   });
 
   const aiConfigSchema = Joi.object({
-    provider: Joi.string().valid('openai').default('openai'),
+    provider: Joi.string().valid('grok', 'openai').default('grok'),
     api_key_encrypted: Joi.string().required(),
-    model: Joi.string().valid('gpt-4', 'gpt-3.5-turbo').default('gpt-4'),
-    max_tokens: Joi.number().integer().min(100).max(4000).default(1000),
+    model: Joi.string().valid('grok-beta', 'gpt-4', 'gpt-3.5-turbo').default('grok-beta'),
+    max_tokens: Joi.number().integer().min(100).max(4000).default(2000),
     temperature: Joi.number().min(0).max(1).default(0.3),
+    is_active: Joi.boolean().default(true)
+  });
+
+  const geographicalSearchSchema = Joi.object({
+    geographical_area: Joi.string().min(1).max(1000).required(),
+    search_query: Joi.string().max(1000).optional(),
+    monitoring_interval: Joi.number().integer().min(60).max(3600).default(300),
     is_active: Joi.boolean().default(true)
   });
 
@@ -294,6 +301,97 @@ export function createSocialMediaRouter(
 
       const result = await threatDetectionService.testAIConnection(api_key, model);
       res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Geographical monitoring endpoints
+  router.get('/geographical-monitors', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const monitors = await socialMediaService.getGeographicalMonitors();
+      res.json({ monitors });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/geographical-monitors', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = (req as any).user.id;
+      
+      const { error, value } = geographicalSearchSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({ error: error.details[0].message });
+      }
+
+      const monitor = await socialMediaService.createGeographicalMonitor(value, userId);
+      res.status(201).json({ monitor });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put('/geographical-monitors/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      
+      const { error, value } = geographicalSearchSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({ error: error.details[0].message });
+      }
+
+      const updatedMonitor = await socialMediaService.updateGeographicalMonitor(id, value);
+      res.json({ monitor: updatedMonitor });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.delete('/geographical-monitors/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      
+      await socialMediaService.deleteGeographicalMonitor(id);
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/geographical-monitors/:id/start', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      
+      await socialMediaService.startGeographicalMonitoring(id);
+      res.json({ message: 'Geographical monitoring started' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/geographical-monitors/:id/stop', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      
+      await socialMediaService.stopGeographicalMonitoring(id);
+      res.json({ message: 'Geographical monitoring stopped' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Direct geographical threat search endpoint
+  router.post('/search-threats', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { geographical_area, search_query } = req.body;
+      
+      if (!geographical_area) {
+        return res.status(400).json({ error: 'Geographical area is required' });
+      }
+
+      const threats = await threatDetectionService.searchGeographicalThreats(geographical_area, search_query);
+      res.json({ threats });
     } catch (error) {
       next(error);
     }

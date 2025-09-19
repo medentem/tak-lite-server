@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from './database';
+import { GrokService, ThreatAnalysis as GrokThreatAnalysis } from './grokService';
 import { logger } from '../utils/logger';
 
 export interface ThreatAnalysis {
@@ -29,16 +30,30 @@ export interface AIConfiguration {
 }
 
 export class ThreatDetectionService {
-  constructor(private db: DatabaseService) {}
+  private grokService: GrokService;
+
+  constructor(private db: DatabaseService) {
+    this.grokService = new GrokService(db);
+  }
 
   async createAIConfiguration(configData: Partial<AIConfiguration>, createdBy: string): Promise<AIConfiguration> {
+    // Delegate to Grok service for new configurations
+    const grokConfig = await this.grokService.createGrokConfiguration({
+      api_key_encrypted: configData.api_key_encrypted!,
+      model: configData.model || 'grok-beta',
+      max_tokens: configData.max_tokens || 2000,
+      temperature: configData.temperature || 0.3,
+      is_active: configData.is_active !== false
+    }, createdBy);
+
+    // Create legacy AI configuration for backward compatibility
     const id = uuidv4();
     const config: AIConfiguration = {
       id,
-      provider: configData.provider || 'openai',
+      provider: 'grok',
       api_key_encrypted: configData.api_key_encrypted!,
-      model: configData.model || 'gpt-4',
-      max_tokens: configData.max_tokens || 1000,
+      model: configData.model || 'grok-beta',
+      max_tokens: configData.max_tokens || 2000,
       temperature: configData.temperature || 0.3,
       is_active: configData.is_active !== false,
       created_by: createdBy,
@@ -48,7 +63,7 @@ export class ThreatDetectionService {
 
     await this.db.client('ai_configurations').insert(config);
     
-    logger.info('Created AI configuration', { id, model: config.model });
+    logger.info('Created AI configuration (Grok)', { id, model: config.model });
     return config;
   }
 
@@ -76,243 +91,67 @@ export class ThreatDetectionService {
     return updated!;
   }
 
-  async testAIConnection(apiKey: string, model: string = 'gpt-4'): Promise<{ success: boolean; error?: string; model?: string }> {
-    try {
-      const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-        model: model,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a helpful assistant. Respond with "Connection successful" to confirm the API is working.'
-          },
-          {
-            role: 'user',
-            content: 'Test connection'
-          }
-        ],
-        max_tokens: 10,
-        temperature: 0
-      }, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 10000
-      });
-
-      return {
-        success: true,
-        model: response.data.model
-      };
-    } catch (error: any) {
-      logger.error('AI connection test failed', { error: error.message });
-      return {
-        success: false,
-        error: error.response?.data?.error?.message || error.message || 'Connection failed'
-      };
-    }
+  async testAIConnection(apiKey: string, model: string = 'grok-beta'): Promise<{ success: boolean; error?: string; model?: string }> {
+    // Delegate to Grok service for connection testing
+    return await this.grokService.testGrokConnection(apiKey, model);
   }
 
   async analyzePost(post: any): Promise<ThreatAnalysis | null> {
-    const aiConfig = await this.getAIConfiguration();
-    if (!aiConfig) {
-      logger.warn('No AI configuration found for threat analysis', { postId: post.id });
-      return null;
-    }
-
-    const prompt = this.buildThreatAnalysisPrompt(post);
+    // Use Grok service for content analysis
+    const content = post.text || '';
+    const location = post.author?.location;
     
-    try {
-      const startTime = Date.now();
-      
-      const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-        model: aiConfig.model,
-        messages: [
-          {
-            role: 'system',
-            content: this.getSystemPrompt()
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        max_tokens: aiConfig.max_tokens,
-        temperature: aiConfig.temperature
-      }, {
-        headers: {
-          'Authorization': `Bearer ${aiConfig.api_key_encrypted}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      });
-
-      const processingTime = Date.now() - startTime;
-      const analysisText = response.data.choices[0].message.content;
-      
-      // Parse the JSON response from OpenAI
-      let analysis;
-      try {
-        analysis = JSON.parse(analysisText);
-      } catch (parseError) {
-        logger.error('Failed to parse AI analysis response', { 
-          error: parseError, 
-          response: analysisText 
-        });
-        return null;
-      }
-
-      // Validate the analysis structure
-      if (!this.validateAnalysis(analysis)) {
-        logger.error('Invalid analysis structure from AI', { analysis });
-        return null;
-      }
-      
-      // Store analysis in database
-      const analysisId = uuidv4();
-      await this.db.client('threat_analyses').insert({
-        id: analysisId,
-        post_id: post.id,
-        openai_analysis: response.data,
-        threat_level: analysis.threat_level,
-        threat_type: analysis.threat_type,
-        confidence_score: analysis.confidence_score,
-        ai_summary: analysis.summary,
-        extracted_locations: analysis.locations,
-        keywords: analysis.keywords,
-        processing_metadata: {
-          model: aiConfig.model,
-          tokens_used: response.data.usage?.total_tokens,
-          processing_time: processingTime,
-          prompt_tokens: response.data.usage?.prompt_tokens,
-          completion_tokens: response.data.usage?.completion_tokens
-        }
-      });
-
-      logger.info('Completed threat analysis', { 
-        analysisId, 
-        postId: post.id, 
-        threatLevel: analysis.threat_level,
-        processingTime 
-      });
-
-      return {
-        id: analysisId,
-        post_id: post.id,
-        threat_level: analysis.threat_level,
-        threat_type: analysis.threat_type,
-        confidence_score: analysis.confidence_score,
-        ai_summary: analysis.summary,
-        extracted_locations: analysis.locations,
-        keywords: analysis.keywords,
-        reasoning: analysis.reasoning
-      };
-
-    } catch (error: any) {
-      logger.error('Error in AI threat analysis', { 
-        error: error.message, 
-        postId: post.id,
-        model: aiConfig.model
-      });
+    const grokAnalysis = await this.grokService.analyzeThreatContent(content, location);
+    
+    if (!grokAnalysis) {
+      logger.warn('No threat analysis returned from Grok', { postId: post.id });
       return null;
     }
-  }
 
-  private getSystemPrompt(): string {
-    return `You are a specialized threat detection AI for emergency services and security teams. Your job is to analyze social media posts for potential security threats and emergency situations.
-
-CRITICAL INSTRUCTIONS:
-1. Only classify as HIGH or CRITICAL if there is a clear, immediate threat to life, property, or public safety
-2. Be conservative - false positives are better than missing real threats
-3. Consider the credibility of the source (verified accounts, follower count, etc.)
-4. Look for specific indicators of violence, terrorism, natural disasters, civil unrest, infrastructure threats, or health emergencies
-5. Extract any location information mentioned in the post
-6. Always respond with valid JSON in the exact format specified
-
-THREAT LEVELS:
-- LOW: General discussion, no immediate threat
-- MEDIUM: Potential concern, monitoring recommended
-- HIGH: Significant threat, immediate attention needed
-- CRITICAL: Life-threatening situation, emergency response required
-
-THREAT TYPES:
-- VIOLENCE: Threats of violence, weapons, shootings, assaults
-- TERRORISM: Terrorist threats, bomb threats, extremist activity
-- NATURAL_DISASTER: Earthquakes, floods, fires, severe weather
-- CIVIL_UNREST: Protests, riots, civil disturbances
-- INFRASTRUCTURE: Power outages, transportation issues, structural problems
-- CYBER: Cyber attacks, data breaches, system compromises
-- HEALTH_EMERGENCY: Disease outbreaks, medical emergencies, contamination
-
-Always respond with valid JSON in this exact format:
-{
-  "threat_level": "LOW|MEDIUM|HIGH|CRITICAL",
-  "threat_type": "VIOLENCE|TERRORISM|NATURAL_DISASTER|CIVIL_UNREST|INFRASTRUCTURE|CYBER|HEALTH_EMERGENCY",
-  "confidence_score": 0.85,
-  "summary": "Brief summary of the threat",
-  "locations": [{"lat": 47.6062, "lng": -122.3321, "name": "Seattle, WA"}],
-  "keywords": ["keyword1", "keyword2"],
-  "reasoning": "Explanation of why this was classified as a threat"
-}`;
-  }
-
-  private buildThreatAnalysisPrompt(post: any): string {
-    return `
-Analyze this social media post for potential security threats:
-
-POST CONTENT: "${post.text}"
-
-AUTHOR INFO:
-- Username: ${post.author?.userName || 'Unknown'}
-- Name: ${post.author?.name || 'Unknown'}
-- Location: ${post.author?.location || 'Not specified'}
-- Followers: ${post.author?.followers || 0}
-- Verified: ${post.author?.isBlueVerified || false}
-
-ENGAGEMENT:
-- Retweets: ${post.retweetCount || 0}
-- Likes: ${post.likeCount || 0}
-- Replies: ${post.replyCount || 0}
-- Views: ${post.viewCount || 'Unknown'}
-
-POST METADATA:
-- Created: ${post.createdAt || 'Unknown'}
-- Language: ${post.lang || 'Unknown'}
-
-Please analyze this post and return a JSON response with your threat assessment.`;
-  }
-
-  private validateAnalysis(analysis: any): boolean {
-    const requiredFields = ['threat_level', 'confidence_score'];
-    const validThreatLevels = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
-    const validThreatTypes = ['VIOLENCE', 'TERRORISM', 'NATURAL_DISASTER', 'CIVIL_UNREST', 'INFRASTRUCTURE', 'CYBER', 'HEALTH_EMERGENCY'];
-
-    // Check required fields
-    for (const field of requiredFields) {
-      if (!(field in analysis)) {
-        return false;
+    // Convert Grok analysis to legacy format
+    const analysisId = uuidv4();
+    await this.db.client('threat_analyses').insert({
+      id: analysisId,
+      post_id: post.id,
+      grok_analysis: grokAnalysis,
+      threat_level: grokAnalysis.threat_level,
+      threat_type: grokAnalysis.threat_type,
+      confidence_score: grokAnalysis.confidence_score,
+      ai_summary: grokAnalysis.summary,
+      extracted_locations: grokAnalysis.locations,
+      keywords: grokAnalysis.keywords,
+      processing_metadata: {
+        model: 'grok-beta',
+        search_type: 'content_analysis',
+        legacy_post_analysis: true
       }
-    }
+    });
 
-    // Validate threat level
-    if (!validThreatLevels.includes(analysis.threat_level)) {
-      return false;
-    }
+    logger.info('Completed threat analysis (Grok)', { 
+      analysisId, 
+      postId: post.id, 
+      threatLevel: grokAnalysis.threat_level
+    });
 
-    // Validate threat type if provided
-    if (analysis.threat_type && !validThreatTypes.includes(analysis.threat_type)) {
-      return false;
-    }
-
-    // Validate confidence score
-    if (typeof analysis.confidence_score !== 'number' || 
-        analysis.confidence_score < 0 || 
-        analysis.confidence_score > 1) {
-      return false;
-    }
-
-    return true;
+    return {
+      id: analysisId,
+      post_id: post.id,
+      threat_level: grokAnalysis.threat_level,
+      threat_type: grokAnalysis.threat_type,
+      confidence_score: grokAnalysis.confidence_score,
+      ai_summary: grokAnalysis.summary,
+      extracted_locations: grokAnalysis.locations,
+      keywords: grokAnalysis.keywords,
+      reasoning: grokAnalysis.reasoning
+    };
   }
+
+  // New method for geographical threat search
+  async searchGeographicalThreats(geographicalArea: string, searchQuery?: string): Promise<GrokThreatAnalysis[]> {
+    return await this.grokService.searchThreats(geographicalArea, searchQuery);
+  }
+
+  // Legacy methods removed - now handled by GrokService
 
   async getThreatAnalyses(filters: {
     threat_level?: string;

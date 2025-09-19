@@ -1,7 +1,7 @@
-import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from './database';
 import { ThreatDetectionService } from './threatDetection';
+import { GrokService, GeographicalSearch } from './grokService';
 import { SyncService } from './sync';
 import { SocialMediaConfigService } from './socialMediaConfig';
 import { logger } from '../utils/logger';
@@ -17,6 +17,20 @@ export interface SocialMediaMonitor {
   monitoring_interval: number;
   is_active: boolean;
   last_checked_at?: Date;
+  created_by?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+// Legacy interface - now using GeographicalSearch from GrokService
+export interface GeographicalMonitor {
+  id: string;
+  name: string;
+  geographical_area: string;
+  search_query?: string;
+  monitoring_interval: number;
+  is_active: boolean;
+  last_searched_at?: Date;
   created_by?: string;
   created_at: Date;
   updated_at: Date;
@@ -48,13 +62,17 @@ export interface TwitterPost {
 
 export class SocialMediaMonitoringService {
   private activeMonitors = new Map<string, NodeJS.Timeout>();
+  private activeGeographicalSearches = new Map<string, NodeJS.Timeout>();
+  private grokService: GrokService;
   
   constructor(
     private db: DatabaseService,
     private threatDetection: ThreatDetectionService,
     private syncService: SyncService,
     private configService: SocialMediaConfigService
-  ) {}
+  ) {
+    this.grokService = new GrokService(db);
+  }
 
   async createMonitor(monitorData: Partial<SocialMediaMonitor>, createdBy: string): Promise<SocialMediaMonitor> {
     const id = uuidv4();
@@ -160,7 +178,8 @@ export class SocialMediaMonitoringService {
           return;
         }
 
-        await this.checkForNewPosts(monitor);
+        // Legacy monitoring disabled - using Grok geographical search instead
+        logger.warn('Legacy monitoring attempted - please use geographical monitoring', { monitorId: monitor.id });
       } catch (error) {
         logger.error('Error in monitoring interval', { monitorId, error });
       }
@@ -180,190 +199,161 @@ export class SocialMediaMonitoringService {
   }
 
   async testConnection(apiKey: string, searchQuery: string): Promise<{ success: boolean; error?: string; samplePosts?: number }> {
-    try {
-      const response = await axios.get('https://api.twitterapi.io/twitter/tweet/advanced_search', {
-        headers: {
-          'X-API-Key': apiKey
-        },
-        params: {
-          query: searchQuery,
-          queryType: 'Latest',
-          cursor: ''
-        },
-        timeout: 10000 // 10 second timeout
-      });
-
-      const posts = response.data.tweets || [];
+    // Test Grok API connection instead of Twitter API
+    const result = await this.grokService.testGrokConnection(apiKey);
+    if (result.success) {
       return {
         success: true,
-        samplePosts: posts.length
+        samplePosts: 0 // Grok doesn't return sample posts in connection test
       };
-    } catch (error: any) {
-      logger.error('Connection test failed', { error: error.message });
+    } else {
       return {
         success: false,
-        error: error.response?.data?.message || error.message || 'Connection failed'
+        error: result.error || 'Connection failed'
       };
     }
   }
 
-  private async checkForNewPosts(monitor: SocialMediaMonitor): Promise<void> {
-    try {
-      const posts = await this.fetchPostsFromTwitterAPI(monitor);
-      
-      for (const post of posts) {
-        // Check if post already exists
-        const existing = await this.db.client('social_media_posts')
-          .where({ monitor_id: monitor.id, platform_post_id: post.id })
-          .first();
+  // New geographical monitoring methods
+  async createGeographicalMonitor(monitorData: Partial<GeographicalSearch>, createdBy: string): Promise<GeographicalSearch> {
+    return await this.grokService.createGeographicalSearch(monitorData, createdBy);
+  }
 
-        if (!existing) {
-          // Store new post
-          const postId = await this.storePost(monitor.id, post);
-          
-          // Analyze for threats
-          const threatAnalysis = await this.threatDetection.analyzePost(post);
-          
-          if (threatAnalysis && threatAnalysis.threat_level !== 'LOW') {
-            await this.createThreatAnnotation(postId, threatAnalysis, post);
-          }
+  async getGeographicalMonitors(): Promise<GeographicalSearch[]> {
+    return await this.grokService.getGeographicalSearches();
+  }
+
+  async updateGeographicalMonitor(monitorId: string, updates: Partial<GeographicalSearch>): Promise<GeographicalSearch> {
+    return await this.grokService.updateGeographicalSearch(monitorId, updates);
+  }
+
+  async deleteGeographicalMonitor(monitorId: string): Promise<void> {
+    await this.stopGeographicalMonitoring(monitorId);
+    await this.grokService.deleteGeographicalSearch(monitorId);
+  }
+
+  async startGeographicalMonitoring(monitorId: string): Promise<void> {
+    const serviceEnabled = await this.configService.isServiceEnabled();
+    if (!serviceEnabled) {
+      throw new Error('Social media monitoring service is disabled globally');
+    }
+
+    const searches = await this.grokService.getGeographicalSearches();
+    const search = searches.find(s => s.id === monitorId);
+    
+    if (!search || !search.is_active) {
+      throw new Error('Geographical search not found or inactive');
+    }
+
+    // Clear existing interval if any
+    await this.stopGeographicalMonitoring(monitorId);
+
+    // Start new monitoring interval
+    const interval = setInterval(async () => {
+      try {
+        const serviceEnabled = await this.configService.isServiceEnabled();
+        if (!serviceEnabled) {
+          logger.info('Service disabled globally, stopping geographical search', { monitorId });
+          await this.stopGeographicalMonitoring(monitorId);
+          return;
         }
+
+        await this.performGeographicalSearch(search);
+      } catch (error) {
+        logger.error('Error in geographical monitoring interval', { monitorId, error });
+      }
+    }, search.monitoring_interval * 1000);
+
+    this.activeGeographicalSearches.set(monitorId, interval);
+    logger.info('Started geographical monitoring', { monitorId, interval: search.monitoring_interval });
+  }
+
+  async stopGeographicalMonitoring(monitorId: string): Promise<void> {
+    const interval = this.activeGeographicalSearches.get(monitorId);
+    if (interval) {
+      clearInterval(interval);
+      this.activeGeographicalSearches.delete(monitorId);
+      logger.info('Stopped geographical monitoring', { monitorId });
+    }
+  }
+
+  private async performGeographicalSearch(search: GeographicalSearch): Promise<void> {
+    try {
+      const threats = await this.grokService.searchThreats(search.geographical_area, search.search_query || undefined);
+      
+      for (const threat of threats) {
+        await this.createThreatAnnotationFromGrok(threat, search);
       }
 
-      // Update last checked timestamp
-      await this.db.client('social_media_monitors')
-        .where('id', monitor.id)
-        .update({ last_checked_at: new Date() });
+      // Update last searched timestamp
+      await this.grokService.updateGeographicalSearch(search.id, { last_searched_at: new Date() });
 
-      logger.debug('Checked for new posts', { 
-        monitorId: monitor.id, 
-        postsFound: posts.length
+      logger.debug('Performed geographical search', { 
+        searchId: search.id, 
+        threatsFound: threats.length
       });
 
     } catch (error) {
-      logger.error('Error checking for new posts', { monitorId: monitor.id, error });
+      logger.error('Error performing geographical search', { searchId: search.id, error });
     }
   }
 
-  private async fetchPostsFromTwitterAPI(monitor: SocialMediaMonitor): Promise<TwitterPost[]> {
-    const response = await axios.get('https://api.twitterapi.io/twitter/tweet/advanced_search', {
-      headers: {
-        'X-API-Key': monitor.api_credentials.api_key
-      },
-      params: {
-        query: monitor.search_query,
-        queryType: monitor.query_type,
-        cursor: '' // Start from beginning for each check
-      },
-      timeout: 30000 // 30 second timeout
+  private async createThreatAnnotationFromGrok(threat: any, search: GeographicalSearch): Promise<void> {
+    if (threat.threat_level === 'LOW') {
+      return; // Skip low-level threats
+    }
+
+    const annotationId = uuidv4();
+    
+    // Determine color and shape based on threat level
+    const { color, shape } = this.getThreatVisual(threat.threat_level);
+    
+    // Create TAK-Lite compatible annotation data
+    const annotationData = {
+      type: 'poi',
+      position: { lt: threat.locations[0]?.lat || 0, lng: threat.locations[0]?.lng || 0 },
+      shape: shape,
+      color: color,
+      label: this.generateThreatLabel(threat),
+      description: threat.summary || 'Geographical threat detected',
+      timestamp: Date.now(),
+      metadata: {
+        source: 'grok_geographical_search',
+        threat_level: threat.threat_level,
+        threat_type: threat.threat_type,
+        confidence_score: threat.confidence_score,
+        geographical_area: search.geographical_area,
+        search_query: search.search_query,
+        keywords: threat.keywords || []
+      }
+    };
+
+    // Store threat annotation in database
+    await this.db.client('threat_annotations').insert({
+      id: annotationId,
+      threat_analysis_id: threat.id,
+      position: { lat: threat.locations[0]?.lat || 0, lng: threat.locations[0]?.lng || 0 },
+      threat_level: threat.threat_level,
+      threat_type: threat.threat_type,
+      title: this.generateThreatTitle(threat),
+      description: threat.summary,
+      source_post_url: null, // No specific post for geographical searches
+      source_author: 'Grok Geographical Search',
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
     });
 
-    return response.data.tweets || [];
-  }
-
-  private async storePost(monitorId: string, post: TwitterPost): Promise<string> {
-    const postId = uuidv4();
-    
-    await this.db.client('social_media_posts').insert({
-      id: postId,
-      monitor_id: monitorId,
-      platform_post_id: post.id,
-      content: post.text,
-      author_info: post.author,
-      engagement_metrics: {
-        retweetCount: post.retweetCount,
-        likeCount: post.likeCount,
-        replyCount: post.replyCount,
-        quoteCount: post.quoteCount,
-        viewCount: post.viewCount
-      },
-      entities: post.entities,
-      raw_data: post
+    logger.info('Created threat annotation from Grok', { 
+      annotationId, 
+      threatLevel: threat.threat_level,
+      threatType: threat.threat_type,
+      color,
+      shape
     });
-
-    return postId;
   }
 
-  private async createThreatAnnotation(
-    postId: string, 
-    threatAnalysis: any, 
-    originalPost: TwitterPost
-  ): Promise<void> {
-    // Extract location from post or author
-    const location = this.extractLocation(threatAnalysis, originalPost);
-    
-    if (location) {
-      const annotationId = uuidv4();
-      
-      // Determine color and shape based on threat level
-      const { color, shape } = this.getThreatVisual(threatAnalysis.threat_level);
-      
-      // Create TAK-Lite compatible annotation data
-      const annotationData = {
-        type: 'poi',
-        position: { lt: location.lat, lng: location.lng },
-        shape: shape,
-        color: color,
-        label: this.generateThreatLabel(threatAnalysis),
-        description: threatAnalysis.ai_summary || 'Social media threat detected',
-        timestamp: Date.now(),
-        metadata: {
-          source: 'social_media',
-          threat_level: threatAnalysis.threat_level,
-          threat_type: threatAnalysis.threat_type,
-          confidence_score: threatAnalysis.confidence_score,
-          source_post_url: `https://twitter.com/i/web/status/${originalPost.id}`,
-          source_author: originalPost.author.userName,
-          keywords: threatAnalysis.keywords || []
-        }
-      };
+  // Legacy Twitter API methods removed - now using Grok geographical search
 
-      // Store threat annotation in database (global, no team_id)
-      await this.db.client('threat_annotations').insert({
-        id: annotationId,
-        threat_analysis_id: threatAnalysis.id,
-        position: { lat: location.lat, lng: location.lng },
-        threat_level: threatAnalysis.threat_level,
-        threat_type: threatAnalysis.threat_type,
-        title: this.generateThreatTitle(threatAnalysis),
-        description: threatAnalysis.ai_summary,
-        source_post_url: `https://twitter.com/i/web/status/${originalPost.id}`,
-        source_author: originalPost.author.userName,
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
-      });
-
-      // Note: TAK-Lite annotation creation removed since we don't have a team context
-      // The threat annotation is stored in the database for admin review
-
-      // Note: Threat alert broadcasting removed since we don't have a team context
-      // The threat annotation is stored in the database for admin review
-
-      logger.info('Created threat annotation', { 
-        annotationId, 
-        threatLevel: threatAnalysis.threat_level,
-        threatType: threatAnalysis.threat_type,
-        color,
-        shape
-      });
-    }
-  }
-
-  private extractLocation(threatAnalysis: any, post: TwitterPost): { lat: number; lng: number } | null {
-    // Try to extract location from analysis first
-    if (threatAnalysis.extracted_locations && threatAnalysis.extracted_locations.length > 0) {
-      return threatAnalysis.extracted_locations[0];
-    }
-    
-    // Try to extract from author location
-    if (post.author.location) {
-      // This would need geocoding in a real implementation
-      // For now, return a default location
-      return { lat: 47.6062, lng: -122.3321 }; // Seattle default
-    }
-    
-    // No location found
-    return null;
-  }
+  // Legacy threat annotation methods removed - now handled by createThreatAnnotationFromGrok
 
   private generateThreatTitle(threatAnalysis: any): string {
     const type = threatAnalysis.threat_type?.toLowerCase().replace('_', ' ') || 'threat';
@@ -418,6 +408,7 @@ export class SocialMediaMonitoringService {
       throw new Error('Social media monitoring service is disabled globally');
     }
 
+    // Start legacy monitors
     const monitors = await this.db.client('social_media_monitors')
       .where('is_active', true);
 
@@ -435,19 +426,43 @@ export class SocialMediaMonitoringService {
       }
     }
 
-    logger.info('Started all monitors', { started, failed, total: monitors.length });
+    // Start geographical monitors
+    const geographicalSearches = await this.grokService.getGeographicalSearches();
+    const activeSearches = geographicalSearches.filter(s => s.is_active);
+
+    for (const search of activeSearches) {
+      try {
+        await this.startGeographicalMonitoring(search.id);
+        started++;
+      } catch (error: any) {
+        failed++;
+        errors.push(`Geographical Search ${search.geographical_area}: ${error.message}`);
+      }
+    }
+
+    logger.info('Started all monitors', { started, failed, total: monitors.length + activeSearches.length });
     return { started, failed, errors };
   }
 
   async stopAllMonitors(): Promise<{ stopped: number }> {
-    const stopped = this.activeMonitors.size;
+    let stopped = 0;
     
+    // Stop legacy monitors
     for (const [monitorId, interval] of this.activeMonitors.entries()) {
       clearInterval(interval);
       logger.info('Stopped monitoring', { monitorId });
+      stopped++;
     }
-    
     this.activeMonitors.clear();
+    
+    // Stop geographical monitors
+    for (const [monitorId, interval] of this.activeGeographicalSearches.entries()) {
+      clearInterval(interval);
+      logger.info('Stopped geographical monitoring', { monitorId });
+      stopped++;
+    }
+    this.activeGeographicalSearches.clear();
+    
     logger.info('Stopped all monitors', { stopped });
     return { stopped };
   }
@@ -479,10 +494,19 @@ export class SocialMediaMonitoringService {
 
   // Cleanup method for graceful shutdown
   async shutdown(): Promise<void> {
+    // Stop legacy monitors
     for (const [monitorId, interval] of this.activeMonitors.entries()) {
       clearInterval(interval);
       logger.info('Stopped monitoring during shutdown', { monitorId });
     }
     this.activeMonitors.clear();
+    
+    // Stop geographical monitors
+    for (const [monitorId, interval] of this.activeGeographicalSearches.entries()) {
+      clearInterval(interval);
+      logger.info('Stopped geographical monitoring during shutdown', { monitorId });
+    }
+    this.activeGeographicalSearches.clear();
   }
 }
+

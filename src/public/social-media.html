@@ -104,7 +104,28 @@
       .spacer { height:16px; }
       .right { text-align:right; }
       .hidden { display:none !important; }
-      .loading { opacity:0.6; pointer-events:none; }
+      .loading { 
+        opacity:0.6; 
+        pointer-events:none; 
+        position: relative;
+      }
+      .loading::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 16px;
+        height: 16px;
+        margin: -8px 0 0 -8px;
+        border: 2px solid transparent;
+        border-top: 2px solid currentColor;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
       
       /* Message styles matching admin page */
       .message { 
@@ -341,7 +362,7 @@
         <!-- Monitors Section -->
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h2>Active Monitors</h2>
+            <h2>Active Monitors (Legacy)</h2>
             <span id="monitor-count" class="pill">0 monitors</span>
           </div>
           
@@ -350,11 +371,23 @@
           </div>
         </div>
 
+        <!-- Geographical Monitoring Section -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h2>Geographical Threat Monitoring</h2>
+            <button onclick="showGeographicalMonitorModal()" class="secondary">Add Geographical Monitor</button>
+          </div>
+          
+          <div id="geographical-monitors-grid" class="grid">
+            <!-- Geographical monitors will be loaded here -->
+          </div>
+        </div>
+
         <!-- AI Configuration Section -->
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h2>AI Configuration</h2>
-            <button onclick="showAIConfigModal()" class="secondary">Configure AI</button>
+            <h2>Grok AI Configuration</h2>
+            <button onclick="showAIConfigModal()" class="secondary">Configure Grok AI</button>
           </div>
           
           <div id="ai-config-status">
@@ -463,32 +496,75 @@
       </div>
     </div>
 
+    <!-- Geographical Monitor Modal -->
+    <div id="geographical-monitor-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Add Geographical Monitor</h3>
+          <button class="close" onclick="closeModal()">&times;</button>
+        </div>
+        
+        <form id="geographical-monitor-form">
+          <div class="form-group">
+            <label>Geographical Area</label>
+            <input type="text" name="geographical_area" placeholder="e.g., Seattle, WA or Downtown Los Angeles" required>
+            <div class="help-text">Specify the geographical area to monitor for threats</div>
+          </div>
+          
+          <div class="form-group">
+            <label>Search Query (Optional)</label>
+            <input type="text" name="search_query" placeholder="e.g., violence, emergency, threat">
+            <div class="help-text">Optional specific search terms to focus the threat detection</div>
+          </div>
+          
+          <div class="form-group">
+            <label>Monitoring Interval (seconds)</label>
+            <input type="number" name="monitoring_interval" value="300" min="60" max="3600">
+            <div class="help-text">How often to search for new threats (60-3600 seconds)</div>
+          </div>
+          
+          <div class="form-group">
+            <label>
+              <input type="checkbox" name="is_active" checked> Active
+            </label>
+          </div>
+          
+          <div class="form-actions">
+            <button type="button" onclick="closeModal()" class="secondary">Cancel</button>
+            <button type="submit" class="success">Create Monitor</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- AI Configuration Modal -->
     <div id="ai-config-modal" class="modal hidden">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>AI Configuration</h3>
+          <h3>Grok AI Configuration</h3>
           <button class="close" onclick="closeModal()">&times;</button>
         </div>
         
         <form id="ai-config-form">
           <div class="form-group">
-            <label>OpenAI API Key</label>
-            <input type="password" name="api_key_encrypted" placeholder="sk-..." required>
-            <div class="help-text">Your OpenAI API key for threat analysis</div>
+            <label>Grok API Key</label>
+            <input type="password" name="api_key_encrypted" placeholder="xai-..." required>
+            <div class="help-text">Your xAI Grok API key for threat analysis and geographical search</div>
           </div>
           
           <div class="form-group">
             <label>Model</label>
             <select name="model">
-              <option value="gpt-4">GPT-4 (Recommended)</option>
-              <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Faster/Cheaper)</option>
+              <option value="grok-beta">Grok Beta (Recommended)</option>
+              <option value="gpt-4">GPT-4 (Legacy)</option>
+              <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Legacy)</option>
             </select>
           </div>
           
           <div class="form-group">
             <label>Max Tokens</label>
-            <input type="number" name="max_tokens" value="1000" min="100" max="4000">
+            <input type="number" name="max_tokens" value="2000" min="100" max="4000">
+            <div class="help-text">Higher values allow for more detailed geographical threat analysis</div>
           </div>
           
           <div class="form-group">
@@ -550,6 +626,7 @@
       // Global state
       let currentMonitorId = null;
       let monitors = [];
+      let geographicalMonitors = [];
       let threats = [];
       let aiConfig = null;
       let serviceStatus = null;
@@ -581,6 +658,7 @@
             loadServiceStatus(),
             loadServiceConfig(),
             loadMonitors(),
+            loadGeographicalMonitors(),
             loadAIConfig(),
             loadThreats(),
             loadThreatStatistics()
@@ -598,6 +676,7 @@
         
         // Set up form handlers
         document.getElementById('monitor-form').addEventListener('submit', handleMonitorSubmit);
+        document.getElementById('geographical-monitor-form').addEventListener('submit', handleGeographicalMonitorSubmit);
         document.getElementById('ai-config-form').addEventListener('submit', handleAIConfigSubmit);
         document.getElementById('service-config-form').addEventListener('submit', handleServiceConfigSubmit);
       });
@@ -698,6 +777,52 @@
           console.error('Failed to load monitors:', error);
           showError('Failed to load monitors: ' + error.message);
         }
+      }
+
+      // Load geographical monitors
+      async function loadGeographicalMonitors() {
+        try {
+          const data = await apiCall('/api/social-media/geographical-monitors');
+          geographicalMonitors = data.monitors;
+          renderGeographicalMonitors();
+        } catch (error) {
+          console.error('Failed to load geographical monitors:', error);
+          showError('Failed to load geographical monitors: ' + error.message);
+        }
+      }
+
+      // Render geographical monitors
+      function renderGeographicalMonitors() {
+        const grid = document.getElementById('geographical-monitors-grid');
+        
+        if (!geographicalMonitors || geographicalMonitors.length === 0) {
+          grid.innerHTML = '<div style="text-align:center; color:var(--muted); padding:40px;">No geographical monitors configured</div>';
+          return;
+        }
+
+        grid.innerHTML = geographicalMonitors.map(monitor => `
+          <div class="card" style="padding:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:12px;">
+              <div>
+                <h4 style="margin:0 0 4px; color:#cbd5e1;">${monitor.geographical_area}</h4>
+                ${monitor.search_query ? `<div style="font-size:12px; color:var(--muted);">Query: ${monitor.search_query}</div>` : ''}
+              </div>
+              <span class="pill ${monitor.is_active ? 'active' : 'inactive'}">${monitor.is_active ? 'Active' : 'Inactive'}</span>
+            </div>
+            
+            <div style="font-size:12px; color:var(--muted); margin-bottom:12px;">
+              Interval: ${monitor.monitoring_interval}s
+              ${monitor.last_searched_at ? `| Last: ${new Date(monitor.last_searched_at).toLocaleString()}` : ''}
+            </div>
+            
+            <div style="display:flex; gap:8px;">
+              <button onclick="toggleGeographicalMonitor('${monitor.id}', ${monitor.is_active})" class="secondary" style="flex:1;">
+                ${monitor.is_active ? 'Stop' : 'Start'}
+              </button>
+              <button onclick="deleteGeographicalMonitor('${monitor.id}')" class="danger">Delete</button>
+            </div>
+          </div>
+        `).join('');
       }
 
       // Render monitors
@@ -854,6 +979,11 @@
         document.getElementById('monitor-modal').classList.remove('hidden');
       }
 
+      function showGeographicalMonitorModal() {
+        document.getElementById('geographical-monitor-form').reset();
+        document.getElementById('geographical-monitor-modal').classList.remove('hidden');
+      }
+
       function showAIConfigModal() {
         document.getElementById('ai-config-form').reset();
         if (aiConfig) {
@@ -928,6 +1058,53 @@
         }
       }
 
+      async function handleGeographicalMonitorSubmit(e) {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+
+        try {
+          await apiCall('/api/social-media/geographical-monitors', {
+            method: 'POST',
+            body: JSON.stringify(data)
+          });
+          
+          closeModal();
+          loadGeographicalMonitors();
+          showSuccess('Geographical monitor created successfully');
+        } catch (error) {
+          showError('Failed to create geographical monitor: ' + error.message);
+        }
+      }
+
+      // Geographical monitor actions
+      async function toggleGeographicalMonitor(id, isActive) {
+        try {
+          const endpoint = isActive 
+            ? `/api/social-media/geographical-monitors/${id}/stop`
+            : `/api/social-media/geographical-monitors/${id}/start`;
+          
+          await apiCall(endpoint, { method: 'POST' });
+          
+          loadGeographicalMonitors();
+          showSuccess(`Geographical monitor ${isActive ? 'stopped' : 'started'} successfully`);
+        } catch (error) {
+          showError('Failed to toggle geographical monitor: ' + error.message);
+        }
+      }
+
+      async function deleteGeographicalMonitor(id) {
+        if (!confirm('Are you sure you want to delete this geographical monitor?')) return;
+        
+        try {
+          await apiCall(`/api/social-media/geographical-monitors/${id}`, { method: 'DELETE' });
+          loadGeographicalMonitors();
+          showSuccess('Geographical monitor deleted successfully');
+        } catch (error) {
+          showError('Failed to delete geographical monitor: ' + error.message);
+        }
+      }
+
       // Monitor actions
       async function editMonitor(id) {
         const monitor = monitors.find(m => m.id === id);
@@ -987,6 +1164,16 @@
           return;
         }
         
+        // Get the test button and add loading state
+        const testButton = document.querySelector('button[onclick="testConnection()"]');
+        const originalText = testButton.textContent;
+        const originalDisabled = testButton.disabled;
+        
+        // Show loading state
+        testButton.textContent = 'Testing...';
+        testButton.disabled = true;
+        testButton.classList.add('loading');
+        
         try {
           const result = await apiCall('/api/social-media/test-connection', {
             method: 'POST',
@@ -1000,6 +1187,11 @@
           }
         } catch (error) {
           showError('Connection test failed: ' + error.message);
+        } finally {
+          // Restore button state
+          testButton.textContent = originalText;
+          testButton.disabled = originalDisabled;
+          testButton.classList.remove('loading');
         }
       }
 
@@ -1012,6 +1204,16 @@
           showError('Please enter OpenAI API key');
           return;
         }
+        
+        // Get the test button and add loading state
+        const testButton = document.querySelector('button[onclick="testAI()"]');
+        const originalText = testButton.textContent;
+        const originalDisabled = testButton.disabled;
+        
+        // Show loading state
+        testButton.textContent = 'Testing...';
+        testButton.disabled = true;
+        testButton.classList.add('loading');
         
         try {
           const result = await apiCall('/api/social-media/test-ai', {
@@ -1026,6 +1228,11 @@
           }
         } catch (error) {
           showError('AI test failed: ' + error.message);
+        } finally {
+          // Restore button state
+          testButton.textContent = originalText;
+          testButton.disabled = originalDisabled;
+          testButton.classList.remove('loading');
         }
       }
 
