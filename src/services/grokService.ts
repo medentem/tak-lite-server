@@ -104,6 +104,14 @@ export class GrokService {
 
   async testGrokConnection(apiKey: string, model: string = 'grok-beta'): Promise<{ success: boolean; error?: string; model?: string }> {
     try {
+      const axiosConfig = {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      };
+
       const response = await axios.post('https://api.x.ai/v1/chat/completions', {
         model: model,
         messages: [
@@ -118,13 +126,7 @@ export class GrokService {
         ],
         max_tokens: 10,
         temperature: 0
-      }, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 10000
-      });
+      }, axiosConfig);
 
       return {
         success: true,
@@ -137,7 +139,6 @@ export class GrokService {
         statusText: error.response?.statusText
       });
       
-      // Provide more specific error messages
       let errorMessage = 'Connection failed';
       if (error.response?.status === 401) {
         errorMessage = 'Invalid API key';
