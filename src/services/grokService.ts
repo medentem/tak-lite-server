@@ -232,7 +232,7 @@ export class GrokService {
           temperature: grokConfig.temperature,
           search_parameters: {
             mode: 'auto',
-            sources: ['x_posts']
+            sources: [{ 'type': 'x' }]
           }
         }, {
           headers: {
