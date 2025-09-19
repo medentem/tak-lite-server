@@ -202,37 +202,29 @@ export class GrokService {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const startTime = Date.now();
-        
-        logger.info('Making Grok API call for geographical threat search', {
-          attempt,
-          geographicalArea,
-          searchQuery,
-          model: grokConfig.model,
-          maxTokens: grokConfig.max_tokens,
-          temperature: grokConfig.temperature,
-          searchParameters: {
-            mode: 'auto',
-            sources: ['x_posts']
-          }
-        });
-        
-        const response = await axios.post('https://api.x.ai/v1/chat/completions', {
-          model: grokConfig.model,
-          messages: [
-            {
-              role: 'system',
-              content: this.getGeographicalThreatSystemPrompt()
-            },
-            {
-              role: 'user',
-              content: prompt
+
+        const requestBody = {
+            model: grokConfig.model,
+            messages: [
+                {
+                    role: 'system',
+                    content: this.getGeographicalThreatSystemPrompt()
+                },
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ],
+            search_parameters: {
+                mode: 'auto'
             }
-          ],
-          search_parameters: {
-            mode: 'auto',
-            sources: [{ 'type': 'x' }]
-          }
-        }, {
+        };
+        
+        logger.info('Making Grok API call for geographical threat search', 
+            requestBody
+        );
+
+        const response = await axios.post('https://api.x.ai/v1/chat/completions', requestBody, {
           headers: {
             'Authorization': `Bearer ${grokConfig.api_key_encrypted}`,
             'Content-Type': 'application/json'
