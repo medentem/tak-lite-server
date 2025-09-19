@@ -760,6 +760,52 @@
           </div>
         </div>
 
+        <!-- Threat Review Section -->
+        <div class="section card" style="margin-top: 16px;">
+          <h2>AI Threat Review</h2>
+          <div class="help-text">
+            <strong>Review and manage AI-detected threats</strong> from geographical monitoring and social media analysis
+          </div>
+          
+          <div style="display: flex; gap: 12px; margin-bottom: 16px; align-items: center;">
+            <select id="threat_status_filter" style="flex: 1; min-width: 150px;">
+              <option value="pending">Pending Review</option>
+              <option value="reviewed">Reviewed</option>
+              <option value="approved">Approved</option>
+              <option value="dismissed">Dismissed</option>
+              <option value="all">All Threats</option>
+            </select>
+            <select id="threat_level_filter" style="flex: 1; min-width: 150px;">
+              <option value="">All Levels</option>
+              <option value="LOW">Low</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="HIGH">High</option>
+              <option value="CRITICAL">Critical</option>
+            </select>
+            <button id="refresh_threats" class="secondary">Refresh</button>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
+                <input id="threat_auto_refresh" type="checkbox" checked />
+                Auto-refresh
+              </label>
+            </div>
+          </div>
+          
+          <div id="threats_list" style="max-height: 400px; overflow-y: auto; border: 1px solid #1f2a44; border-radius: 8px; background: #0c1527;">
+            <div class="muted" style="text-align: center; padding: 20px;">Loading threats...</div>
+          </div>
+          
+          <div style="margin-top: 16px; font-size: 13px;">
+            <strong>Threat Review Controls:</strong>
+            <div style="margin-top: 8px; color: var(--muted);">
+              • Review AI-detected threats and their confidence scores<br>
+              • Approve threats to create map annotations for teams<br>
+              • Dismiss false positives or irrelevant threats<br>
+              • Real-time notifications for new threats appear here
+            </div>
+          </div>
+        </div>
+
         <!-- Message Monitoring Section -->
         <div class="section card" style="margin-top: 16px;">
           <h2>Live Message Monitoring</h2>

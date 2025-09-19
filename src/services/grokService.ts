@@ -9,8 +9,6 @@ export interface GrokConfiguration {
   id: string;
   api_key_encrypted: string;
   model: string;
-  max_tokens: number;
-  temperature: number;
   search_enabled: boolean;
   is_active: boolean;
   created_by?: string;
@@ -59,7 +57,7 @@ export interface GeographicalSearch {
 export class GrokService {
   private securityService: SecurityService;
 
-  constructor(private db: DatabaseService) {
+  constructor(private db: DatabaseService, private io?: any) {
     const configService = new ConfigService(db);
     this.securityService = new SecurityService(configService);
   }
@@ -72,8 +70,6 @@ export class GrokService {
       id,
       api_key_encrypted: encryptedApiKey,
       model: configData.model || 'grok-4-latest',
-      max_tokens: configData.max_tokens || 2000,
-      temperature: configData.temperature || 0.3,
       search_enabled: configData.search_enabled !== false,
       is_active: configData.is_active !== false,
       created_by: createdBy,
@@ -326,6 +322,22 @@ export class GrokService {
               reasoning: analysis.reasoning,
               source_info: analysis.source_info
             });
+
+            // Emit real-time notification for new threat
+            if (this.io) {
+              this.io.emit('admin:new_threat_detected', {
+                id: analysisId,
+                threat_level: analysis.threat_level,
+                threat_type: analysis.threat_type,
+                confidence_score: analysis.confidence_score,
+                summary: analysis.summary,
+                locations: analysis.locations || [],
+                keywords: analysis.keywords || [],
+                geographical_area: geographicalArea,
+                search_query: searchQuery,
+                created_at: new Date().toISOString()
+              });
+            }
           }
         }
 

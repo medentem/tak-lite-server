@@ -6,8 +6,6 @@ export async function up(knex: Knex): Promise<void> {
     t.uuid('id').primary();
     t.text('api_key_encrypted').notNullable(); // Encrypted Grok API key
     t.string('model').defaultTo('grok-beta');
-    t.integer('max_tokens').defaultTo(2000);
-    t.decimal('temperature', 2, 1).defaultTo(0.3);
     t.boolean('search_enabled').defaultTo(true);
     t.boolean('is_active').defaultTo(true);
     t.uuid('created_by').references('users.id');
@@ -81,13 +79,13 @@ export async function up(knex: Knex): Promise<void> {
   // Migrate existing AI configurations to Grok configurations
   await knex.raw(`
     INSERT INTO grok_configurations (
-      id, api_key_encrypted, model, max_tokens, temperature, 
+      id, api_key_encrypted, model, 
       search_enabled, is_active, created_by, created_at, updated_at
     )
     SELECT 
       id, api_key_encrypted, 
       CASE WHEN model = 'gpt-4' THEN 'grok-beta' ELSE 'grok-beta' END,
-      max_tokens, temperature, true, is_active, created_by, created_at, updated_at
+      true, is_active, created_by, created_at, updated_at
     FROM ai_configurations
     WHERE is_active = true
   `);

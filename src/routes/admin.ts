@@ -603,6 +603,238 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
     } catch (err) { next(err); }
   });
 
+  // --- Threat Management (admin) ---
+  router.get('/threats', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!db) return res.json([]);
+      
+      const { 
+        threat_level, 
+        threat_type, 
+        status = 'pending',
+        limit = 50, 
+        offset = 0 
+      } = req.query;
+      
+      let query = db.client('threat_analyses')
+        .select([
+          'id', 'threat_level', 'threat_type', 'confidence_score', 
+          'ai_summary', 'extracted_locations', 'keywords', 'reasoning',
+          'search_query', 'geographical_area', 'created_at', 'updated_at',
+          'processing_metadata'
+        ])
+        .orderBy('created_at', 'desc')
+        .limit(parseInt(limit as string))
+        .offset(parseInt(offset as string));
+      
+      if (threat_level) {
+        query = query.where('threat_level', threat_level);
+      }
+      
+      if (threat_type) {
+        query = query.where('threat_type', threat_type);
+      }
+      
+      // Filter by status (pending, reviewed, approved, dismissed)
+      if (status === 'pending') {
+        query = query.whereNull('admin_status');
+      } else if (status !== 'all') {
+        query = query.where('admin_status', status);
+      }
+      
+      const threats = await query;
+      res.json(threats);
+    } catch (err) { next(err); }
+  });
+
+  router.get('/threats/:threatId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!db) return res.status(500).json({ error: 'Database not initialized' });
+      
+      const threat = await db.client('threat_analyses')
+        .where('id', req.params.threatId)
+        .first();
+      
+      if (!threat) {
+        return res.status(404).json({ error: 'Threat not found' });
+      }
+      
+      res.json(threat);
+    } catch (err) { next(err); }
+  });
+
+  router.put('/threats/:threatId/status', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!db) return res.status(500).json({ error: 'Database not initialized' });
+      
+      const schema = Joi.object({
+        status: Joi.string().valid('pending', 'reviewed', 'approved', 'dismissed').required(),
+        notes: Joi.string().max(1000).allow('').optional()
+      });
+      
+      const { status, notes } = await schema.validateAsync(req.body);
+      const userId = (req.user as any)?.sub || 'admin';
+      
+      const threat = await db.client('threat_analyses')
+        .where('id', req.params.threatId)
+        .first();
+      
+      if (!threat) {
+        return res.status(404).json({ error: 'Threat not found' });
+      }
+      
+      await db.client('threat_analyses')
+        .where('id', req.params.threatId)
+        .update({
+          admin_status: status,
+          admin_notes: notes,
+          reviewed_by: userId,
+          reviewed_at: new Date(),
+          updated_at: new Date()
+        });
+      
+      if (audit) await audit.log({ 
+        actorUserId: userId, 
+        action: 'threat.update_status', 
+        resourceType: 'threat_analysis', 
+        resourceId: req.params.threatId, 
+        metadata: { status, notes } 
+      });
+      
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  });
+
+  router.post('/threats/:threatId/create-annotation', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!db) return res.status(500).json({ error: 'Database not initialized' });
+      
+      const schema = Joi.object({
+        teamId: Joi.string().uuid().required(),
+        annotationType: Joi.string().valid('poi', 'area').default('poi'),
+        customLabel: Joi.string().max(100).allow('').optional(),
+        customColor: Joi.string().valid('green', 'yellow', 'red', 'black', 'white').optional()
+      });
+      
+      const { teamId, annotationType, customLabel, customColor } = await schema.validateAsync(req.body);
+      const userId = (req.user as any)?.sub || 'admin';
+      
+      // Get the threat analysis
+      const threat = await db.client('threat_analyses')
+        .where('id', req.params.threatId)
+        .first();
+      
+      if (!threat) {
+        return res.status(404).json({ error: 'Threat not found' });
+      }
+      
+      // Verify team exists
+      const team = await db.client('teams').where({ id: teamId }).first();
+      if (!team) {
+        return res.status(404).json({ error: 'Team not found' });
+      }
+      
+      // Extract location data from threat
+      const locations = threat.extracted_locations || [];
+      if (locations.length === 0) {
+        return res.status(400).json({ error: 'No location data available for this threat' });
+      }
+      
+      // Use the first location for the annotation
+      const primaryLocation = locations[0];
+      
+      // Determine annotation properties based on threat level
+      const threatLevelColors = {
+        'LOW': 'green',
+        'MEDIUM': 'yellow', 
+        'HIGH': 'red',
+        'CRITICAL': 'black'
+      };
+      
+      const color = customColor || threatLevelColors[threat.threat_level as keyof typeof threatLevelColors] || 'red';
+      const label = customLabel || `${threat.threat_level} Threat: ${threat.threat_type || 'Unknown'}`;
+      
+      // Create annotation data
+      const annotationData = {
+        position: {
+          lng: primaryLocation.lng,
+          lat: primaryLocation.lat
+        },
+        color: color,
+        shape: 'exclamation', // Use exclamation for threats
+        label: label,
+        timestamp: Date.now(),
+        threatInfo: {
+          threatId: threat.id,
+          threatLevel: threat.threat_level,
+          threatType: threat.threat_type,
+          confidenceScore: threat.confidence_score,
+          summary: threat.ai_summary,
+          source: 'AI Threat Detection'
+        }
+      };
+      
+      // Create the annotation
+      const annotationId = uuidv4();
+      const annotation = {
+        id: annotationId,
+        user_id: userId,
+        team_id: teamId,
+        type: annotationType,
+        data: JSON.stringify(annotationData),
+        created_at: db.client.fn.now(),
+        updated_at: db.client.fn.now()
+      };
+      
+      await db.client('annotations').insert(annotation);
+      
+      // Update threat status to approved
+      await db.client('threat_analyses')
+        .where('id', req.params.threatId)
+        .update({
+          admin_status: 'approved',
+          annotation_id: annotationId,
+          reviewed_by: userId,
+          reviewed_at: new Date(),
+          updated_at: new Date()
+        });
+      
+      if (audit) await audit.log({ 
+        actorUserId: userId, 
+        action: 'threat.create_annotation', 
+        resourceType: 'threat_analysis', 
+        resourceId: req.params.threatId, 
+        metadata: { teamId, annotationId, annotationType } 
+      });
+      
+      // Emit real-time update to admin clients
+      if (io) {
+        io.emit('admin:threat_annotation_created', {
+          threatId: req.params.threatId,
+          annotationId,
+          teamId,
+          threatLevel: threat.threat_level,
+          threatType: threat.threat_type,
+          location: primaryLocation
+        });
+      }
+      
+      res.json({ 
+        success: true, 
+        annotationId,
+        annotation: {
+          id: annotationId,
+          user_id: userId,
+          team_id: teamId,
+          type: annotationType,
+          data: annotationData,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      });
+    } catch (err) { next(err); }
+  });
+
   return router;
 }
 

@@ -354,7 +354,7 @@ process.on('SIGINT', async () => {
     
     // Initialize social media services after migrations
     socialMediaConfigService = new SocialMediaConfigService(databaseService);
-    socialMediaService = new SocialMediaMonitoringService(databaseService, syncService, socialMediaConfigService);
+    socialMediaService = new SocialMediaMonitoringService(databaseService, syncService, socialMediaConfigService, io);
     
     // Register social media routes after services are initialized
     app.use('/api/social-media', auth.authenticate, auth.adminOnly, createSocialMediaRouter(databaseService, socialMediaService, socialMediaConfigService));

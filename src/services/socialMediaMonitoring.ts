@@ -14,9 +14,10 @@ export class SocialMediaMonitoringService {
   constructor(
     private db: DatabaseService,
     private syncService: SyncService,
-    private configService: SocialMediaConfigService
+    private configService: SocialMediaConfigService,
+    private io?: any
   ) {
-    this.grokService = new GrokService(db);
+    this.grokService = new GrokService(db, io);
   }
 
   // Legacy monitor methods removed - use geographical monitoring instead

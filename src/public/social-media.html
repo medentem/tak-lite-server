@@ -226,56 +226,6 @@
         border-top:1px solid #1f2a44;
       }
       
-      /* Threat cards */
-      .threat-card { 
-        background:var(--panel); 
-        border:1px solid #1f2a44; 
-        border-radius:12px; 
-        padding:16px; 
-        margin-bottom:12px;
-        transition:all 0.2s;
-      }
-      .threat-card:hover { border-color:var(--accent); }
-      .threat-card.critical { border-left:4px solid var(--critical); }
-      .threat-card.high { border-left:4px solid var(--warning); }
-      .threat-card.medium { border-left:4px solid var(--accent); }
-      .threat-card.low { border-left:4px solid var(--muted); }
-      .threat-header { 
-        display:flex; 
-        justify-content:space-between; 
-        align-items:center; 
-        margin-bottom:12px;
-      }
-      .threat-level-badge { 
-        padding:4px 12px; 
-        border-radius:9999px; 
-        font-size:12px; 
-        font-weight:600; 
-        text-transform:uppercase;
-      }
-      .threat-level-badge.critical { background:var(--critical); color:#fff; }
-      .threat-level-badge.high { background:var(--warning); color:#000; }
-      .threat-level-badge.medium { background:var(--accent); color:#fff; }
-      .threat-level-badge.low { background:var(--muted); color:#fff; }
-      .threat-time { font-size:12px; color:var(--muted); }
-      .threat-content h4 { margin:0 0 8px; color:#cbd5e1; }
-      .threat-summary { margin:0 0 12px; color:var(--text); line-height:1.5; }
-      .threat-source { 
-        margin:8px 0; 
-        font-size:12px; 
-        color:var(--muted); 
-      }
-      .threat-source a { color:var(--accent); text-decoration:none; }
-      .threat-actions { 
-        display:flex; 
-        gap:8px; 
-        margin-top:12px; 
-      }
-      .threat-actions button { 
-        padding:6px 12px; 
-        font-size:12px; 
-        height:auto; 
-      }
       
       /* Status indicators */
       .status-indicator { 
@@ -294,7 +244,6 @@
         .grid { grid-template-columns: 1fr; }
         .row { flex-direction:column; align-items:stretch; }
         .form-actions { flex-direction:column; }
-        .threat-header { flex-direction:column; align-items:flex-start; gap:8px; }
       }
     </style>
   </head>
@@ -325,6 +274,15 @@
       <div id="main-content">
         <!-- Global message area -->
         <div id="globalMessage" class="message hidden"></div>
+        
+        <!-- Page Description -->
+        <div class="card" style="margin-bottom: 20px;">
+          <h2>Social Media Monitoring Setup</h2>
+          <div class="help-text">
+            <strong>Configure AI-powered threat detection</strong> for geographical areas using Grok AI.<br>
+            <strong>Note:</strong> Threat review and management is handled in the <a href="/admin" style="color: var(--accent);">Admin Dashboard</a>.
+          </div>
+        </div>
         
         <!-- Service Status Section -->
         <div class="card">
@@ -387,52 +345,6 @@
           </div>
         </div>
 
-        <!-- Threat Dashboard -->
-        <div class="card">
-          <h2>Threat Dashboard</h2>
-          
-          <div class="grid" style="margin-bottom:20px;">
-            <div class="kpi">
-              <div class="value" id="total-threats">0</div>
-              <div class="label">Total Threats</div>
-            </div>
-            <div class="kpi">
-              <div class="value" id="critical-threats">0</div>
-              <div class="label">Critical</div>
-            </div>
-            <div class="kpi">
-              <div class="value" id="high-threats">0</div>
-              <div class="label">High</div>
-            </div>
-            <div class="kpi">
-              <div class="value" id="posts-analyzed">0</div>
-              <div class="label">Posts Analyzed</div>
-            </div>
-          </div>
-
-          <div style="display:flex; gap:12px; margin-bottom:20px;">
-            <select id="threat-level-filter">
-              <option value="">All Threat Levels</option>
-              <option value="CRITICAL">Critical</option>
-              <option value="HIGH">High</option>
-              <option value="MEDIUM">Medium</option>
-              <option value="LOW">Low</option>
-            </select>
-            <select id="threat-type-filter">
-              <option value="">All Types</option>
-              <option value="VIOLENCE">Violence</option>
-              <option value="TERRORISM">Terrorism</option>
-              <option value="NATURAL_DISASTER">Natural Disaster</option>
-              <option value="CIVIL_UNREST">Civil Unrest</option>
-              <option value="INFRASTRUCTURE">Infrastructure</option>
-            </select>
-            <input type="text" id="search-threats" placeholder="Search threats...">
-          </div>
-
-          <div id="threats-list">
-            <!-- Threats will be loaded here -->
-          </div>
-        </div>
       </div>
     </div>
 
@@ -507,18 +419,6 @@
             </select>
           </div>
           
-          <div class="form-group">
-            <label>Max Tokens</label>
-            <input type="number" name="max_tokens" value="2000" min="100" max="4000">
-            <div class="help-text">Higher values allow for more detailed geographical threat analysis</div>
-          </div>
-          
-          <div class="form-group">
-            <label>Temperature</label>
-            <input type="range" name="temperature" min="0" max="1" step="0.1" value="0.3">
-            <div class="help-text">Lower values = more focused, Higher values = more creative</div>
-          </div>
-          
           <div class="form-actions">
             <button type="button" onclick="testAI()" class="secondary">Test AI</button>
             <button type="submit">Save Configuration</button>
@@ -571,7 +471,6 @@
     <script>
       // Global state
       let geographicalMonitors = [];
-      let threats = [];
       let aiConfig = null;
       let serviceStatus = null;
       let serviceConfig = null;
@@ -602,20 +501,13 @@
             loadServiceStatus(),
             loadServiceConfig(),
             loadGeographicalMonitors(),
-            loadAIConfig(),
-            loadThreats(),
-            loadThreatStatistics()
+            loadAIConfig()
           ]);
         } catch (error) {
           console.error('Failed to load page data:', error);
           // Show error but keep page visible
           showError('Some data failed to load: ' + error.message);
         }
-        
-        // Set up event listeners
-        document.getElementById('threat-level-filter').addEventListener('change', filterThreats);
-        document.getElementById('threat-type-filter').addEventListener('change', filterThreats);
-        document.getElementById('search-threats').addEventListener('input', filterThreats);
         
         // Set up form handlers
         document.getElementById('geographical-monitor-form').addEventListener('submit', handleGeographicalMonitorSubmit);
@@ -783,7 +675,7 @@
             <div>
               <div style="font-weight:600; margin-bottom:4px;">AI Configuration Active</div>
               <div style="font-size:12px; color:var(--muted);">
-                Model: ${aiConfig.model} | Max Tokens: ${aiConfig.max_tokens} | Temperature: ${aiConfig.temperature}
+                Model: ${aiConfig.model}
               </div>
             </div>
             <button onclick="showAIConfigModal()" class="secondary">Edit</button>
@@ -791,65 +683,6 @@
         `;
       }
 
-      // Load threats
-      async function loadThreats() {
-        try {
-          const data = await apiCall('/api/social-media/threats?limit=50');
-          threats = data.threats;
-          renderThreats();
-        } catch (error) {
-          console.error('Failed to load threats:', error);
-          showError('Failed to load threats: ' + error.message);
-        }
-      }
-
-      // Render threats
-      function renderThreats() {
-        const container = document.getElementById('threats-list');
-        if (threats.length === 0) {
-          container.innerHTML = '<div style="text-align:center; color:var(--muted); padding:40px;">No threats detected yet.</div>';
-          return;
-        }
-
-        container.innerHTML = threats.map(threat => `
-          <div class="threat-card ${threat.threat_level.toLowerCase()}">
-            <div class="threat-header">
-              <div class="threat-level-badge ${threat.threat_level.toLowerCase()}">${threat.threat_level}</div>
-              <div style="font-size:12px; color:var(--muted);">${threat.threat_type || 'Unknown'}</div>
-              <div class="threat-time">${new Date(threat.created_at).toLocaleString()}</div>
-            </div>
-            
-            <div class="threat-content">
-              <h4>${threat.ai_summary || 'Threat Detected'}</h4>
-              <div class="threat-summary">
-                Confidence: ${(threat.confidence_score * 100).toFixed(1)}% | 
-                Keywords: ${(threat.keywords || []).join(', ')}
-              </div>
-            </div>
-            
-            <div class="threat-actions">
-              <button onclick="viewThreatDetails('${threat.id}')" class="secondary">View Details</button>
-              <button onclick="verifyThreat('${threat.id}', true)" class="success">Verify</button>
-              <button onclick="verifyThreat('${threat.id}', false)" class="danger">Dismiss</button>
-            </div>
-          </div>
-        `).join('');
-      }
-
-      // Load threat statistics
-      async function loadThreatStatistics() {
-        try {
-          const data = await apiCall('/api/social-media/threats/statistics');
-          const stats = data.statistics;
-          
-          document.getElementById('total-threats').textContent = stats.total_threats;
-          document.getElementById('critical-threats').textContent = stats.by_level.CRITICAL || 0;
-          document.getElementById('high-threats').textContent = stats.by_level.HIGH || 0;
-          document.getElementById('posts-analyzed').textContent = stats.total_threats; // Simplified for now
-        } catch (error) {
-          console.error('Failed to load threat statistics:', error);
-        }
-      }
 
       // Legacy monitor modal functions removed - use geographical monitoring instead
 
@@ -862,8 +695,6 @@
         document.getElementById('ai-config-form').reset();
         if (aiConfig) {
           document.getElementById('ai-config-form').querySelector('[name="model"]').value = aiConfig.model;
-          document.getElementById('ai-config-form').querySelector('[name="max_tokens"]').value = aiConfig.max_tokens;
-          document.getElementById('ai-config-form').querySelector('[name="temperature"]').value = aiConfig.temperature;
         }
         document.getElementById('ai-config-modal').classList.remove('hidden');
       }
@@ -1007,45 +838,6 @@
         }
       }
 
-      // Threat actions
-      async function verifyThreat(id, verified) {
-        try {
-          await apiCall(`/api/social-media/threat-annotations/${id}/verify`, {
-            method: 'POST',
-            body: JSON.stringify({ is_verified: verified })
-          });
-          
-          loadThreats();
-          showSuccess(`Threat ${verified ? 'verified' : 'dismissed'}`);
-        } catch (error) {
-          showError('Failed to update threat: ' + error.message);
-        }
-      }
-
-      function viewThreatDetails(id) {
-        // TODO: Implement threat details modal
-        showError('Threat details view not implemented yet');
-      }
-
-      // Filter functions
-      function filterThreats() {
-        const levelFilter = document.getElementById('threat-level-filter').value;
-        const typeFilter = document.getElementById('threat-type-filter').value;
-        const searchFilter = document.getElementById('search-threats').value.toLowerCase();
-        
-        const filtered = threats.filter(threat => {
-          if (levelFilter && threat.threat_level !== levelFilter) return false;
-          if (typeFilter && threat.threat_type !== typeFilter) return false;
-          if (searchFilter && !threat.ai_summary?.toLowerCase().includes(searchFilter)) return false;
-          return true;
-        });
-        
-        // Re-render with filtered threats
-        const originalThreats = threats;
-        threats = filtered;
-        renderThreats();
-        threats = originalThreats;
-      }
 
       // Utility functions
       function showSuccess(message) {

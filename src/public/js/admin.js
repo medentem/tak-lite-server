@@ -15,6 +15,13 @@ let messageTeamFilter = '';
 let messageAutoScroll = true;
 let messageShowTimestamps = true;
 
+// Threat review variables
+let threatsList = [];
+let threatStatusFilter = 'pending';
+let threatLevelFilter = '';
+let threatAutoRefresh = true;
+let threatRefreshInterval = null;
+
 // Real-time activity logging
 function addActivityLog(message, type = 'info') {
   const timestamp = new Date().toLocaleTimeString();
@@ -154,6 +161,365 @@ function setupMessageControls() {
   }
 }
 
+// Threat review functions
+async function loadThreats() {
+  try {
+    const params = new URLSearchParams();
+    if (threatStatusFilter) params.append('status', threatStatusFilter);
+    if (threatLevelFilter) params.append('threat_level', threatLevelFilter);
+    params.append('limit', '50');
+    
+    const response = await fetch(`/api/admin/threats?${params}`, {
+      headers: hdrs()
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to load threats: ${response.status}`);
+    }
+    
+    threatsList = await response.json();
+    updateThreatsDisplay();
+    addActivityLog(`Loaded ${threatsList.length} threats`, 'info');
+  } catch (error) {
+    console.error('Failed to load threats:', error);
+    addActivityLog(`Failed to load threats: ${error.message}`, 'error');
+  }
+}
+
+function updateThreatsDisplay() {
+  const threatsEl = q('#threats_list');
+  if (!threatsEl) return;
+  
+  if (threatsList.length === 0) {
+    threatsEl.innerHTML = '<div class="muted" style="text-align: center; padding: 20px;">No threats found</div>';
+    return;
+  }
+  
+  const html = threatsList.map(threat => {
+    const threatLevelColors = {
+      'LOW': '#22c55e',
+      'MEDIUM': '#f59e0b', 
+      'HIGH': '#ef4444',
+      'CRITICAL': '#dc2626'
+    };
+    
+    const color = threatLevelColors[threat.threat_level] || '#8b97a7';
+    const status = threat.admin_status || 'pending';
+    const statusColors = {
+      'pending': '#f59e0b',
+      'reviewed': '#3b82f6',
+      'approved': '#22c55e',
+      'dismissed': '#6b7280'
+    };
+    
+    const locations = threat.extracted_locations || [];
+    const locationText = locations.length > 0 
+      ? `${locations.length} location(s): ${locations.map(loc => loc.name || `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`).join(', ')}`
+      : 'No location data';
+    
+    return `
+      <div style="border-bottom: 1px solid #1f2a44; padding: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+              <span style="background: ${color}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                ${threat.threat_level}
+              </span>
+              <span style="background: ${statusColors[status]}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                ${status.toUpperCase()}
+              </span>
+              <span style="color: var(--muted); font-size: 12px;">
+                ${(threat.confidence_score * 100).toFixed(1)}% confidence
+              </span>
+            </div>
+            <div style="font-weight: 600; margin-bottom: 4px;">
+              ${threat.threat_type || 'Unknown Threat Type'}
+            </div>
+            <div style="color: var(--text); margin-bottom: 8px; line-height: 1.4;">
+              ${threat.ai_summary || 'No summary available'}
+            </div>
+            <div style="color: var(--muted); font-size: 12px; margin-bottom: 8px;">
+              <strong>Area:</strong> ${threat.geographical_area || 'Unknown'}<br>
+              <strong>Locations:</strong> ${locationText}<br>
+              <strong>Keywords:</strong> ${(threat.keywords || []).join(', ') || 'None'}<br>
+              <strong>Detected:</strong> ${new Date(threat.created_at).toLocaleString()}
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 16px;">
+            ${status === 'pending' ? `
+              <button onclick="reviewThreat('${threat.id}', 'approved')" style="background: #22c55e; color: white; padding: 6px 12px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                Approve & Create Annotation
+              </button>
+              <button onclick="reviewThreat('${threat.id}', 'dismissed')" style="background: #6b7280; color: white; padding: 6px 12px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                Dismiss
+              </button>
+            ` : `
+              <div style="color: var(--muted); font-size: 12px; text-align: center;">
+                ${status === 'approved' ? '✓ Approved' : status === 'dismissed' ? '✗ Dismissed' : 'Reviewed'}
+              </div>
+            `}
+            <button onclick="showThreatDetails('${threat.id}')" style="background: #3b82f6; color: white; padding: 6px 12px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
+              View Details
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  threatsEl.innerHTML = html;
+}
+
+async function reviewThreat(threatId, status) {
+  try {
+    if (status === 'approved') {
+      // For approved threats, we need to create an annotation
+      // First, get the teams to let the user choose which team to create the annotation for
+      const teamsResponse = await fetch('/api/admin/teams', { headers: hdrs() });
+      const teams = await teamsResponse.json();
+      
+      if (teams.length === 0) {
+        showMessage('No teams available to create annotation', 'error');
+        return;
+      }
+      
+      // For now, create annotation for the first team
+      // In a more sophisticated implementation, you'd show a team selection dialog
+      const teamId = teams[0].id;
+      
+      const response = await fetch(`/api/admin/threats/${threatId}/create-annotation`, {
+        method: 'POST',
+        headers: hdrs(),
+        body: JSON.stringify({ teamId })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to create annotation: ${response.status}`);
+      }
+      
+      addActivityLog(`Threat approved and annotation created`, 'success');
+      showMessage('Threat approved and annotation created!', 'success', 3000);
+    } else {
+      // For other statuses, just update the status
+      const response = await fetch(`/api/admin/threats/${threatId}/status`, {
+        method: 'PUT',
+        headers: hdrs(),
+        body: JSON.stringify({ status })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to update threat status: ${response.status}`);
+      }
+      
+      addActivityLog(`Threat ${status}`, 'success');
+    }
+    
+    await loadThreats(); // Refresh the list
+  } catch (error) {
+    console.error('Failed to review threat:', error);
+    addActivityLog(`Failed to review threat: ${error.message}`, 'error');
+    showMessage(`Failed to review threat: ${error.message}`, 'error');
+  }
+}
+
+async function createThreatAnnotation(threatId, teamId) {
+  try {
+    const response = await fetch(`/api/admin/threats/${threatId}/create-annotation`, {
+      method: 'POST',
+      headers: hdrs(),
+      body: JSON.stringify({ teamId })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to create annotation: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    addActivityLog(`Created annotation for threat`, 'success');
+    showMessage('Threat annotation created successfully!', 'success', 3000);
+    
+    // Refresh map data if available
+    if (window.adminMap && window.adminMap.isAuthenticated()) {
+      await window.adminMap.loadMapData();
+    }
+    
+    await loadThreats(); // Refresh the list
+  } catch (error) {
+    console.error('Failed to create threat annotation:', error);
+    addActivityLog(`Failed to create annotation: ${error.message}`, 'error');
+    showMessage(`Failed to create annotation: ${error.message}`, 'error');
+  }
+}
+
+function showThreatDetails(threatId) {
+  const threat = threatsList.find(t => t.id === threatId);
+  if (!threat) return;
+  
+  const threatLevelColors = {
+    'LOW': '#22c55e',
+    'MEDIUM': '#f59e0b', 
+    'HIGH': '#ef4444',
+    'CRITICAL': '#dc2626'
+  };
+  
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+    background: rgba(0,0,0,0.8); z-index: 2000; 
+    display: flex; align-items: center; justify-content: center;
+  `;
+  
+  modal.innerHTML = `
+    <div style="background: var(--panel); border: 1px solid #1f2a44; border-radius: 12px; padding: 24px; max-width: 600px; max-height: 80vh; overflow-y: auto;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="margin: 0; color: var(--text);">Threat Details</h3>
+        <button onclick="this.closest('.modal').remove()" style="background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer;">&times;</button>
+      </div>
+      
+      <div style="margin-bottom: 16px;">
+        <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+          <span style="background: ${threatLevelColors[threat.threat_level] || '#8b97a7'}; color: white; padding: 6px 12px; border-radius: 6px; font-weight: 600;">
+            ${threat.threat_level}
+          </span>
+          <span style="background: #3b82f6; color: white; padding: 6px 12px; border-radius: 6px;">
+            ${threat.threat_type || 'Unknown'}
+          </span>
+          <span style="color: var(--muted); padding: 6px 12px;">
+            ${(threat.confidence_score * 100).toFixed(1)}% confidence
+          </span>
+        </div>
+        
+        <div style="margin-bottom: 12px;">
+          <strong style="color: var(--text);">Summary:</strong>
+          <div style="color: var(--text); margin-top: 4px; line-height: 1.4;">
+            ${threat.ai_summary || 'No summary available'}
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 12px;">
+          <strong style="color: var(--text);">Geographical Area:</strong>
+          <div style="color: var(--muted); margin-top: 4px;">
+            ${threat.geographical_area || 'Unknown'}
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 12px;">
+          <strong style="color: var(--text);">Locations:</strong>
+          <div style="color: var(--muted); margin-top: 4px;">
+            ${(threat.extracted_locations || []).map(loc => 
+              `${loc.name || 'Unnamed'} (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}) - ${(loc.confidence * 100).toFixed(1)}% confidence`
+            ).join('<br>') || 'No location data'}
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 12px;">
+          <strong style="color: var(--text);">Keywords:</strong>
+          <div style="color: var(--muted); margin-top: 4px;">
+            ${(threat.keywords || []).join(', ') || 'None'}
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 12px;">
+          <strong style="color: var(--text);">Detected:</strong>
+          <div style="color: var(--muted); margin-top: 4px;">
+            ${new Date(threat.created_at).toLocaleString()}
+          </div>
+        </div>
+        
+        ${threat.reasoning ? `
+          <div style="margin-bottom: 12px;">
+            <strong style="color: var(--text);">AI Reasoning:</strong>
+            <div style="color: var(--muted); margin-top: 4px; line-height: 1.4;">
+              ${threat.reasoning}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+  
+  modal.className = 'modal';
+  document.body.appendChild(modal);
+}
+
+function setupThreatControls() {
+  // Status filter
+  const statusFilter = q('#threat_status_filter');
+  if (statusFilter) {
+    statusFilter.addEventListener('change', (e) => {
+      threatStatusFilter = e.target.value;
+      loadThreats();
+    });
+  }
+  
+  // Level filter
+  const levelFilter = q('#threat_level_filter');
+  if (levelFilter) {
+    levelFilter.addEventListener('change', (e) => {
+      threatLevelFilter = e.target.value;
+      loadThreats();
+    });
+  }
+  
+  // Refresh button
+  const refreshBtn = q('#refresh_threats');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', loadThreats);
+  }
+  
+  // Auto-refresh toggle
+  const autoRefreshToggle = q('#threat_auto_refresh');
+  if (autoRefreshToggle) {
+    autoRefreshToggle.addEventListener('change', (e) => {
+      threatAutoRefresh = e.target.checked;
+      if (threatAutoRefresh) {
+        startThreatAutoRefresh();
+      } else {
+        stopThreatAutoRefresh();
+      }
+    });
+  }
+}
+
+function startThreatAutoRefresh() {
+  if (threatRefreshInterval) {
+    clearInterval(threatRefreshInterval);
+  }
+  threatRefreshInterval = setInterval(loadThreats, 30000); // Refresh every 30 seconds
+}
+
+function stopThreatAutoRefresh() {
+  if (threatRefreshInterval) {
+    clearInterval(threatRefreshInterval);
+    threatRefreshInterval = null;
+  }
+}
+
+// WebSocket event handlers for threats
+function handleNewThreatDetected(data) {
+  addActivityLog(`New ${data.threat_level} threat detected: ${data.threat_type || 'Unknown'}`, 'warning');
+  
+  // Show notification
+  showMessage(`New ${data.threat_level} threat detected in ${data.geographical_area}`, 'warning', 8000);
+  
+  // Refresh threats list if we're viewing pending threats
+  if (threatStatusFilter === 'pending' || threatStatusFilter === 'all') {
+    loadThreats();
+  }
+}
+
+function handleThreatAnnotationCreated(data) {
+  addActivityLog(`Threat annotation created for ${data.threatLevel} threat`, 'success');
+  
+  // Refresh threats list
+  loadThreats();
+  
+  // Refresh map data if available
+  if (window.adminMap && window.adminMap.isAuthenticated()) {
+    window.adminMap.loadMapData();
+  }
+}
+
 // WebSocket connection management
 function connectWebSocket() {
   // Check if Socket.IO library is loaded first
@@ -278,6 +644,16 @@ function connectWebSocket() {
     // Listen for message events
     socket.on('admin:message_received', (data) => {
       handleMessageReceived(data);
+    });
+    
+    // Listen for new threat events
+    socket.on('admin:new_threat_detected', (data) => {
+      handleNewThreatDetected(data);
+    });
+    
+    // Listen for threat annotation created events
+    socket.on('admin:threat_annotation_created', (data) => {
+      handleThreatAnnotationCreated(data);
     });
     
   } catch (error) {
@@ -435,6 +811,17 @@ function showDash(show) {
     // Initialize message monitoring controls
     setupMessageControls();
     
+    // Initialize threat review controls
+    setupThreatControls();
+    
+    // Load initial threats
+    loadThreats();
+    
+    // Start auto-refresh if enabled
+    if (threatAutoRefresh) {
+      startThreatAutoRefresh();
+    }
+    
     // Wait for Socket.IO library if not available, then connect
     if (typeof io !== 'undefined') {
       // Add a small delay to ensure authentication is fully processed
@@ -448,6 +835,7 @@ function showDash(show) {
     }
   } else {
     disconnectWebSocket();
+    stopThreatAutoRefresh();
   }
 }
 
