@@ -193,6 +193,19 @@
         width:100%; 
         box-sizing:border-box; 
       }
+      .checkbox-label {
+        display: flex !important;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        margin-bottom: 0 !important;
+      }
+      .checkbox-label input[type="checkbox"] {
+        width: auto !important;
+        height: auto !important;
+        margin: 0 !important;
+        transform: scale(1.2);
+      }
       .help-text { 
         background: #0d1b34; 
         border: 1px solid #223056; 
@@ -457,8 +470,9 @@
           </div>
           
           <div class="form-group">
-            <label>
-              <input type="checkbox" name="is_active" checked> Active
+            <label class="checkbox-label">
+              <input type="checkbox" name="is_active" checked> 
+              <span>Active</span>
             </label>
           </div>
           
@@ -895,6 +909,17 @@
         e.preventDefault();
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
+
+        // Convert checkbox value to boolean
+        data.is_active = data.is_active === 'on';
+        
+        // Convert numeric values
+        data.monitoring_interval = parseInt(data.monitoring_interval);
+        
+        // Convert empty strings to undefined for optional fields
+        if (data.search_query === '') {
+          data.search_query = undefined;
+        }
 
         try {
           await apiCall('/api/social-media/geographical-monitors', {

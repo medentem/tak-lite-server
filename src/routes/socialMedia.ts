@@ -28,7 +28,7 @@ export function createSocialMediaRouter(
 
   const geographicalSearchSchema = Joi.object({
     geographical_area: Joi.string().min(1).max(1000).required(),
-    search_query: Joi.string().max(1000).optional(),
+    search_query: Joi.string().max(1000).allow('').optional(),
     monitoring_interval: Joi.number().integer().min(60).max(3600).default(300),
     is_active: Joi.boolean().default(true)
   });
