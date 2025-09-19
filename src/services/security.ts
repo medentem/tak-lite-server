@@ -49,9 +49,14 @@ export class SecurityService {
   async getEncryptionKey(): Promise<string> {
     const env = process.env.ENCRYPTION_KEY?.trim();
     if (env) return env;
-    const stored = await this.config.get<string>('security.encryption_key');
+    
+    let stored = await this.config.get<string>('security.encryption_key');
     if (stored && stored.trim().length >= 32) return stored;
-    throw new Error('Server not configured: missing encryption key');
+    
+    // Auto-generate encryption key if none exists
+    const generatedKey = SecurityService.generateStrongSecret(32); // 64 character hex string
+    await this.config.set('security.encryption_key', generatedKey);
+    return generatedKey;
   }
 
   async encryptApiKey(apiKey: string): Promise<string> {

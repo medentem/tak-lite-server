@@ -215,6 +215,22 @@ app.get('/favicon.ico', (_req: Request, res: Response) => {
   res.status(204).end(); // No content, but no error
 });
 
+// Root route - redirect to setup if not completed, otherwise redirect to admin
+app.get('/', async (req: Request, res: Response) => {
+  try {
+    const completed = await configService.get<boolean>('setup.completed');
+    if (!completed) {
+      return res.redirect('/setup');
+    }
+    // If setup is completed, redirect to admin dashboard
+    return res.redirect('/admin');
+  } catch (error) {
+    logger.error('Error checking setup status', { error });
+    // If there's an error checking setup status, redirect to setup to be safe
+    return res.redirect('/setup');
+  }
+});
+
 // First-run setup
 app.use('/api/setup', createSetupRouter(databaseService, configService));
 
@@ -326,6 +342,15 @@ process.on('SIGINT', async () => {
 (async () => {
   try {
     await databaseService.migrateToLatest();
+    
+    // Initialize encryption key if not already set
+    try {
+      const securityService = new SecurityService(configService);
+      await securityService.getEncryptionKey(); // This will auto-generate if needed
+      logger.info('Encryption key initialized');
+    } catch (error) {
+      logger.error('Failed to initialize encryption key', { error });
+    }
     
     // Initialize social media services after migrations
     socialMediaConfigService = new SocialMediaConfigService(databaseService);
