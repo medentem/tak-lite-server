@@ -350,26 +350,9 @@
           </div>
         </div>
 
-        <!-- Create Monitor Section -->
-        <div class="card">
-          <h2>Create New Monitor</h2>
-          <p style="color: var(--muted); margin-bottom: 20px;">Set up a new social media monitor to track threats and emergencies in real-time.</p>
-          <button onclick="showCreateMonitorModal()" class="success" id="create-monitor-btn" style="padding: 12px 24px; font-size: 16px;">
-            + Create New Monitor
-          </button>
-        </div>
+        <!-- Legacy monitor creation removed - use geographical monitoring instead -->
 
-        <!-- Monitors Section -->
-        <div class="card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h2>Active Monitors (Legacy)</h2>
-            <span id="monitor-count" class="pill">0 monitors</span>
-          </div>
-          
-          <div id="monitors-grid" class="grid">
-            <!-- Monitors will be loaded here -->
-          </div>
-        </div>
+        <!-- Legacy monitors section removed - use geographical monitoring instead -->
 
         <!-- Geographical Monitoring Section -->
         <div class="card">
@@ -444,57 +427,7 @@
       </div>
     </div>
 
-    <!-- Create/Edit Monitor Modal -->
-    <div id="monitor-modal" class="modal hidden">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 id="monitor-modal-title">Create Monitor</h3>
-          <button class="close" onclick="closeModal()">&times;</button>
-        </div>
-        
-        <form id="monitor-form">
-          <div class="form-group">
-            <label>Monitor Name</label>
-            <input type="text" name="name" placeholder="Emergency Services Monitor" required>
-          </div>
-          
-          <div class="form-group">
-            <label>TwitterAPI.io API Key</label>
-            <input type="password" name="api_credentials" placeholder="Your TwitterAPI.io API key" required>
-            <div class="help-text">Get your API key from <a href="https://twitterapi.io" target="_blank" style="color:var(--accent);">twitterapi.io</a></div>
-          </div>
-          
-          <div class="form-group">
-            <label>Advanced Search Query</label>
-            <textarea name="search_query" placeholder='"emergency" OR "police" OR "fire" near:Seattle within:10mi' required></textarea>
-            <div class="help-text">
-              Use Twitter's advanced search operators. 
-              <a href="https://github.com/igorbrigadir/twitter-advanced-search" target="_blank" style="color:var(--accent);">See examples</a>
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label>Query Type</label>
-            <select name="query_type">
-              <option value="Latest">Latest (Real-time)</option>
-              <option value="Top">Top (Popular)</option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label>Monitoring Interval (seconds)</label>
-            <input type="number" name="monitoring_interval" value="300" min="60" max="3600">
-            <div class="help-text">How often to check for new posts (60-3600 seconds)</div>
-          </div>
-          
-          
-          <div class="form-actions">
-            <button type="button" onclick="testConnection()" class="secondary">Test Connection</button>
-            <button type="submit">Save Monitor</button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <!-- Legacy monitor modal removed - use geographical monitoring instead -->
 
     <!-- Geographical Monitor Modal -->
     <div id="geographical-monitor-modal" class="modal hidden">
@@ -624,8 +557,6 @@
 
     <script>
       // Global state
-      let currentMonitorId = null;
-      let monitors = [];
       let geographicalMonitors = [];
       let threats = [];
       let aiConfig = null;
@@ -657,7 +588,6 @@
           await Promise.all([
             loadServiceStatus(),
             loadServiceConfig(),
-            loadMonitors(),
             loadGeographicalMonitors(),
             loadAIConfig(),
             loadThreats(),
@@ -675,7 +605,6 @@
         document.getElementById('search-threats').addEventListener('input', filterThreats);
         
         // Set up form handlers
-        document.getElementById('monitor-form').addEventListener('submit', handleMonitorSubmit);
         document.getElementById('geographical-monitor-form').addEventListener('submit', handleGeographicalMonitorSubmit);
         document.getElementById('ai-config-form').addEventListener('submit', handleAIConfigSubmit);
         document.getElementById('service-config-form').addEventListener('submit', handleServiceConfigSubmit);
@@ -767,17 +696,7 @@
         document.getElementById('service-posts-today').textContent = serviceStatus.posts_processed_today;
       }
 
-      // Load monitors
-      async function loadMonitors() {
-        try {
-          const data = await apiCall('/api/social-media/monitors');
-          monitors = data.monitors;
-          renderMonitors();
-        } catch (error) {
-          console.error('Failed to load monitors:', error);
-          showError('Failed to load monitors: ' + error.message);
-        }
-      }
+      // Legacy monitor functions removed - use geographical monitoring instead
 
       // Load geographical monitors
       async function loadGeographicalMonitors() {
@@ -825,54 +744,7 @@
         `).join('');
       }
 
-      // Render monitors
-      function renderMonitors() {
-        const grid = document.getElementById('monitors-grid');
-        const countEl = document.getElementById('monitor-count');
-        
-        // Update monitor count
-        if (countEl) {
-          countEl.textContent = `${monitors.length} monitor${monitors.length !== 1 ? 's' : ''}`;
-        }
-        
-        if (monitors.length === 0) {
-          grid.innerHTML = '<div style="text-align:center; color:var(--muted); padding:40px;">No monitors configured. Create one to get started.</div>';
-          return;
-        }
-
-        grid.innerHTML = monitors.map(monitor => `
-          <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-              <h3>${monitor.name}</h3>
-              <div class="pill ${monitor.is_active ? 'active' : 'inactive'}">
-                <span class="status-indicator ${monitor.is_active ? 'active' : 'inactive'}"></span>
-                ${monitor.is_active ? 'Active' : 'Inactive'}
-              </div>
-            </div>
-            
-            <div style="margin-bottom:12px;">
-              <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">Query:</div>
-              <div style="font-size:14px; background:#0d1b34; padding:8px; border-radius:6px; border:1px solid #223056;">
-                ${monitor.search_query}
-              </div>
-            </div>
-            
-            <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:16px;">
-              <span>Interval: ${monitor.monitoring_interval}s</span>
-              <span>Type: ${monitor.query_type}</span>
-              <span>Last: ${monitor.last_checked_at ? new Date(monitor.last_checked_at).toLocaleString() : 'Never'}</span>
-            </div>
-            
-            <div style="display:flex; gap:8px;">
-              <button onclick="editMonitor('${monitor.id}')" class="secondary" style="flex:1;">Edit</button>
-              <button onclick="toggleMonitor('${monitor.id}')" class="${monitor.is_active ? 'secondary' : 'success'}" style="flex:1;">
-                ${monitor.is_active ? 'Pause' : 'Start'}
-              </button>
-              <button onclick="deleteMonitor('${monitor.id}')" class="danger">Delete</button>
-            </div>
-          </div>
-        `).join('');
-      }
+      // Legacy monitor rendering removed - use geographical monitoring instead
 
       // Load AI configuration
       async function loadAIConfig() {
@@ -971,13 +843,7 @@
         }
       }
 
-      // Modal functions
-      function showCreateMonitorModal() {
-        currentMonitorId = null;
-        document.getElementById('monitor-modal-title').textContent = 'Create Monitor';
-        document.getElementById('monitor-form').reset();
-        document.getElementById('monitor-modal').classList.remove('hidden');
-      }
+      // Legacy monitor modal functions removed - use geographical monitoring instead
 
       function showGeographicalMonitorModal() {
         document.getElementById('geographical-monitor-form').reset();
@@ -998,39 +864,7 @@
         document.querySelectorAll('.modal').forEach(modal => modal.classList.add('hidden'));
       }
 
-      // Form handlers
-      async function handleMonitorSubmit(e) {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const data = Object.fromEntries(formData.entries());
-        
-        // Convert api_credentials string to object format expected by API
-        if (data.api_credentials) {
-          data.api_credentials = {
-            api_key: data.api_credentials
-          };
-        }
-        
-        try {
-          if (currentMonitorId) {
-            await apiCall(`/api/social-media/monitors/${currentMonitorId}`, {
-              method: 'PUT',
-              body: JSON.stringify(data)
-            });
-          } else {
-            await apiCall('/api/social-media/monitors', {
-              method: 'POST',
-              body: JSON.stringify(data)
-            });
-          }
-          
-          closeModal();
-          loadMonitors();
-          showSuccess('Monitor saved successfully');
-        } catch (error) {
-          showError('Failed to save monitor: ' + error.message);
-        }
-      }
+      // Legacy monitor form handlers removed - use geographical monitoring instead
 
       async function handleAIConfigSubmit(e) {
         e.preventDefault();
@@ -1105,95 +939,9 @@
         }
       }
 
-      // Monitor actions
-      async function editMonitor(id) {
-        const monitor = monitors.find(m => m.id === id);
-        if (!monitor) return;
-        
-        currentMonitorId = id;
-        document.getElementById('monitor-modal-title').textContent = 'Edit Monitor';
-        
-        const form = document.getElementById('monitor-form');
-        form.querySelector('[name="name"]').value = monitor.name;
-        form.querySelector('[name="api_credentials"]').value = ''; // Don't show existing API key for security
-        form.querySelector('[name="search_query"]').value = monitor.search_query;
-        form.querySelector('[name="query_type"]').value = monitor.query_type;
-        form.querySelector('[name="monitoring_interval"]').value = monitor.monitoring_interval;
-        
-        document.getElementById('monitor-modal').classList.remove('hidden');
-      }
+      // Legacy monitor actions removed - use geographical monitoring instead
 
-      async function toggleMonitor(id) {
-        try {
-          const monitor = monitors.find(m => m.id === id);
-          if (!monitor) return;
-          
-          if (monitor.is_active) {
-            await apiCall(`/api/social-media/monitors/${id}/stop`, { method: 'POST' });
-          } else {
-            await apiCall(`/api/social-media/monitors/${id}/start`, { method: 'POST' });
-          }
-          
-          loadMonitors();
-          showSuccess(`Monitor ${monitor.is_active ? 'stopped' : 'started'} successfully`);
-        } catch (error) {
-          showError('Failed to toggle monitor: ' + error.message);
-        }
-      }
-
-      async function deleteMonitor(id) {
-        if (!confirm('Are you sure you want to delete this monitor?')) return;
-        
-        try {
-          await apiCall(`/api/social-media/monitors/${id}`, { method: 'DELETE' });
-          loadMonitors();
-          showSuccess('Monitor deleted successfully');
-        } catch (error) {
-          showError('Failed to delete monitor: ' + error.message);
-        }
-      }
-
-      // Test functions
-      async function testConnection() {
-        const form = document.getElementById('monitor-form');
-        const apiKey = form.querySelector('[name="api_credentials"]').value;
-        const searchQuery = form.querySelector('[name="search_query"]').value;
-        
-        if (!apiKey || !searchQuery) {
-          showError('Please enter API key and search query');
-          return;
-        }
-        
-        // Get the test button and add loading state
-        const testButton = document.querySelector('button[onclick="testConnection()"]');
-        const originalText = testButton.textContent;
-        const originalDisabled = testButton.disabled;
-        
-        // Show loading state
-        testButton.textContent = 'Testing...';
-        testButton.disabled = true;
-        testButton.classList.add('loading');
-        
-        try {
-          const result = await apiCall('/api/social-media/test-connection', {
-            method: 'POST',
-            body: JSON.stringify({ api_key: apiKey, search_query: searchQuery })
-          });
-          
-          if (result.success) {
-            showSuccess(`Connection successful! Found ${result.samplePosts} sample posts.`);
-          } else {
-            showError('Connection failed: ' + result.error);
-          }
-        } catch (error) {
-          showError('Connection test failed: ' + error.message);
-        } finally {
-          // Restore button state
-          testButton.textContent = originalText;
-          testButton.disabled = originalDisabled;
-          testButton.classList.remove('loading');
-        }
-      }
+      // Legacy test functions removed - use geographical monitoring instead
 
       async function testAI() {
         const form = document.getElementById('ai-config-form');

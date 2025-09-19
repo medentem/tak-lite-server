@@ -6,62 +6,9 @@ import { SyncService } from './sync';
 import { SocialMediaConfigService } from './socialMediaConfig';
 import { logger } from '../utils/logger';
 
-export interface SocialMediaMonitor {
-  id: string;
-  name: string;
-  platform: string;
-  api_provider: string;
-  api_credentials: any;
-  search_query: string;
-  query_type: 'Latest' | 'Top';
-  monitoring_interval: number;
-  is_active: boolean;
-  last_checked_at?: Date;
-  created_by?: string;
-  created_at: Date;
-  updated_at: Date;
-}
-
-// Legacy interface - now using GeographicalSearch from GrokService
-export interface GeographicalMonitor {
-  id: string;
-  name: string;
-  geographical_area: string;
-  search_query?: string;
-  monitoring_interval: number;
-  is_active: boolean;
-  last_searched_at?: Date;
-  created_by?: string;
-  created_at: Date;
-  updated_at: Date;
-}
-
-export interface TwitterPost {
-  id: string;
-  text: string;
-  author: {
-    userName: string;
-    name: string;
-    location?: string;
-    followers: number;
-    isBlueVerified: boolean;
-    profilePicture?: string;
-  };
-  retweetCount: number;
-  likeCount: number;
-  replyCount: number;
-  quoteCount: number;
-  viewCount?: number;
-  createdAt: string;
-  entities?: {
-    hashtags: Array<{ text: string; indices: number[] }>;
-    urls: Array<{ url: string; expanded_url: string; display_url: string }>;
-    user_mentions: Array<{ screen_name: string; name: string; id_str: string }>;
-  };
-}
+// Legacy interfaces removed - now using GeographicalSearch from GrokService
 
 export class SocialMediaMonitoringService {
-  private activeMonitors = new Map<string, NodeJS.Timeout>();
   private activeGeographicalSearches = new Map<string, NodeJS.Timeout>();
   private grokService: GrokService;
   
@@ -74,129 +21,7 @@ export class SocialMediaMonitoringService {
     this.grokService = new GrokService(db);
   }
 
-  async createMonitor(monitorData: Partial<SocialMediaMonitor>, createdBy: string): Promise<SocialMediaMonitor> {
-    const id = uuidv4();
-    const monitor: SocialMediaMonitor = {
-      id,
-      name: monitorData.name!,
-      platform: monitorData.platform || 'twitter',
-      api_provider: monitorData.api_provider || 'twitterapi_io',
-      api_credentials: monitorData.api_credentials!,
-      search_query: monitorData.search_query!,
-      query_type: monitorData.query_type || 'Latest',
-      monitoring_interval: monitorData.monitoring_interval || 300,
-      is_active: monitorData.is_active !== false,
-      created_by: createdBy,
-      created_at: new Date(),
-      updated_at: new Date()
-    };
-
-    await this.db.client('social_media_monitors').insert(monitor);
-    
-    logger.info('Created social media monitor', { id, name: monitor.name });
-    
-    // Start monitoring if active
-    if (monitor.is_active) {
-      await this.startMonitoring(id);
-    }
-
-    return monitor;
-  }
-
-  async getMonitors(): Promise<SocialMediaMonitor[]> {
-    try {
-      return await this.db.client('social_media_monitors')
-        .orderBy('created_at', 'desc');
-    } catch (error: any) {
-      logger.error('Error getting monitors', { error: error.message });
-      // Return empty array to prevent crashes
-      return [];
-    }
-  }
-
-  async getMonitor(monitorId: string): Promise<SocialMediaMonitor | null> {
-    return await this.db.client('social_media_monitors')
-      .where('id', monitorId)
-      .first() || null;
-  }
-
-  async updateMonitor(monitorId: string, updates: Partial<SocialMediaMonitor>): Promise<SocialMediaMonitor> {
-    const updateData = {
-      ...updates,
-      updated_at: new Date()
-    };
-
-    await this.db.client('social_media_monitors')
-      .where('id', monitorId)
-      .update(updateData);
-
-    const updated = await this.getMonitor(monitorId);
-    
-    // Restart monitoring if settings changed
-    if (updated && updated.is_active) {
-      await this.startMonitoring(monitorId);
-    } else {
-      await this.stopMonitoring(monitorId);
-    }
-
-    logger.info('Updated social media monitor', { monitorId, updates });
-    return updated!;
-  }
-
-  async deleteMonitor(monitorId: string): Promise<void> {
-    await this.stopMonitoring(monitorId);
-    await this.db.client('social_media_monitors')
-      .where('id', monitorId)
-      .del();
-    
-    logger.info('Deleted social media monitor', { monitorId });
-  }
-
-  async startMonitoring(monitorId: string): Promise<void> {
-    // Check if service is globally enabled
-    const serviceEnabled = await this.configService.isServiceEnabled();
-    if (!serviceEnabled) {
-      throw new Error('Social media monitoring service is disabled globally');
-    }
-
-    const monitor = await this.getMonitor(monitorId);
-    if (!monitor || !monitor.is_active) {
-      throw new Error('Monitor not found or inactive');
-    }
-
-    // Clear existing interval if any
-    await this.stopMonitoring(monitorId);
-
-    // Start new monitoring interval
-    const interval = setInterval(async () => {
-      try {
-        // Check service status before each monitoring cycle
-        const serviceEnabled = await this.configService.isServiceEnabled();
-        if (!serviceEnabled) {
-          logger.info('Service disabled globally, stopping monitor', { monitorId });
-          await this.stopMonitoring(monitorId);
-          return;
-        }
-
-        // Legacy monitoring disabled - using Grok geographical search instead
-        logger.warn('Legacy monitoring attempted - please use geographical monitoring', { monitorId: monitor.id });
-      } catch (error) {
-        logger.error('Error in monitoring interval', { monitorId, error });
-      }
-    }, monitor.monitoring_interval * 1000);
-
-    this.activeMonitors.set(monitorId, interval);
-    logger.info('Started monitoring', { monitorId, interval: monitor.monitoring_interval });
-  }
-
-  async stopMonitoring(monitorId: string): Promise<void> {
-    const interval = this.activeMonitors.get(monitorId);
-    if (interval) {
-      clearInterval(interval);
-      this.activeMonitors.delete(monitorId);
-      logger.info('Stopped monitoring', { monitorId });
-    }
-  }
+  // Legacy monitor methods removed - use geographical monitoring instead
 
   async testConnection(apiKey: string, searchQuery: string): Promise<{ success: boolean; error?: string; samplePosts?: number }> {
     // Test Grok API connection instead of Twitter API
@@ -408,27 +233,13 @@ export class SocialMediaMonitoringService {
       throw new Error('Social media monitoring service is disabled globally');
     }
 
-    // Start legacy monitors
-    const monitors = await this.db.client('social_media_monitors')
-      .where('is_active', true);
+    // Start geographical monitors only
+    const geographicalSearches = await this.grokService.getGeographicalSearches();
+    const activeSearches = geographicalSearches.filter(s => s.is_active);
 
     let started = 0;
     let failed = 0;
     const errors: string[] = [];
-
-    for (const monitor of monitors) {
-      try {
-        await this.startMonitoring(monitor.id);
-        started++;
-      } catch (error: any) {
-        failed++;
-        errors.push(`Monitor ${monitor.name}: ${error.message}`);
-      }
-    }
-
-    // Start geographical monitors
-    const geographicalSearches = await this.grokService.getGeographicalSearches();
-    const activeSearches = geographicalSearches.filter(s => s.is_active);
 
     for (const search of activeSearches) {
       try {
@@ -440,20 +251,12 @@ export class SocialMediaMonitoringService {
       }
     }
 
-    logger.info('Started all monitors', { started, failed, total: monitors.length + activeSearches.length });
+    logger.info('Started all geographical monitors', { started, failed, total: activeSearches.length });
     return { started, failed, errors };
   }
 
   async stopAllMonitors(): Promise<{ stopped: number }> {
     let stopped = 0;
-    
-    // Stop legacy monitors
-    for (const [monitorId, interval] of this.activeMonitors.entries()) {
-      clearInterval(interval);
-      logger.info('Stopped monitoring', { monitorId });
-      stopped++;
-    }
-    this.activeMonitors.clear();
     
     // Stop geographical monitors
     for (const [monitorId, interval] of this.activeGeographicalSearches.entries()) {
@@ -463,7 +266,7 @@ export class SocialMediaMonitoringService {
     }
     this.activeGeographicalSearches.clear();
     
-    logger.info('Stopped all monitors', { stopped });
+    logger.info('Stopped all geographical monitors', { stopped });
     return { stopped };
   }
 
@@ -494,13 +297,6 @@ export class SocialMediaMonitoringService {
 
   // Cleanup method for graceful shutdown
   async shutdown(): Promise<void> {
-    // Stop legacy monitors
-    for (const [monitorId, interval] of this.activeMonitors.entries()) {
-      clearInterval(interval);
-      logger.info('Stopped monitoring during shutdown', { monitorId });
-    }
-    this.activeMonitors.clear();
-    
     // Stop geographical monitors
     for (const [monitorId, interval] of this.activeGeographicalSearches.entries()) {
       clearInterval(interval);
