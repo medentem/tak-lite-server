@@ -123,9 +123,7 @@ export class GrokService {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
-        timeout: 10000,
-        retry: 3,
-        retryDelay: 1000
+        timeout: 10000
       });
 
       return {
