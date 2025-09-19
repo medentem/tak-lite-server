@@ -62,7 +62,11 @@ export class SecurityService {
   async encryptApiKey(apiKey: string): Promise<string> {
     const key = await this.getEncryptionKey();
     const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipher('aes-256-cbc', key);
+    
+    // Create a proper key from the hex string
+    const keyBuffer = Buffer.from(key, 'hex');
+    
+    const cipher = crypto.createCipheriv('aes-256-cbc', keyBuffer, iv);
     let encrypted = cipher.update(apiKey, 'utf8', 'hex');
     encrypted += cipher.final('hex');
     return iv.toString('hex') + ':' + encrypted;
@@ -76,7 +80,11 @@ export class SecurityService {
     }
     const iv = Buffer.from(parts[0], 'hex');
     const encrypted = parts[1];
-    const decipher = crypto.createDecipher('aes-256-cbc', key);
+    
+    // Create a proper key from the hex string
+    const keyBuffer = Buffer.from(key, 'hex');
+    
+    const decipher = crypto.createDecipheriv('aes-256-cbc', keyBuffer, iv);
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
     return decrypted;
