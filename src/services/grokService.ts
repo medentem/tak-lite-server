@@ -135,10 +135,20 @@ export class GrokService {
       logger.info('Testing Grok API connection', { 
         endpoint: 'https://api.x.ai/v1/chat/completions',
         model: model,
-        hasApiKey: !!apiKey
+        hasApiKey: !!apiKey,
+        searchParameters: {
+          mode: 'auto',
+          sources: ['x_posts']
+        }
       });
 
       const response = await axios.post('https://api.x.ai/v1/chat/completions', requestBody, axiosConfig);
+      
+      logger.info('Grok API connection test successful', {
+        status: response.status,
+        model: response.data.model,
+        usage: response.data.usage
+      });
 
       return {
         success: true,
@@ -193,6 +203,19 @@ export class GrokService {
       try {
         const startTime = Date.now();
         
+        logger.info('Making Grok API call for geographical threat search', {
+          attempt,
+          geographicalArea,
+          searchQuery,
+          model: grokConfig.model,
+          maxTokens: grokConfig.max_tokens,
+          temperature: grokConfig.temperature,
+          searchParameters: {
+            mode: 'auto',
+            sources: ['x_posts']
+          }
+        });
+        
         const response = await axios.post('https://api.x.ai/v1/chat/completions', {
           model: grokConfig.model,
           messages: [
@@ -220,6 +243,15 @@ export class GrokService {
         });
 
         const processingTime = Date.now() - startTime;
+        
+        logger.info('Grok API response received', {
+          attempt,
+          status: response.status,
+          duration: `${processingTime}ms`,
+          model: response.data.model,
+          usage: response.data.usage,
+          responseLength: response.data.choices?.[0]?.message?.content?.length || 0
+        });
         const analysisText = response.data.choices[0].message.content;
         
         // Parse the JSON response from Grok
@@ -347,6 +379,18 @@ export class GrokService {
     try {
       const startTime = Date.now();
       
+      logger.info('Making Grok API call for content analysis', {
+        contentLength: content.length,
+        location,
+        model: grokConfig.model,
+        maxTokens: grokConfig.max_tokens,
+        temperature: grokConfig.temperature,
+        searchParameters: {
+          mode: 'auto',
+          sources: ['x_posts']
+        }
+      });
+      
       const response = await axios.post('https://api.x.ai/v1/chat/completions', {
         model: grokConfig.model,
         messages: [
@@ -374,6 +418,15 @@ export class GrokService {
       });
 
       const processingTime = Date.now() - startTime;
+      
+      logger.info('Grok API response received for content analysis', {
+        status: response.status,
+        duration: `${processingTime}ms`,
+        model: response.data.model,
+        usage: response.data.usage,
+        responseLength: response.data.choices?.[0]?.message?.content?.length || 0
+      });
+      
       const analysisText = response.data.choices[0].message.content;
       
       // Parse the JSON response from Grok
