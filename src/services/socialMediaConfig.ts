@@ -113,32 +113,29 @@ export class SocialMediaConfigService {
     service_enabled: boolean;
     total_monitors: number;
     active_monitors: number;
-    estimated_monthly_cost: number;
     posts_processed_today: number;
   }> {
     const config = await this.getServiceConfig();
     
-    // Get monitor statistics
-    const monitorStats = await this.db.client('social_media_monitors')
+    // Get geographical monitor statistics
+    const monitorStats = await this.db.client('geographical_searches')
       .select(
         this.db.client.raw('COUNT(*) as total_monitors'),
-        this.db.client.raw('COUNT(CASE WHEN is_active = true THEN 1 END) as active_monitors'),
-        this.db.client.raw('SUM(posts_processed_today) as posts_processed_today')
+        this.db.client.raw('COUNT(CASE WHEN is_active = true THEN 1 END) as active_monitors')
       )
       .first();
 
-    // Estimate monthly cost (rough calculation)
-    const estimatedMonthlyCost = this.estimateMonthlyCost(
-      monitorStats.active_monitors || 0,
-      monitorStats.posts_processed_today || 0
-    );
+    // Get posts processed today from threat analyses
+    const postsStats = await this.db.client('threat_analyses')
+      .select(this.db.client.raw('COUNT(*) as posts_processed_today'))
+      .whereRaw('DATE(created_at) = CURRENT_DATE')
+      .first();
 
     return {
       service_enabled: config.service_enabled,
       total_monitors: parseInt(monitorStats.total_monitors) || 0,
       active_monitors: parseInt(monitorStats.active_monitors) || 0,
-      estimated_monthly_cost: estimatedMonthlyCost,
-      posts_processed_today: parseInt(monitorStats.posts_processed_today) || 0
+      posts_processed_today: parseInt(postsStats.posts_processed_today) || 0
     };
   }
 
@@ -168,28 +165,12 @@ export class SocialMediaConfigService {
     }
   }
 
-  private estimateMonthlyCost(activeMonitors: number, postsToday: number): number {
-    // Rough cost estimation based on typical API pricing
-    const twitterApiCostPerPost = 0.001; // $0.001 per post (estimated)
-    const openAiCostPerPost = 0.002; // $0.002 per post (estimated)
-    const baseCost = 50; // Base monthly cost for TwitterAPI.io
-
-    const dailyPosts = postsToday;
-    const monthlyPosts = dailyPosts * 30;
-    const totalCost = baseCost + (monthlyPosts * (twitterApiCostPerPost + openAiCostPerPost));
-
-    return Math.round(totalCost * 100) / 100; // Round to 2 decimal places
-  }
+  // Removed estimateMonthlyCost method - no longer needed with Grok API
 
   // Reset daily usage counters (should be called daily)
   async resetDailyUsage(): Promise<void> {
-    await this.db.client('social_media_monitors')
-      .update({
-        posts_processed_today: 0,
-        last_cost_check: new Date()
-      });
-
-    logger.info('Reset daily usage counters for social media monitors');
+    // No longer needed with Grok API - posts are tracked in threat_analyses table
+    logger.info('Daily usage reset - not needed with Grok API approach');
   }
 
 }

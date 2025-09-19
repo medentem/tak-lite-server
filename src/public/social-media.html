@@ -347,10 +347,6 @@
               <div class="label">Total Monitors</div>
             </div>
             <div class="kpi">
-              <div class="value" id="service-estimated-cost">$0</div>
-              <div class="label">Est. Monthly Cost</div>
-            </div>
-            <div class="kpi">
               <div class="value" id="service-posts-today">0</div>
               <div class="label">Posts Today</div>
             </div>
@@ -505,9 +501,9 @@
           <div class="form-group">
             <label>Model</label>
             <select name="model">
-              <option value="grok-beta">Grok Beta (Recommended)</option>
-              <option value="gpt-4">GPT-4 (Legacy)</option>
-              <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Legacy)</option>
+              <option value="grok-4-latest">Grok-4 Latest (Recommended)</option>
+              <option value="grok-3-latest">Grok-3 Latest</option>
+              <option value="grok-3-mini-latest">Grok-3 Mini Latest</option>
             </select>
           </div>
           
@@ -705,7 +701,6 @@
         // Update service metrics
         document.getElementById('service-active-monitors').textContent = serviceStatus.active_monitors;
         document.getElementById('service-total-monitors').textContent = serviceStatus.total_monitors;
-        document.getElementById('service-estimated-cost').textContent = `$${serviceStatus.estimated_monthly_cost}`;
         document.getElementById('service-posts-today').textContent = serviceStatus.posts_processed_today;
       }
 
@@ -1100,8 +1095,8 @@
           });
           
           loadServiceStatus();
-          loadMonitors();
-          showSuccess(`Started ${result.result.started} monitors`);
+          loadGeographicalMonitors();
+          showSuccess(`Started ${result.result.started} geographical monitors`);
           
           if (result.result.failed > 0) {
             showError(`Failed to start ${result.result.failed} monitors: ${result.result.errors.join(', ')}`);
@@ -1118,8 +1113,8 @@
           });
           
           loadServiceStatus();
-          loadMonitors();
-          showSuccess(`Stopped ${result.result.stopped} monitors`);
+          loadGeographicalMonitors();
+          showSuccess(`Stopped ${result.result.stopped} geographical monitors`);
         } catch (error) {
           showError('Failed to stop monitors: ' + error.message);
         }

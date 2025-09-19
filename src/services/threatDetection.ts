@@ -40,7 +40,7 @@ export class ThreatDetectionService {
     // Delegate to Grok service for new configurations
     const grokConfig = await this.grokService.createGrokConfiguration({
       api_key_encrypted: configData.api_key_encrypted!,
-      model: configData.model || 'grok-beta',
+      model: configData.model || 'grok-4-latest',
       max_tokens: configData.max_tokens || 2000,
       temperature: configData.temperature || 0.3,
       is_active: configData.is_active !== false
@@ -52,7 +52,7 @@ export class ThreatDetectionService {
       id,
       provider: 'grok',
       api_key_encrypted: configData.api_key_encrypted!,
-      model: configData.model || 'grok-beta',
+      model: configData.model || 'grok-4-latest',
       max_tokens: configData.max_tokens || 2000,
       temperature: configData.temperature || 0.3,
       is_active: configData.is_active !== false,
@@ -91,7 +91,7 @@ export class ThreatDetectionService {
     return updated!;
   }
 
-  async testAIConnection(apiKey: string, model: string = 'grok-beta'): Promise<{ success: boolean; error?: string; model?: string }> {
+  async testAIConnection(apiKey: string, model: string = 'grok-4-latest'): Promise<{ success: boolean; error?: string; model?: string }> {
     // Delegate to Grok service for connection testing
     return await this.grokService.testGrokConnection(apiKey, model);
   }
@@ -121,7 +121,7 @@ export class ThreatDetectionService {
       extracted_locations: grokAnalysis.locations,
       keywords: grokAnalysis.keywords,
       processing_metadata: {
-        model: 'grok-beta',
+        model: 'grok-4-latest',
         search_type: 'content_analysis',
         legacy_post_analysis: true
       }

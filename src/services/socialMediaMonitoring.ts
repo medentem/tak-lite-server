@@ -274,7 +274,6 @@ export class SocialMediaMonitoringService {
     service_enabled: boolean;
     active_monitors: number;
     total_monitors: number;
-    estimated_monthly_cost: number;
     posts_processed_today: number;
   }> {
     return await this.configService.getServiceStatus();

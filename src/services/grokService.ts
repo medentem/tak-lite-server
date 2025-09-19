@@ -62,7 +62,7 @@ export class GrokService {
     const config: GrokConfiguration = {
       id,
       api_key_encrypted: configData.api_key_encrypted!,
-      model: configData.model || 'grok-beta',
+      model: configData.model || 'grok-4-latest',
       max_tokens: configData.max_tokens || 2000,
       temperature: configData.temperature || 0.3,
       search_enabled: configData.search_enabled !== false,
@@ -102,7 +102,7 @@ export class GrokService {
     return updated!;
   }
 
-  async testGrokConnection(apiKey: string, model: string = 'grok-beta'): Promise<{ success: boolean; error?: string; model?: string }> {
+  async testGrokConnection(apiKey: string, model: string = 'grok-4-latest'): Promise<{ success: boolean; error?: string; model?: string }> {
     try {
       const axiosConfig = {
         headers: {

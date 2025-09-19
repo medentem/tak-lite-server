@@ -20,7 +20,7 @@ export function createSocialMediaRouter(
   const aiConfigSchema = Joi.object({
     provider: Joi.string().valid('grok', 'openai').default('grok'),
     api_key_encrypted: Joi.string().required(),
-    model: Joi.string().valid('grok-beta', 'gpt-4', 'gpt-3.5-turbo').default('grok-beta'),
+    model: Joi.string().valid('grok-4-latest', 'grok-3-latest', 'grok-3-mini-latest').default('grok-4-latest'),
     max_tokens: Joi.number().integer().min(100).max(4000).default(2000),
     temperature: Joi.number().min(0).max(1).default(0.3),
     is_active: Joi.boolean().default(true)
