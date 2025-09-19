@@ -228,8 +228,6 @@ export class GrokService {
               content: prompt
             }
           ],
-          max_tokens: grokConfig.max_tokens,
-          temperature: grokConfig.temperature,
           search_parameters: {
             mode: 'auto',
             sources: [{ 'type': 'x' }]
