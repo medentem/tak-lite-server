@@ -670,7 +670,6 @@
         const toggleBtn = document.getElementById('service-toggle-btn');
         const startAllBtn = document.getElementById('start-all-btn');
         const stopAllBtn = document.getElementById('stop-all-btn');
-        const createMonitorBtn = document.getElementById('create-monitor-btn');
 
         // Update status indicator and text
         if (serviceStatus.service_enabled) {
@@ -688,9 +687,6 @@
           startAllBtn.disabled = true;
           stopAllBtn.disabled = true;
         }
-        
-        // Create Monitor button is always enabled
-        createMonitorBtn.disabled = false;
 
         // Update service metrics
         document.getElementById('service-active-monitors').textContent = serviceStatus.active_monitors;
