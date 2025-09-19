@@ -125,7 +125,11 @@ export class GrokService {
           }
         ],
         max_tokens: 10,
-        temperature: 0
+        temperature: 0,
+        search_parameters: {
+          mode: 'auto',
+          sources: ['x_posts']
+        }
       };
 
       logger.info('Testing Grok API connection', { 
@@ -202,7 +206,11 @@ export class GrokService {
             }
           ],
           max_tokens: grokConfig.max_tokens,
-          temperature: grokConfig.temperature
+          temperature: grokConfig.temperature,
+          search_parameters: {
+            mode: 'auto',
+            sources: ['x_posts']
+          }
         }, {
           headers: {
             'Authorization': `Bearer ${grokConfig.api_key_encrypted}`,
@@ -352,7 +360,11 @@ export class GrokService {
           }
         ],
         max_tokens: grokConfig.max_tokens,
-        temperature: grokConfig.temperature
+        temperature: grokConfig.temperature,
+        search_parameters: {
+          mode: 'auto',
+          sources: ['x_posts']
+        }
       }, {
         headers: {
           'Authorization': `Bearer ${grokConfig.api_key_encrypted}`,
@@ -437,15 +449,16 @@ export class GrokService {
   }
 
   private getGeographicalThreatSystemPrompt(): string {
-    return `You are a specialized threat detection AI for emergency services and security teams. Your job is to search for and analyze potential security threats and emergency situations in specific geographical areas.
+    return `You are a specialized threat detection AI for emergency services and security teams. You have access to real-time X (Twitter) posts and can search for current threats and emergency situations in specific geographical areas.
 
 CRITICAL INSTRUCTIONS:
-1. Use your real-time search capabilities to find current information about threats in the specified area
+1. Use your real-time search capabilities to find recent X posts (last 24-48 hours) about threats in the specified area
 2. Only classify as HIGH or CRITICAL if there is a clear, immediate threat to life, property, or public safety
 3. Be conservative - false positives are better than missing real threats
-4. Extract precise location information when available
+4. Extract precise location information from X posts when available
 5. For general area references, provide approximate boundaries
 6. Always respond with valid JSON in the exact format specified
+7. Include actual X post information in source_info when available
 
 THREAT LEVELS:
 - LOW: General discussion, no immediate threat
@@ -487,10 +500,10 @@ Always respond with valid JSON array in this exact format:
     "keywords": ["keyword1", "keyword2"],
     "reasoning": "Explanation of why this was classified as a threat",
     "source_info": {
-      "platform": "twitter|news|social_media",
-      "author": "username or source",
-      "timestamp": "2024-01-01T12:00:00Z",
-      "url": "source_url_if_available"
+      "platform": "x_posts",
+      "author": "actual_x_username",
+      "timestamp": "actual_post_timestamp",
+      "url": "https://x.com/username/status/1234567890"
     }
   }
 ]`;
@@ -547,12 +560,12 @@ Always respond with valid JSON in this exact format:
 
   private buildGeographicalThreatSearchPrompt(geographicalArea: string, searchQuery?: string): string {
     return `
-Search for recent threat-related information in the specified geographical area.
+Search for REAL-TIME threat-related information from X (Twitter) posts in the specified geographical area.
 
 GEOGRAPHICAL AREA: "${geographicalArea}"
 ${searchQuery ? `SEARCH FOCUS: "${searchQuery}"` : ''}
 
-Please search for and analyze any recent threats, incidents, or emergency situations in this area. Look for:
+Use your real-time search capabilities to find recent X posts about threats, incidents, or emergency situations in this area. Look for:
 - Violence or security threats
 - Natural disasters or severe weather
 - Infrastructure problems
@@ -560,7 +573,13 @@ Please search for and analyze any recent threats, incidents, or emergency situat
 - Health emergencies
 - Cyber threats affecting the area
 
-For each threat found, provide detailed location information and threat assessment.`;
+IMPORTANT: Only analyze posts from the last 24-48 hours to ensure relevance. For each threat found, provide:
+1. The specific location with coordinates if possible
+2. Threat level assessment
+3. Source information from the X post
+4. Confidence in the threat assessment
+
+Return results as a JSON array of threat analyses.`;
   }
 
   private buildContentAnalysisPrompt(content: string, location?: string): string {

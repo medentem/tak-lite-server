@@ -1,7 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from './database';
-import { ThreatDetectionService } from './threatDetection';
-import { GrokService, GeographicalSearch } from './grokService';
+import { GrokService, GeographicalSearch, ThreatAnalysis as GrokThreatAnalysis } from './grokService';
 import { SyncService } from './sync';
 import { SocialMediaConfigService } from './socialMediaConfig';
 import { logger } from '../utils/logger';
@@ -14,7 +13,6 @@ export class SocialMediaMonitoringService {
   
   constructor(
     private db: DatabaseService,
-    private threatDetection: ThreatDetectionService,
     private syncService: SyncService,
     private configService: SocialMediaConfigService
   ) {
@@ -37,6 +35,133 @@ export class SocialMediaMonitoringService {
         error: result.error || 'Connection failed'
       };
     }
+  }
+
+  // AI Configuration methods (moved from ThreatDetectionService)
+  async getAIConfiguration(): Promise<any> {
+    return await this.grokService.getGrokConfiguration();
+  }
+
+  async createAIConfiguration(configData: any, createdBy: string): Promise<any> {
+    return await this.grokService.createGrokConfiguration(configData, createdBy);
+  }
+
+  async updateAIConfiguration(configId: string, updates: any): Promise<any> {
+    return await this.grokService.updateGrokConfiguration(configId, updates);
+  }
+
+  async testAIConnection(apiKey: string, model: string = 'grok-4-latest'): Promise<{ success: boolean; error?: string; model?: string }> {
+    return await this.grokService.testGrokConnection(apiKey, model);
+  }
+
+  // Threat analysis methods (moved from ThreatDetectionService)
+  async getThreatAnalyses(filters: {
+    threat_level?: string;
+    threat_type?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<any[]> {
+    try {
+      let query = this.db.client('threat_analyses')
+        .select('*')
+        .orderBy('created_at', 'desc');
+
+      if (filters.threat_level) {
+        query = query.where('threat_level', filters.threat_level);
+      }
+
+      if (filters.threat_type) {
+        query = query.where('threat_type', filters.threat_type);
+      }
+
+      if (filters.limit) {
+        query = query.limit(filters.limit);
+      }
+
+      if (filters.offset) {
+        query = query.offset(filters.offset);
+      }
+
+      return await query;
+    } catch (error: any) {
+      logger.error('Error getting threat analyses', { error: error.message });
+      return [];
+    }
+  }
+
+  async getThreatStatistics(days: number = 7): Promise<{
+    total_threats: number;
+    by_level: Record<string, number>;
+    by_type: Record<string, number>;
+    recent_trend: Array<{ date: string; count: number }>;
+  }> {
+    try {
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+
+      // Get total threats
+      const totalResult = await this.db.client('threat_analyses')
+        .count('* as count')
+        .where('created_at', '>=', startDate)
+        .first();
+
+      // Get threats by level
+      const levelResults = await this.db.client('threat_analyses')
+        .select('threat_level')
+        .count('* as count')
+        .where('created_at', '>=', startDate)
+        .groupBy('threat_level');
+
+      // Get threats by type
+      const typeResults = await this.db.client('threat_analyses')
+        .select('threat_type')
+        .count('* as count')
+        .where('created_at', '>=', startDate)
+        .whereNotNull('threat_type')
+        .groupBy('threat_type');
+
+      // Get recent trend (daily counts)
+      const trendResults = await this.db.client('threat_analyses')
+        .select(this.db.client.raw('DATE(created_at) as date'))
+        .count('* as count')
+        .where('created_at', '>=', startDate)
+        .groupBy(this.db.client.raw('DATE(created_at)'))
+        .orderBy('date', 'asc');
+
+      const byLevel: Record<string, number> = {};
+      levelResults.forEach((row: any) => {
+        byLevel[row.threat_level] = parseInt(String(row.count));
+      });
+
+      const byType: Record<string, number> = {};
+      typeResults.forEach((row: any) => {
+        byType[row.threat_type] = parseInt(String(row.count));
+      });
+
+      const recentTrend = trendResults.map((row: any) => ({
+        date: row.date,
+        count: parseInt(String(row.count))
+      }));
+
+      return {
+        total_threats: parseInt(String(totalResult?.count || '0')),
+        by_level: byLevel,
+        by_type: byType,
+        recent_trend: recentTrend
+      };
+    } catch (error: any) {
+      logger.error('Error getting threat statistics', { error: error.message });
+      return {
+        total_threats: 0,
+        by_level: {},
+        by_type: {},
+        recent_trend: []
+      };
+    }
+  }
+
+  async searchGeographicalThreats(geographicalArea: string, searchQuery?: string): Promise<GrokThreatAnalysis[]> {
+    return await this.grokService.searchThreats(geographicalArea, searchQuery);
   }
 
   // New geographical monitoring methods

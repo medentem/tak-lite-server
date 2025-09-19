@@ -26,7 +26,6 @@ import { RetentionService } from './services/retention';
 import { AuditService } from './services/audit';
 import { SecurityService } from './services/security';
 import { SocialMediaMonitoringService } from './services/socialMediaMonitoring';
-import { ThreatDetectionService } from './services/threatDetection';
 import { SocialMediaConfigService } from './services/socialMediaConfig';
 import { createSocialMediaRouter } from './routes/socialMedia';
 
@@ -70,7 +69,6 @@ const auditService = new AuditService(databaseService);
 const retentionService = new RetentionService(databaseService, configService);
 
 // Social media services will be initialized after migrations
-let threatDetectionService: ThreatDetectionService;
 let socialMediaConfigService: SocialMediaConfigService;
 let socialMediaService: SocialMediaMonitoringService;
 
@@ -330,12 +328,11 @@ process.on('SIGINT', async () => {
     await databaseService.migrateToLatest();
     
     // Initialize social media services after migrations
-    threatDetectionService = new ThreatDetectionService(databaseService);
     socialMediaConfigService = new SocialMediaConfigService(databaseService);
-    socialMediaService = new SocialMediaMonitoringService(databaseService, threatDetectionService, syncService, socialMediaConfigService);
+    socialMediaService = new SocialMediaMonitoringService(databaseService, syncService, socialMediaConfigService);
     
     // Register social media routes after services are initialized
-    app.use('/api/social-media', auth.authenticate, auth.adminOnly, createSocialMediaRouter(databaseService, socialMediaService, threatDetectionService, socialMediaConfigService));
+    app.use('/api/social-media', auth.authenticate, auth.adminOnly, createSocialMediaRouter(databaseService, socialMediaService, socialMediaConfigService));
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, () => {
       logger.info(`TAK Lite Server running on port ${PORT}`);

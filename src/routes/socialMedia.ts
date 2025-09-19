@@ -2,14 +2,12 @@ import { Router, Request, Response, NextFunction } from 'express';
 import Joi from 'joi';
 import { DatabaseService } from '../services/database';
 import { SocialMediaMonitoringService } from '../services/socialMediaMonitoring';
-import { ThreatDetectionService } from '../services/threatDetection';
 import { SocialMediaConfigService } from '../services/socialMediaConfig';
 import { logger } from '../utils/logger';
 
 export function createSocialMediaRouter(
   databaseService: DatabaseService,
   socialMediaService: SocialMediaMonitoringService,
-  threatDetectionService: ThreatDetectionService,
   configService: SocialMediaConfigService
 ): Router {
   const router = Router();
@@ -39,7 +37,7 @@ export function createSocialMediaRouter(
   router.get('/ai-config', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const teamId = (req as any).user.teamId;
-      const config = await threatDetectionService.getAIConfiguration();
+      const config = await socialMediaService.getAIConfiguration();
       
       if (!config) {
         // Return null config instead of 404 - frontend can handle this
@@ -68,7 +66,7 @@ export function createSocialMediaRouter(
         return res.status(400).json({ error: error.details[0].message });
       }
 
-      const config = await threatDetectionService.createAIConfiguration(value, userId);
+      const config = await socialMediaService.createAIConfiguration(value, userId);
       
       // Remove sensitive API key from response
       const safeConfig = {
@@ -92,7 +90,7 @@ export function createSocialMediaRouter(
         return res.status(400).json({ error: error.details[0].message });
       }
 
-      const config = await threatDetectionService.updateAIConfiguration(id, value);
+      const config = await socialMediaService.updateAIConfiguration(id, value);
       
       // Remove sensitive API key from response
       const safeConfig = {
@@ -115,7 +113,7 @@ export function createSocialMediaRouter(
         return res.status(400).json({ error: 'API key is required' });
       }
 
-      const result = await threatDetectionService.testAIConnection(api_key, model);
+      const result = await socialMediaService.testAIConnection(api_key, model);
       res.json(result);
     } catch (error) {
       next(error);
@@ -206,7 +204,7 @@ export function createSocialMediaRouter(
         return res.status(400).json({ error: 'Geographical area is required' });
       }
 
-      const threats = await threatDetectionService.searchGeographicalThreats(geographical_area, search_query);
+      const threats = await socialMediaService.searchGeographicalThreats(geographical_area, search_query);
       res.json({ threats });
     } catch (error) {
       next(error);
@@ -223,7 +221,7 @@ export function createSocialMediaRouter(
       if (threat_level) filters.threat_level = threat_level as string;
       if (threat_type) filters.threat_type = threat_type as string;
 
-      const threats = await threatDetectionService.getThreatAnalyses(filters);
+      const threats = await socialMediaService.getThreatAnalyses(filters);
       res.json({ threats });
     } catch (error) {
       next(error);
@@ -236,7 +234,7 @@ export function createSocialMediaRouter(
       const teamId = (req as any).user.teamId;
       const { days = 7 } = req.query;
       
-      const stats = await threatDetectionService.getThreatStatistics(parseInt(days as string));
+      const stats = await socialMediaService.getThreatStatistics(parseInt(days as string));
       res.json({ statistics: stats });
     } catch (error) {
       next(error);
