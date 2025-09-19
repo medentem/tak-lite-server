@@ -15,11 +15,21 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.alterTable('threat_analyses', (t) => {
     t.index(['admin_status']);
     t.index(['reviewed_at']);
-    t.index(['created_at']);
   });
+
+  // Add created_at index only if it doesn't exist (it was created in migration 0008)
+  await knex.raw(`
+    CREATE INDEX IF NOT EXISTS threat_analyses_created_at_index 
+    ON threat_analyses (created_at)
+  `);
 }
 
 export async function down(knex: Knex): Promise<void> {
+  // Drop the indexes we created
+  await knex.raw('DROP INDEX IF EXISTS threat_analyses_admin_status_index');
+  await knex.raw('DROP INDEX IF EXISTS threat_analyses_reviewed_at_index');
+  // Note: We don't drop the created_at index as it was created in migration 0008
+
   // Remove the added columns
   await knex.schema.alterTable('threat_analyses', (t) => {
     t.dropColumn('admin_status');
