@@ -16,7 +16,6 @@ export function createSocialMediaRouter(
   // Legacy monitor schemas removed - use geographical monitoring instead
 
   const aiConfigSchema = Joi.object({
-    provider: Joi.string().valid('grok', 'openai').default('grok'),
     api_key_encrypted: Joi.string().required(),
     model: Joi.string().valid('grok-4-latest', 'grok-3-latest', 'grok-3-mini-latest').default('grok-4-latest'),
     max_tokens: Joi.number().integer().min(100).max(4000).default(2000),
