@@ -620,7 +620,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         .select([
           'id', 'threat_level', 'threat_type', 'confidence_score', 
           'ai_summary', 'extracted_locations', 'keywords', 'reasoning',
-          'search_query', 'geographical_area', 'created_at', 'updated_at',
+          'search_query', 'geographical_area', 'created_at',
           'processing_metadata'
         ])
         .orderBy('created_at', 'desc')
@@ -689,8 +689,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           admin_status: status,
           admin_notes: notes,
           reviewed_by: userId,
-          reviewed_at: new Date(),
-          updated_at: new Date()
+          reviewed_at: new Date()
         });
       
       if (audit) await audit.log({ 
@@ -795,8 +794,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           admin_status: 'approved',
           annotation_id: annotationId,
           reviewed_by: userId,
-          reviewed_at: new Date(),
-          updated_at: new Date()
+          reviewed_at: new Date()
         });
       
       if (audit) await audit.log({ 
@@ -828,8 +826,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           team_id: teamId,
           type: annotationType,
           data: annotationData,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: new Date().toISOString()
         }
       });
     } catch (err) { next(err); }
