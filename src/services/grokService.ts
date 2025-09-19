@@ -112,7 +112,7 @@ export class GrokService {
         timeout: 10000
       };
 
-      const response = await axios.post('https://api.x.ai/v1/chat/completions', {
+      const requestBody = {
         model: model,
         messages: [
           {
@@ -126,7 +126,15 @@ export class GrokService {
         ],
         max_tokens: 10,
         temperature: 0
-      }, axiosConfig);
+      };
+
+      logger.info('Testing Grok API connection', { 
+        endpoint: 'https://api.x.ai/v1/chat/completions',
+        model: model,
+        hasApiKey: !!apiKey
+      });
+
+      const response = await axios.post('https://api.x.ai/v1/chat/completions', requestBody, axiosConfig);
 
       return {
         success: true,
@@ -136,12 +144,16 @@ export class GrokService {
       logger.error('Grok connection test failed', { 
         error: error.message,
         status: error.response?.status,
-        statusText: error.response?.statusText
+        statusText: error.response?.statusText,
+        responseData: error.response?.data,
+        endpoint: 'https://api.x.ai/v1/chat/completions'
       });
       
       let errorMessage = 'Connection failed';
       if (error.response?.status === 401) {
         errorMessage = 'Invalid API key';
+      } else if (error.response?.status === 404) {
+        errorMessage = 'API endpoint not found. The Grok API may not be publicly available yet or the endpoint has changed.';
       } else if (error.response?.status === 429) {
         errorMessage = 'Rate limit exceeded';
       } else if (error.response?.status === 500) {
@@ -150,6 +162,8 @@ export class GrokService {
         errorMessage = 'Connection timeout';
       } else if (error.response?.data?.error?.message) {
         errorMessage = error.response.data.error.message;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
       }
       
       return {

@@ -482,7 +482,10 @@
           <div class="form-group">
             <label>Grok API Key</label>
             <input type="password" name="api_key_encrypted" placeholder="xai-..." required>
-            <div class="help-text">Your xAI Grok API key for threat analysis and geographical search</div>
+            <div class="help-text">
+              Your xAI Grok API key for threat analysis and geographical search
+              <br><strong>Note:</strong> The Grok API may not be publicly available yet. If you get a 404 error, the API is likely still in development.
+            </div>
           </div>
           
           <div class="form-group">
@@ -949,7 +952,7 @@
         const model = form.querySelector('[name="model"]').value;
         
         if (!apiKey) {
-          showError('Please enter OpenAI API key');
+          showError('Please enter Grok API key');
           return;
         }
         
@@ -970,9 +973,13 @@
           });
           
           if (result.success) {
-            showSuccess(`AI connection successful! Using model: ${result.model}`);
+            showSuccess(`Grok AI connection successful! Using model: ${result.model}`);
           } else {
-            showError('AI connection failed: ' + result.error);
+            let errorMsg = 'Grok AI connection failed: ' + result.error;
+            if (result.error.includes('404') || result.error.includes('not found')) {
+              errorMsg += '\n\nNote: The Grok API may not be publicly available yet. Please check x.ai for the latest API availability.';
+            }
+            showError(errorMsg);
           }
         } catch (error) {
           showError('AI test failed: ' + error.message);
