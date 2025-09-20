@@ -158,26 +158,16 @@ export class GrokService {
             role: 'user',
             content: 'Test connection'
           }
-        ],
-        max_tokens: 10,
-        temperature: 0,
-        search_parameters: {
-          mode: 'auto',
-          sources: ['x_posts']
-        }
+        ]
       };
 
       logger.info('Testing Grok API connection', { 
-        endpoint: 'https://api.x.ai/v1/chat/completions',
+        endpoint: 'https://api.x.ai/v1/completions',
         model: model,
-        hasApiKey: !!apiKey,
-        searchParameters: {
-          mode: 'auto',
-          sources: ['x_posts']
-        }
+        hasApiKey: !!apiKey
       });
 
-      const response = await axios.post('https://api.x.ai/v1/chat/completions', requestBody, axiosConfig);
+      const response = await axios.post('https://api.x.ai/v1/completions', requestBody, axiosConfig);
       
       logger.info('Grok API connection test successful', {
         status: response.status,
@@ -197,7 +187,7 @@ export class GrokService {
         statusText: error.response?.statusText,
         responseData: error.response?.data,
         responseHeaders: error.response?.headers,
-        endpoint: 'https://api.x.ai/v1/chat/completions'
+        endpoint: 'https://api.x.ai/v1/completions'
       });
       
       let errorMessage = 'Connection failed';
