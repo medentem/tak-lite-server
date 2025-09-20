@@ -51,7 +51,7 @@ export class SocialMediaMonitoringService {
     return await this.grokService.updateGrokConfiguration(configId, updates);
   }
 
-  async testAIConnection(apiKey: string, model: string = 'grok-4-latest'): Promise<{ success: boolean; error?: string; model?: string }> {
+  async testAIConnection(apiKey: string, model: string = 'grok-4-fast-reasoning-latest'): Promise<{ success: boolean; error?: string; model?: string }> {
     return await this.grokService.testGrokConnection(apiKey, model);
   }
 

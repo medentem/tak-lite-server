@@ -17,7 +17,7 @@ export function createSocialMediaRouter(
 
   const aiConfigSchema = Joi.object({
     api_key_encrypted: Joi.string().required(),
-    model: Joi.string().valid('grok-4-latest', 'grok-3-latest', 'grok-3-mini-latest').default('grok-4-latest'),
+    model: Joi.string().valid('grok-4-latest', 'grok-4-fast-reasoning-latest', 'grok-3-latest', 'grok-3-mini-latest').default('grok-4-latest'),
     is_active: Joi.boolean().default(true)
   });
 

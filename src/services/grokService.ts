@@ -69,7 +69,7 @@ export class GrokService {
     const config: GrokConfiguration = {
       id,
       api_key_encrypted: encryptedApiKey,
-      model: configData.model || 'grok-4-latest',
+      model: configData.model || 'grok-4-fast-reasoning-latest',
       search_enabled: configData.search_enabled !== false,
       is_active: configData.is_active !== false,
       created_by: createdBy,
@@ -112,7 +112,7 @@ export class GrokService {
     return updated!;
   }
 
-  async testGrokConnection(apiKey: string, model: string = 'grok-4-latest'): Promise<{ success: boolean; error?: string; model?: string }> {
+  async testGrokConnection(apiKey: string, model: string = 'grok-4-fast-reasoning-latest'): Promise<{ success: boolean; error?: string; model?: string }> {
     try {
       // Clean the API key to remove any potential formatting issues
       const cleanApiKey = apiKey.trim().replace(/[\r\n\t]/g, '');
@@ -128,9 +128,20 @@ export class GrokService {
         hasInvalidChars: /[^\x20-\x7E]/.test(cleanApiKey)
       });
 
+      const authHeader = `Bearer ${cleanApiKey}`;
+      
+      // Debug: Log the exact Authorization header being sent
+      logger.info('Grok test Authorization header debug', {
+        headerLength: authHeader.length,
+        headerPrefix: authHeader.substring(0, 20),
+        headerSuffix: authHeader.substring(authHeader.length - 10),
+        hasInvalidChars: /[^\x20-\x7E]/.test(authHeader),
+        headerBytes: Buffer.from(authHeader).toString('hex').substring(0, 40)
+      });
+
       const axiosConfig = {
         headers: {
-          'Authorization': `Bearer ${cleanApiKey}`,
+          'Authorization': authHeader,
           'Content-Type': 'application/json'
         },
         timeout: 10000
@@ -181,9 +192,11 @@ export class GrokService {
     } catch (error: any) {
       logger.error('Grok connection test failed', { 
         error: error.message,
+        errorCode: error.code,
         status: error.response?.status,
         statusText: error.response?.statusText,
         responseData: error.response?.data,
+        responseHeaders: error.response?.headers,
         endpoint: 'https://api.x.ai/v1/chat/completions'
       });
       
@@ -264,9 +277,20 @@ export class GrokService {
           hasInvalidChars: /[^\x20-\x7E]/.test(cleanApiKey)
         });
         
+        const authHeader = `Bearer ${cleanApiKey}`;
+        
+        // Debug: Log the exact Authorization header being sent
+        logger.info('Grok Authorization header debug', {
+          headerLength: authHeader.length,
+          headerPrefix: authHeader.substring(0, 20),
+          headerSuffix: authHeader.substring(authHeader.length - 10),
+          hasInvalidChars: /[^\x20-\x7E]/.test(authHeader),
+          headerBytes: Buffer.from(authHeader).toString('hex').substring(0, 40)
+        });
+        
         const response = await axios.post('https://api.x.ai/v1/completions', requestBody, {
           headers: {
-            'Authorization': `Bearer ${cleanApiKey}`,
+            'Authorization': authHeader,
             'Content-Type': 'application/json'
           },
           timeout: 120000 // 120 second timeout for complex searches
@@ -383,6 +407,11 @@ export class GrokService {
         lastError = error;
         logger.warn('Grok API call failed', { 
           error: error.message,
+          errorCode: error.code,
+          errorStatus: error.response?.status,
+          errorStatusText: error.response?.statusText,
+          errorHeaders: error.response?.headers,
+          errorData: error.response?.data,
           attempt,
           maxRetries,
           geographicalArea,
