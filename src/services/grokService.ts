@@ -162,12 +162,12 @@ export class GrokService {
       };
 
       logger.info('Testing Grok API connection', { 
-        endpoint: 'https://api.x.ai/v1/completions',
+        endpoint: 'https://api.x.ai/v1/chat/completions',
         model: model,
         hasApiKey: !!apiKey
       });
 
-      const response = await axios.post('https://api.x.ai/v1/completions', requestBody, axiosConfig);
+      const response = await axios.post('https://api.x.ai/v1/chat/completions', requestBody, axiosConfig);
       
       logger.info('Grok API connection test successful', {
         status: response.status,
@@ -187,7 +187,7 @@ export class GrokService {
         statusText: error.response?.statusText,
         responseData: error.response?.data,
         responseHeaders: error.response?.headers,
-        endpoint: 'https://api.x.ai/v1/completions'
+        endpoint: 'https://api.x.ai/v1/chat/completions'
       });
       
       let errorMessage = 'Connection failed';
@@ -244,7 +244,9 @@ export class GrokService {
             ],
             search_parameters: {
                 mode: 'auto'
-            }
+            },
+            stream: false,
+            temperature: 0
         };
         
         logger.info('Making Grok API call for geographical threat search', 
@@ -278,7 +280,7 @@ export class GrokService {
           headerBytes: Buffer.from(authHeader).toString('hex').substring(0, 40)
         });
         
-        const response = await axios.post('https://api.x.ai/v1/completions', requestBody, {
+        const response = await axios.post('https://api.x.ai/v1/chat/completions', requestBody, {
           headers: {
             'Authorization': authHeader,
             'Content-Type': 'application/json'
