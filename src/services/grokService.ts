@@ -298,6 +298,17 @@ export class GrokService {
           usage: response.data.usage,
           responseLength: response.data.choices?.[0]?.message?.content?.length || 0
         });
+        
+        // Debug: Log the raw response structure
+        logger.info('Grok API raw response debug', {
+          hasChoices: !!response.data.choices,
+          choicesLength: response.data.choices?.length || 0,
+          hasMessage: !!response.data.choices?.[0]?.message,
+          hasContent: !!response.data.choices?.[0]?.message?.content,
+          contentLength: response.data.choices?.[0]?.message?.content?.length || 0,
+          contentPreview: response.data.choices?.[0]?.message?.content?.substring(0, 200) || 'No content'
+        });
+        
         const analysisText = response.data.choices[0].message.content;
         
         // Parse the JSON response from Grok
@@ -308,6 +319,14 @@ export class GrokService {
           if (!Array.isArray(analyses)) {
             analyses = [analyses];
           }
+          
+          // Debug: Log parsed analysis structure
+          logger.info('Grok analysis parsing successful', {
+            analysesCount: analyses.length,
+            firstAnalysisKeys: analyses[0] ? Object.keys(analyses[0]) : [],
+            firstAnalysisThreatLevel: analyses[0]?.threat_level,
+            firstAnalysisLocations: analyses[0]?.locations?.length || 0
+          });
         } catch (parseError) {
           logger.error('Failed to parse Grok analysis response', { 
             error: parseError, 
@@ -327,8 +346,8 @@ export class GrokService {
           if (this.validateThreatAnalysis(analysis)) {
             const analysisId = uuidv4();
             
-            // Store analysis in database
-            await this.db.client('threat_analyses').insert({
+            // Prepare database insertion data
+            const dbInsertData = {
               id: analysisId,
               post_id: null, // No specific post for geographical searches
               grok_analysis: response.data,
@@ -353,7 +372,60 @@ export class GrokService {
                 search_type: 'geographical',
                 attempt: attempt
               }
+            };
+            
+            // Debug: Log database insertion data structure
+            logger.info('Database insertion data debug', {
+              analysisId,
+              threatLevel: dbInsertData.threat_level,
+              threatType: dbInsertData.threat_type,
+              confidenceScore: dbInsertData.confidence_score,
+              aiSummaryLength: dbInsertData.ai_summary?.length || 0,
+              extractedLocationsCount: dbInsertData.extracted_locations?.length || 0,
+              keywordsCount: dbInsertData.keywords?.length || 0,
+              grokAnalysisKeys: Object.keys(dbInsertData.grok_analysis || {}),
+              locationConfidenceKeys: Object.keys(dbInsertData.location_confidence || {}),
+              processingMetadataKeys: Object.keys(dbInsertData.processing_metadata || {})
             });
+            
+            // Test JSON serialization of each field
+            try {
+              JSON.stringify(dbInsertData.grok_analysis);
+              logger.info('grok_analysis JSON serialization: OK');
+            } catch (e) {
+              logger.error('grok_analysis JSON serialization failed', { error: e.message });
+            }
+            
+            try {
+              JSON.stringify(dbInsertData.extracted_locations);
+              logger.info('extracted_locations JSON serialization: OK');
+            } catch (e) {
+              logger.error('extracted_locations JSON serialization failed', { error: e.message });
+            }
+            
+            try {
+              JSON.stringify(dbInsertData.keywords);
+              logger.info('keywords JSON serialization: OK');
+            } catch (e) {
+              logger.error('keywords JSON serialization failed', { error: e.message });
+            }
+            
+            try {
+              JSON.stringify(dbInsertData.location_confidence);
+              logger.info('location_confidence JSON serialization: OK');
+            } catch (e) {
+              logger.error('location_confidence JSON serialization failed', { error: e.message });
+            }
+            
+            try {
+              JSON.stringify(dbInsertData.processing_metadata);
+              logger.info('processing_metadata JSON serialization: OK');
+            } catch (e) {
+              logger.error('processing_metadata JSON serialization failed', { error: e.message });
+            }
+            
+            // Store analysis in database
+            await this.db.client('threat_analyses').insert(dbInsertData);
 
             validAnalyses.push({
               id: analysisId,
