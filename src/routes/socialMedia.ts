@@ -245,12 +245,19 @@ export function createSocialMediaRouter(
   router.get('/threat-annotations', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const teamId = (req as any).user.teamId;
-      const { threat_level, is_verified, limit = 100 } = req.query;
+      const { threat_level, is_verified, limit = 100, all_teams } = req.query;
       
       let query = databaseService.client('threat_annotations')
-        .where('team_id', teamId)
         .where('expires_at', '>', new Date()) // Only active threats
         .orderBy('created_at', 'desc');
+      
+      // If all_teams is not true, show team data + global data (null team_id)
+      if (all_teams !== 'true' && teamId) {
+        query = query.where(function() {
+          this.where('team_id', teamId).orWhereNull('team_id');
+        });
+      }
+      // If all_teams is true or teamId is null, show annotations for all teams
 
       if (threat_level) {
         query = query.where('threat_level', threat_level);
@@ -283,9 +290,16 @@ export function createSocialMediaRouter(
         return res.status(400).json({ error: 'is_verified must be a boolean' });
       }
 
-      const annotation = await databaseService.client('threat_annotations')
-        .where({ id, team_id: teamId })
-        .first();
+      let query = databaseService.client('threat_annotations').where({ id });
+      
+      // If teamId is provided, allow access to team data + global data (null team_id)
+      if (teamId) {
+        query = query.where(function() {
+          this.where('team_id', teamId).orWhereNull('team_id');
+        });
+      }
+      
+      const annotation = await query.first();
 
       if (!annotation) {
         return res.status(404).json({ error: 'Threat annotation not found' });

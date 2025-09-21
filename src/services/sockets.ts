@@ -68,9 +68,16 @@ export class SocketGateway {
       try {
         console.log(`[SOCKET] User ${user.id} attempting to join team: ${teamId}`);
         await this.sync.assertTeamMembership(user.id, teamId);
+        
+        // Join both the specific team room and the global room
         await socket.join(`team:${teamId}`);
-        console.log(`[SOCKET] User ${user.id} successfully joined team: ${teamId}`);
+        await socket.join('global'); // Global room for null team_id data
+        
+        console.log(`[SOCKET] User ${user.id} successfully joined team: ${teamId} and global room`);
         socket.emit('team:joined', { teamId });
+        
+        // Store the team ID in socket data for reference
+        (socket.data as any).teamId = teamId;
         
         // Emit admin connection update to show the new team room
         this.emitAdminConnectionUpdate('team_join', socket.id);
@@ -84,7 +91,13 @@ export class SocketGateway {
       const user = (socket.data as any).user;
       if (!user) return socket.emit('error', { message: 'Not authenticated' });
       console.log(`[SOCKET] User ${user.id} leaving team: ${teamId}`);
+      
+      // Leave the specific team room but stay in global room
       await socket.leave(`team:${teamId}`);
+      
+      // Clear the team ID from socket data
+      (socket.data as any).teamId = null;
+      
       socket.emit('team:left', { teamId });
       
       // Emit admin connection update to show the team room change
@@ -95,11 +108,18 @@ export class SocketGateway {
       const user = (socket.data as any).user;
       if (!user) return socket.emit('error', { message: 'Not authenticated' });
       await this.sync.handleLocationUpdate(user.id, data);
+      
+      // Broadcast to appropriate rooms based on team filtering logic
       if (data.teamId) {
+        // Broadcast to specific team room
         this.io.to(`team:${data.teamId}`).emit('location:update', { userId: user.id, ...data });
-        // Emit admin event for real-time map updates
-        this.emitAdminLocationUpdate(user.id, data);
+      } else {
+        // Broadcast to global room for null team_id data
+        this.io.to('global').emit('location:update', { userId: user.id, ...data });
       }
+      
+      // Emit admin event for real-time map updates
+      this.emitAdminLocationUpdate(user.id, data);
     });
 
     socket.on('annotation:update', async (data: { teamId?: string; [key: string]: unknown }) => {
@@ -108,11 +128,18 @@ export class SocketGateway {
       
       try {
         const annotation = await this.sync.handleAnnotationUpdate(user.id, data);
+        
+        // Broadcast to appropriate rooms based on team filtering logic
         if (data.teamId) {
+          // Broadcast to specific team room
           this.io.to(`team:${data.teamId}`).emit('annotation:update', annotation);
-          // Emit admin event for real-time map updates
-          this.emitAdminAnnotationUpdate(user.id, annotation);
+        } else {
+          // Broadcast to global room for null team_id data
+          this.io.to('global').emit('annotation:update', annotation);
         }
+        
+        // Emit admin event for real-time map updates
+        this.emitAdminAnnotationUpdate(user.id, annotation);
       } catch (error: any) {
         console.error('[SOCKET] Annotation update error:', error);
         socket.emit('error', { 
@@ -128,11 +155,18 @@ export class SocketGateway {
       
       try {
         const result = await this.sync.handleAnnotationDelete(user.id, data);
+        
+        // Broadcast to appropriate rooms based on team filtering logic
         if (data.teamId) {
+          // Broadcast to specific team room
           this.io.to(`team:${data.teamId}`).emit('annotation:delete', { annotationId: data.annotationId });
-          // Emit admin event for real-time map updates
-          this.emitAdminAnnotationDelete(user.id, { annotationId: data.annotationId, teamId: data.teamId });
+        } else {
+          // Broadcast to global room for null team_id data
+          this.io.to('global').emit('annotation:delete', { annotationId: data.annotationId });
         }
+        
+        // Emit admin event for real-time map updates
+        this.emitAdminAnnotationDelete(user.id, { annotationId: data.annotationId, teamId: data.teamId });
       } catch (error: any) {
         console.error('[SOCKET] Annotation delete error:', error);
         socket.emit('error', { 
@@ -157,14 +191,23 @@ export class SocketGateway {
         const result = await this.sync.handleBulkAnnotationDelete(user.id, data);
         console.log('[SOCKET] Bulk annotation delete result:', result);
         
+        // Broadcast to appropriate rooms based on team filtering logic
         if (data.teamId) {
+          // Broadcast to specific team room
           this.io.to(`team:${data.teamId}`).emit('annotation:bulk_delete', { 
             annotationIds: data.annotationIds 
           });
           console.log('[SOCKET] Broadcasted bulk delete to team:', data.teamId);
-          // Emit admin event for real-time map updates
-          this.emitAdminBulkAnnotationDelete(user.id, { annotationIds: data.annotationIds, teamId: data.teamId });
+        } else {
+          // Broadcast to global room for null team_id data
+          this.io.to('global').emit('annotation:bulk_delete', { 
+            annotationIds: data.annotationIds 
+          });
+          console.log('[SOCKET] Broadcasted bulk delete to global room');
         }
+        
+        // Emit admin event for real-time map updates
+        this.emitAdminBulkAnnotationDelete(user.id, { annotationIds: data.annotationIds, teamId: data.teamId });
         
         socket.emit('annotation:bulk_delete_result', result);
       } catch (error: any) {
@@ -180,11 +223,18 @@ export class SocketGateway {
       const user = (socket.data as any).user;
       if (!user) return socket.emit('error', { message: 'Not authenticated' });
       const message = await this.sync.handleMessage(user.id, data);
+      
+      // Broadcast to appropriate rooms based on team filtering logic
       if (data.teamId) {
+        // Broadcast to specific team room
         this.io.to(`team:${data.teamId}`).emit('message:received', message);
-        // Emit admin event for real-time message monitoring
-        this.emitAdminMessageReceived(user.id, message);
+      } else {
+        // Broadcast to global room for null team_id data
+        this.io.to('global').emit('message:received', message);
       }
+      
+      // Emit admin event for real-time message monitoring
+      this.emitAdminMessageReceived(user.id, message);
     });
     
     // Handle disconnection
@@ -440,10 +490,18 @@ export class SocketGateway {
     }
   }
 
-  // Emit threat alert to team members
+  // Emit threat alert to team members and global room
   public emitThreatAlert(teamId: string, threatData: any) {
     console.log('[SOCKET] Emitting threat alert:', { teamId, threatData });
+    
+    // Broadcast to specific team room
     this.io.to(`team:${teamId}`).emit('threat:new', {
+      ...threatData,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Also broadcast to global room for cross-team threat awareness
+    this.io.to('global').emit('threat:new', {
       ...threatData,
       timestamp: new Date().toISOString()
     });

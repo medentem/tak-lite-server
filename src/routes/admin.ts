@@ -203,7 +203,9 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         .limit(limit);
       
       if (teamId) {
-        query = query.where('team_id', teamId);
+        query = query.where(function() {
+          this.where('team_id', teamId).orWhereNull('team_id');
+        });
       }
       
       if (since) {
@@ -234,7 +236,9 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         .limit(limit);
       
       if (teamId) {
-        query = query.where('l.team_id', teamId);
+        query = query.where(function() {
+          this.where('l.team_id', teamId).orWhereNull('l.team_id');
+        });
       }
       
       if (since) {
@@ -635,10 +639,14 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         query = query.where('threat_type', threat_type);
       }
       
-      // Filter by status (pending, reviewed, approved, dismissed)
+      // Filter by status (pending, reviewed, approved, dismissed, all)
       if (status === 'pending') {
         query = query.whereNull('admin_status');
-      } else if (status !== 'all') {
+      } else if (status === 'all') {
+        // Show all threats regardless of status
+        // No additional filtering needed
+      } else {
+        // Filter by specific status (reviewed, approved, dismissed)
         query = query.where('admin_status', status);
       }
       
