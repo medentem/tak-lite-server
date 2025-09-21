@@ -424,8 +424,17 @@ export class GrokService {
               logger.error('processing_metadata JSON serialization failed', { error: e.message });
             }
             
-            // Store analysis in database
-            await this.db.client('threat_analyses').insert(dbInsertData);
+            // Store analysis in database - explicitly stringify JSON fields
+            const dbInsertDataStringified = {
+              ...dbInsertData,
+              grok_analysis: JSON.stringify(dbInsertData.grok_analysis),
+              extracted_locations: JSON.stringify(dbInsertData.extracted_locations),
+              keywords: JSON.stringify(dbInsertData.keywords),
+              location_confidence: JSON.stringify(dbInsertData.location_confidence),
+              processing_metadata: JSON.stringify(dbInsertData.processing_metadata)
+            };
+            
+            await this.db.client('threat_analyses').insert(dbInsertDataStringified);
 
             validAnalyses.push({
               id: analysisId,
