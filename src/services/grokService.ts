@@ -392,35 +392,35 @@ export class GrokService {
             try {
               JSON.stringify(dbInsertData.grok_analysis);
               logger.info('grok_analysis JSON serialization: OK');
-            } catch (e) {
+            } catch (e: any) {
               logger.error('grok_analysis JSON serialization failed', { error: e.message });
             }
             
             try {
               JSON.stringify(dbInsertData.extracted_locations);
               logger.info('extracted_locations JSON serialization: OK');
-            } catch (e) {
+            } catch (e: any) {
               logger.error('extracted_locations JSON serialization failed', { error: e.message });
             }
             
             try {
               JSON.stringify(dbInsertData.keywords);
               logger.info('keywords JSON serialization: OK');
-            } catch (e) {
+            } catch (e: any) {
               logger.error('keywords JSON serialization failed', { error: e.message });
             }
             
             try {
               JSON.stringify(dbInsertData.location_confidence);
               logger.info('location_confidence JSON serialization: OK');
-            } catch (e) {
+            } catch (e: any) {
               logger.error('location_confidence JSON serialization failed', { error: e.message });
             }
             
             try {
               JSON.stringify(dbInsertData.processing_metadata);
               logger.info('processing_metadata JSON serialization: OK');
-            } catch (e) {
+            } catch (e: any) {
               logger.error('processing_metadata JSON serialization failed', { error: e.message });
             }
             
