@@ -311,7 +311,7 @@ export class GrokService {
             'Authorization': authHeader,
             'Content-Type': 'application/json'
           },
-          timeout: 120000 // 120 second timeout for complex searches
+          timeout: 240000 // 240 second timeout for complex searches
         });
 
         const processingTime = Date.now() - startTime;
