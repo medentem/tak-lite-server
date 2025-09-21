@@ -289,6 +289,7 @@ export class SocialMediaMonitoringService {
     await this.db.client('threat_annotations').insert({
       id: annotationId,
       threat_analysis_id: threat.id,
+      team_id: null, // Global threat annotation - visible to all teams
       position: { lat: threat.locations[0]?.lat || 0, lng: threat.locations[0]?.lng || 0 },
       threat_level: threat.threat_level,
       threat_type: threat.threat_type,

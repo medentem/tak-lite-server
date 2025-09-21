@@ -829,6 +829,25 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           threatType: threat.threat_type,
           location: primaryLocation
         });
+        
+        // Emit annotation update for regular clients (so they can see the new annotation on their maps)
+        io.emit('admin:annotation_update', {
+          id: annotationId,
+          teamId,
+          type: annotationType,
+          data: annotationData,
+          userId,
+          userName: 'System (Threat Detection)',
+          userEmail: 'system@threat-detection',
+          timestamp: new Date().toISOString(),
+          source: 'threat_approval'
+        });
+        
+        // Emit sync activity for admin dashboard
+        io.emit('admin:sync_activity', {
+          type: 'annotation_update',
+          details: `System created threat annotation ${annotationId} for team ${teamId} from approved threat ${req.params.threatId}`
+        });
       }
       
       res.json({ 
