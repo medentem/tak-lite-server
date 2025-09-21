@@ -226,13 +226,27 @@ export class GrokService {
     }
   }
 
-  async searchThreats(geographicalArea: string, searchQuery?: string): Promise<ThreatAnalysis[]> {
+  async searchThreats(geographicalArea: string, searchQuery?: string, lastSearchTime?: Date): Promise<ThreatAnalysis[]> {
     const grokConfig = await this.getGrokConfiguration();
     if (!grokConfig) {
       throw new Error('No active Grok configuration found');
     }
 
-    const prompt = this.buildGeographicalThreatSearchPrompt(geographicalArea, searchQuery);
+    const prompt = this.buildGeographicalThreatSearchPrompt(geographicalArea, searchQuery, lastSearchTime);
+    
+    // Log the time window being used
+    if (lastSearchTime) {
+      const timeDiffMs = Date.now() - lastSearchTime.getTime();
+      const timeDiffMinutes = Math.floor(timeDiffMs / (1000 * 60));
+      logger.info('Using dynamic time window for threat search', {
+        geographicalArea,
+        lastSearchTime: lastSearchTime.toISOString(),
+        timeDiffMinutes,
+        timeWindow: timeDiffMinutes < 60 ? `${timeDiffMinutes} minutes` : `${Math.floor(timeDiffMinutes / 60)} hours`
+      });
+    } else {
+      logger.info('Using default 1-hour time window for threat search', { geographicalArea });
+    }
     
     // Retry logic for API calls
     const maxRetries = 3;
@@ -523,7 +537,8 @@ export class GrokService {
           searchQuery,
           threatsFound: validAnalyses.length,
           processingTime,
-          attempt
+          attempt,
+          lastSearchTime: lastSearchTime?.toISOString()
         });
 
         return validAnalyses;
@@ -572,14 +587,14 @@ export class GrokService {
     return `You are a specialized threat detection AI for emergency services and security teams. You have access to real-time X (Twitter) posts and can search for current threats and emergency situations in specific geographical areas.
 
 CRITICAL INSTRUCTIONS:
-1. Use your real-time search capabilities to find recent X posts (LAST HOUR ONLY) about threats in the specified area
+1. Use your real-time search capabilities to find recent X posts about threats in the specified area within the time window provided
 2. Only classify as HIGH or CRITICAL if there is a clear, immediate threat to life, property, or public safety
 3. Be conservative - false positives are better than missing real threats
 4. Extract PRECISE location information from X posts when available
 5. For general area references, provide center point AND radius in kilometers
 6. Always respond with valid JSON in the exact format specified
 7. Include detailed citations with clickable URLs for all sources
-8. Prioritize recency - only include information from the last hour
+8. Prioritize recency - only include information from within the specified time window
 
 THREAT LEVELS:
 - LOW: General discussion, no immediate threat
@@ -645,14 +660,34 @@ Always respond with valid JSON array in this exact format:
 ]`;
   }
 
-  private buildGeographicalThreatSearchPrompt(geographicalArea: string, searchQuery?: string): string {
+  private buildGeographicalThreatSearchPrompt(geographicalArea: string, searchQuery?: string, lastSearchTime?: Date): string {
+    // Calculate the time window for the search
+    const now = new Date();
+    let timeConstraint: string;
+    
+    if (lastSearchTime) {
+      const timeDiffMs = now.getTime() - lastSearchTime.getTime();
+      const timeDiffMinutes = Math.floor(timeDiffMs / (1000 * 60));
+      const timeDiffHours = Math.floor(timeDiffMinutes / 60);
+      
+      if (timeDiffMinutes < 60) {
+        timeConstraint = `Only search for posts from the last ${timeDiffMinutes} minutes (since ${lastSearchTime.toISOString()}) to find NEW threats since the last search.`;
+      } else if (timeDiffHours < 24) {
+        timeConstraint = `Only search for posts from the last ${timeDiffHours} hours (since ${lastSearchTime.toISOString()}) to find NEW threats since the last search.`;
+      } else {
+        timeConstraint = `Only search for posts from the last 24 hours to ensure relevance (last search was ${timeDiffHours} hours ago).`;
+      }
+    } else {
+      timeConstraint = `Only search for posts from the last hour to ensure maximum relevance and urgency.`;
+    }
+
     return `
 Search for REAL-TIME threat-related information from X (Twitter) posts in the specified geographical area.
 
 GEOGRAPHICAL AREA: "${geographicalArea}"
 ${searchQuery ? `SEARCH FOCUS: "${searchQuery}"` : ''}
 
-CRITICAL TIME CONSTRAINT: Only search for posts from the LAST HOUR to ensure maximum relevance and urgency.
+CRITICAL TIME CONSTRAINT: ${timeConstraint}
 
 Use your real-time search capabilities to find recent X posts about threats, incidents, or emergency situations in this area. Look for:
 - Violence or security threats
@@ -760,6 +795,33 @@ Return results as a JSON array of threat analyses with complete citations.`;
       .del();
     
     logger.info('Deleted geographical search', { searchId });
+  }
+
+  async updateLastSearchTime(searchId: string): Promise<void> {
+    await this.db.client('geographical_searches')
+      .where('id', searchId)
+      .update({
+        last_searched_at: new Date(),
+        updated_at: new Date()
+      });
+    
+    logger.info('Updated last search time', { searchId });
+  }
+
+  // Test method to verify dynamic time window calculation
+  testDynamicTimeWindow(lastSearchTime: Date): string {
+    const now = new Date();
+    const timeDiffMs = now.getTime() - lastSearchTime.getTime();
+    const timeDiffMinutes = Math.floor(timeDiffMs / (1000 * 60));
+    const timeDiffHours = Math.floor(timeDiffMinutes / 60);
+    
+    if (timeDiffMinutes < 60) {
+      return `Last ${timeDiffMinutes} minutes (since ${lastSearchTime.toISOString()})`;
+    } else if (timeDiffHours < 24) {
+      return `Last ${timeDiffHours} hours (since ${lastSearchTime.toISOString()})`;
+    } else {
+      return `Last 24 hours (last search was ${timeDiffHours} hours ago)`;
+    }
   }
 
   private async checkForDuplicateThreat(analysis: any, geographicalArea: string): Promise<boolean> {

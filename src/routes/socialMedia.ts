@@ -195,13 +195,16 @@ export function createSocialMediaRouter(
   // Direct geographical threat search endpoint
   router.post('/search-threats', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { geographical_area, search_query } = req.body;
+      const { geographical_area, search_query, last_search_time } = req.body;
       
       if (!geographical_area) {
         return res.status(400).json({ error: 'Geographical area is required' });
       }
 
-      const threats = await socialMediaService.searchGeographicalThreats(geographical_area, search_query);
+      // Parse last_search_time if provided
+      const lastSearchTime = last_search_time ? new Date(last_search_time) : undefined;
+
+      const threats = await socialMediaService.searchGeographicalThreats(geographical_area, search_query, lastSearchTime);
       res.json({ threats });
     } catch (error) {
       next(error);

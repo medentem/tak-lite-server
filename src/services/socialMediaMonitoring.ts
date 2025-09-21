@@ -161,8 +161,8 @@ export class SocialMediaMonitoringService {
     }
   }
 
-  async searchGeographicalThreats(geographicalArea: string, searchQuery?: string): Promise<GrokThreatAnalysis[]> {
-    return await this.grokService.searchThreats(geographicalArea, searchQuery);
+  async searchGeographicalThreats(geographicalArea: string, searchQuery?: string, lastSearchTime?: Date): Promise<GrokThreatAnalysis[]> {
+    return await this.grokService.searchThreats(geographicalArea, searchQuery, lastSearchTime);
   }
 
   // New geographical monitoring methods
@@ -230,14 +230,20 @@ export class SocialMediaMonitoringService {
 
   private async performGeographicalSearch(search: GeographicalSearch): Promise<void> {
     try {
-      const threats = await this.grokService.searchThreats(search.geographical_area, search.search_query || undefined);
+      // Use the last search time to create a dynamic time window
+      const lastSearchTime = search.last_searched_at;
+      const threats = await this.grokService.searchThreats(
+        search.geographical_area, 
+        search.search_query || undefined, 
+        lastSearchTime
+      );
       
       for (const threat of threats) {
         await this.createThreatAnnotationFromGrok(threat, search);
       }
-
-      // Update last searched timestamp
-      await this.grokService.updateGeographicalSearch(search.id, { last_searched_at: new Date() });
+      
+      // Update the last search time after successful search
+      await this.grokService.updateLastSearchTime(search.id);
 
       logger.debug('Performed geographical search', { 
         searchId: search.id, 
