@@ -55,7 +55,10 @@ export class DatabaseService {
       migrations: {
         // Use the same path as knexfile.ts - migrations are in the root migrations folder
         directory: path.resolve(process.cwd(), 'migrations')
-      }
+      },
+      // Ensure proper JSON handling for PostgreSQL JSONB columns
+      asyncStackTraces: true,
+      debug: false
     });
   }
 

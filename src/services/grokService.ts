@@ -424,17 +424,26 @@ export class GrokService {
               logger.error('processing_metadata JSON serialization failed', { error: e.message });
             }
             
-            // Store analysis in database - explicitly stringify JSON fields
-            const dbInsertDataStringified = {
-              ...dbInsertData,
-              grok_analysis: JSON.stringify(dbInsertData.grok_analysis),
-              extracted_locations: JSON.stringify(dbInsertData.extracted_locations),
-              keywords: JSON.stringify(dbInsertData.keywords),
-              location_confidence: JSON.stringify(dbInsertData.location_confidence),
-              processing_metadata: JSON.stringify(dbInsertData.processing_metadata)
-            };
-            
-            await this.db.client('threat_analyses').insert(dbInsertDataStringified);
+            // Store analysis in database - Knex.js should handle JSONB automatically
+            try {
+              await this.db.client('threat_analyses').insert(dbInsertData);
+              logger.info('Database insertion successful', { analysisId });
+            } catch (dbError: any) {
+              logger.error('Database insertion failed', { 
+                error: dbError.message,
+                errorCode: dbError.code,
+                analysisId,
+                // Log the problematic data structure
+                dataKeys: Object.keys(dbInsertData),
+                dataTypes: Object.entries(dbInsertData).map(([key, value]) => ({
+                  key,
+                  type: typeof value,
+                  isArray: Array.isArray(value),
+                  isObject: value && typeof value === 'object' && !Array.isArray(value)
+                }))
+              });
+              throw dbError;
+            }
 
             validAnalyses.push({
               id: analysisId,
