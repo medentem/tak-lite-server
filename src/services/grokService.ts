@@ -438,6 +438,7 @@ export class GrokService {
             // Store analysis in database - explicitly stringify JSONB fields
             const dbInsertDataStringified = {
               id: dbInsertData.id,
+              // post_id is now nullable - omit for geographical searches
               grok_analysis: JSON.stringify(dbInsertData.grok_analysis),
               threat_level: dbInsertData.threat_level,
               threat_type: dbInsertData.threat_type,
