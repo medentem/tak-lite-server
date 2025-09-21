@@ -344,12 +344,23 @@ export class GrokService {
         const validAnalyses: ThreatAnalysis[] = [];
         for (const analysis of analyses) {
           if (this.validateThreatAnalysis(analysis)) {
+            // Check for duplicate threats (same location, similar content, within 24 hours)
+            const isDuplicate = await this.checkForDuplicateThreat(analysis, geographicalArea);
+            if (isDuplicate) {
+              logger.info('Skipping duplicate threat', { 
+                threatLevel: analysis.threat_level,
+                threatType: analysis.threat_type,
+                geographicalArea
+              });
+              continue;
+            }
+            
             const analysisId = uuidv4();
             
             // Prepare database insertion data
             const dbInsertData = {
               id: analysisId,
-              post_id: null, // No specific post for geographical searches
+              // Don't include post_id for geographical searches - let database use DEFAULT
               grok_analysis: response.data,
               threat_level: analysis.threat_level,
               threat_type: analysis.threat_type,
@@ -357,7 +368,7 @@ export class GrokService {
               ai_summary: analysis.summary,
               extracted_locations: analysis.locations,
               keywords: analysis.keywords,
-              search_query: searchQuery,
+              search_query: searchQuery || null, // Ensure search_query is not undefined
               geographical_area: geographicalArea,
               location_confidence: {
                 average_confidence: analysis.locations?.reduce((acc: number, loc: any) => acc + (loc.confidence || 0), 0) / (analysis.locations?.length || 1),
@@ -692,5 +703,63 @@ Return results as a JSON array of threat analyses.`;
       .del();
     
     logger.info('Deleted geographical search', { searchId });
+  }
+
+  private async checkForDuplicateThreat(analysis: any, geographicalArea: string): Promise<boolean> {
+    try {
+      const locations = analysis.locations || [];
+      if (locations.length === 0) return false;
+
+      // Check for threats in the same geographical area with similar content within the last 24 hours
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      
+      const existingThreats = await this.db.client('threat_analyses')
+        .where('geographical_area', geographicalArea)
+        .where('threat_level', analysis.threat_level)
+        .where('threat_type', analysis.threat_type)
+        .where('created_at', '>', twentyFourHoursAgo)
+        .select(['id', 'ai_summary', 'extracted_locations']);
+
+      // Check for similar content and location proximity
+      for (const existing of existingThreats) {
+        // Simple content similarity check (first 50 characters)
+        const existingSummary = existing.ai_summary?.substring(0, 50) || '';
+        const newSummary = analysis.summary?.substring(0, 50) || '';
+        
+        if (existingSummary === newSummary) {
+          return true; // Exact content match
+        }
+
+        // Check location proximity (within 1km)
+        const existingLocations = existing.extracted_locations || [];
+        for (const existingLoc of existingLocations) {
+          for (const newLoc of locations) {
+            const distance = this.calculateDistance(
+              existingLoc.lat, existingLoc.lng,
+              newLoc.lat, newLoc.lng
+            );
+            if (distance < 1.0) { // Within 1km
+              return true;
+            }
+          }
+        }
+      }
+
+      return false;
+    } catch (error) {
+      logger.error('Error checking for duplicate threats', { error });
+      return false; // Don't block on error
+    }
+  }
+
+  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
   }
 }

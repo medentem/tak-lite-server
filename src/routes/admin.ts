@@ -621,7 +621,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           'id', 'threat_level', 'threat_type', 'confidence_score', 
           'ai_summary', 'extracted_locations', 'keywords', 'reasoning',
           'search_query', 'geographical_area', 'created_at',
-          'processing_metadata'
+          'processing_metadata', 'grok_analysis'
         ])
         .orderBy('created_at', 'desc')
         .limit(parseInt(limit as string))
