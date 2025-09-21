@@ -435,9 +435,24 @@ export class GrokService {
               logger.error('processing_metadata JSON serialization failed', { error: e.message });
             }
             
-            // Store analysis in database - Knex.js should handle JSONB automatically
+            // Store analysis in database - explicitly stringify JSONB fields
+            const dbInsertDataStringified = {
+              id: dbInsertData.id,
+              grok_analysis: JSON.stringify(dbInsertData.grok_analysis),
+              threat_level: dbInsertData.threat_level,
+              threat_type: dbInsertData.threat_type,
+              confidence_score: dbInsertData.confidence_score,
+              ai_summary: dbInsertData.ai_summary,
+              extracted_locations: JSON.stringify(dbInsertData.extracted_locations),
+              keywords: JSON.stringify(dbInsertData.keywords),
+              search_query: dbInsertData.search_query, // Keep as null/string, not JSONB
+              geographical_area: dbInsertData.geographical_area,
+              location_confidence: JSON.stringify(dbInsertData.location_confidence),
+              processing_metadata: JSON.stringify(dbInsertData.processing_metadata)
+            };
+            
             try {
-              await this.db.client('threat_analyses').insert(dbInsertData);
+              await this.db.client('threat_analyses').insert(dbInsertDataStringified);
               logger.info('Database insertion successful', { analysisId });
             } catch (dbError: any) {
               logger.error('Database insertion failed', { 
@@ -445,8 +460,8 @@ export class GrokService {
                 errorCode: dbError.code,
                 analysisId,
                 // Log the problematic data structure
-                dataKeys: Object.keys(dbInsertData),
-                dataTypes: Object.entries(dbInsertData).map(([key, value]) => ({
+                dataKeys: Object.keys(dbInsertDataStringified),
+                dataTypes: Object.entries(dbInsertDataStringified).map(([key, value]) => ({
                   key,
                   type: typeof value,
                   isArray: Array.isArray(value),
