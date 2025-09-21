@@ -621,7 +621,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           'id', 'threat_level', 'threat_type', 'confidence_score', 
           'ai_summary', 'extracted_locations', 'keywords', 'reasoning',
           'search_query', 'geographical_area', 'created_at',
-          'processing_metadata', 'grok_analysis'
+          'processing_metadata', 'grok_analysis', 'citations'
         ])
         .orderBy('created_at', 'desc')
         .limit(parseInt(limit as string))
@@ -652,6 +652,12 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
       
       const threat = await db.client('threat_analyses')
+        .select([
+          'id', 'threat_level', 'threat_type', 'confidence_score', 
+          'ai_summary', 'extracted_locations', 'keywords', 'reasoning',
+          'search_query', 'geographical_area', 'created_at',
+          'processing_metadata', 'grok_analysis', 'citations'
+        ])
         .where('id', req.params.threatId)
         .first();
       

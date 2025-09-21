@@ -242,7 +242,10 @@ function updateThreatsDisplay() {
               <strong>Area:</strong> ${threat.geographical_area || 'Unknown'}<br>
               <strong>Locations:</strong> ${locationText}<br>
               <strong>Keywords:</strong> ${(threat.keywords || []).join(', ') || 'None'}<br>
-              <strong>Detected:</strong> ${new Date(threat.created_at).toLocaleString()}
+              <strong>Detected:</strong> ${new Date(threat.created_at).toLocaleString()}<br>
+              ${threat.citations && threat.citations.length > 0 ? `
+                <strong>Sources:</strong> ${threat.citations.length} citation${threat.citations.length !== 1 ? 's' : ''} available
+              ` : ''}
             </div>
           </div>
           <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 16px;">
@@ -431,6 +434,63 @@ function showThreatDetails(threatId) {
             <strong style="color: var(--text);">AI Reasoning:</strong>
             <div style="color: var(--muted); margin-top: 4px; line-height: 1.4;">
               ${threat.reasoning}
+            </div>
+          </div>
+        ` : ''}
+        
+        ${threat.citations && threat.citations.length > 0 ? `
+          <div style="margin-bottom: 12px;">
+            <strong style="color: var(--text);">Sources & Citations:</strong>
+            <div style="margin-top: 8px;">
+              ${threat.citations.map(citation => `
+                <div style="background: #0d1b34; border: 1px solid #223056; border-radius: 6px; padding: 12px; margin-bottom: 8px;">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                    <div style="flex: 1;">
+                      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                        <span style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+                          ${citation.platform.toUpperCase()}
+                        </span>
+                        ${citation.relevance_score ? `
+                          <span style="color: var(--muted); font-size: 11px;">
+                            ${(citation.relevance_score * 100).toFixed(0)}% relevant
+                          </span>
+                        ` : ''}
+                      </div>
+                      ${citation.title ? `
+                        <div style="font-weight: 600; color: var(--text); margin-bottom: 4px;">
+                          ${citation.title}
+                        </div>
+                      ` : ''}
+                      ${citation.author ? `
+                        <div style="color: var(--muted); font-size: 12px; margin-bottom: 4px;">
+                          by ${citation.author}
+                        </div>
+                      ` : ''}
+                      ${citation.content_preview ? `
+                        <div style="color: var(--muted); font-size: 12px; line-height: 1.4; margin-bottom: 8px;">
+                          "${citation.content_preview}"
+                        </div>
+                      ` : ''}
+                      ${citation.timestamp ? `
+                        <div style="color: var(--muted); font-size: 11px; margin-bottom: 8px;">
+                          ${new Date(citation.timestamp).toLocaleString()}
+                        </div>
+                      ` : ''}
+                    </div>
+                  </div>
+                  <div style="display: flex; justify-content: flex-end;">
+                    <a href="${citation.url}" target="_blank" rel="noopener noreferrer" 
+                       style="background: #3b82f6; color: white; padding: 6px 12px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                        <polyline points="15,3 21,3 21,9"></polyline>
+                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                      </svg>
+                      View Source
+                    </a>
+                  </div>
+                </div>
+              `).join('')}
             </div>
           </div>
         ` : ''}

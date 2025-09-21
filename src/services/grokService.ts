@@ -22,6 +22,8 @@ export interface LocationData {
   name?: string;
   confidence: number;
   source: 'coordinates' | 'address' | 'geocoded' | 'inferred';
+  radius_km?: number; // For area-based threats
+  area_description?: string; // Human-readable area description
 }
 
 export interface ThreatAnalysis {
@@ -39,6 +41,16 @@ export interface ThreatAnalysis {
     timestamp?: string;
     url?: string;
   };
+  citations?: {
+    id: string;
+    platform: 'x_posts' | 'news' | 'other';
+    title?: string;
+    author?: string;
+    timestamp?: string;
+    url: string;
+    content_preview?: string;
+    relevance_score?: number;
+  }[];
 }
 
 export interface GeographicalSearch {
@@ -374,6 +386,7 @@ export class GrokService {
                 average_confidence: analysis.locations?.reduce((acc: number, loc: any) => acc + (loc.confidence || 0), 0) / (analysis.locations?.length || 1),
                 total_locations: analysis.locations?.length || 0
               },
+              citations: analysis.citations || [], // Store citations for UI display
               processing_metadata: {
                 model: grokConfig.model,
                 tokens_used: response.data.usage?.total_tokens,
@@ -449,6 +462,7 @@ export class GrokService {
               search_query: dbInsertData.search_query, // Keep as null/string, not JSONB
               geographical_area: dbInsertData.geographical_area,
               location_confidence: JSON.stringify(dbInsertData.location_confidence),
+              citations: JSON.stringify(dbInsertData.citations), // Store citations as JSONB
               processing_metadata: JSON.stringify(dbInsertData.processing_metadata)
             };
             
@@ -481,7 +495,8 @@ export class GrokService {
               locations: analysis.locations || [],
               keywords: analysis.keywords || [],
               reasoning: analysis.reasoning,
-              source_info: analysis.source_info
+              source_info: analysis.source_info,
+              citations: analysis.citations || []
             });
 
             // Emit real-time notification for new threat
@@ -494,6 +509,7 @@ export class GrokService {
                 summary: analysis.summary,
                 locations: analysis.locations || [],
                 keywords: analysis.keywords || [],
+                citations: analysis.citations || [],
                 geographical_area: geographicalArea,
                 search_query: searchQuery,
                 created_at: new Date().toISOString()
@@ -556,13 +572,14 @@ export class GrokService {
     return `You are a specialized threat detection AI for emergency services and security teams. You have access to real-time X (Twitter) posts and can search for current threats and emergency situations in specific geographical areas.
 
 CRITICAL INSTRUCTIONS:
-1. Use your real-time search capabilities to find recent X posts (last 24-48 hours) about threats in the specified area
+1. Use your real-time search capabilities to find recent X posts (LAST HOUR ONLY) about threats in the specified area
 2. Only classify as HIGH or CRITICAL if there is a clear, immediate threat to life, property, or public safety
 3. Be conservative - false positives are better than missing real threats
-4. Extract precise location information from X posts when available
-5. For general area references, provide approximate boundaries
+4. Extract PRECISE location information from X posts when available
+5. For general area references, provide center point AND radius in kilometers
 6. Always respond with valid JSON in the exact format specified
-7. Include actual X post information in source_info when available
+7. Include detailed citations with clickable URLs for all sources
+8. Prioritize recency - only include information from the last hour
 
 THREAT LEVELS:
 - LOW: General discussion, no immediate threat
@@ -579,11 +596,18 @@ THREAT TYPES:
 - CYBER: Cyber attacks, data breaches, system compromises
 - HEALTH_EMERGENCY: Disease outbreaks, medical emergencies, contamination
 
-LOCATION EXTRACTION:
-- For specific addresses: provide coordinates and address
-- For general areas: provide approximate center point and area description
+LOCATION EXTRACTION REQUIREMENTS:
+- For specific addresses: provide exact coordinates and full address
+- For general areas: provide center point AND radius_km for area coverage
 - Include confidence score for location accuracy (0.0 to 1.0)
 - Specify source of location information
+- Add area_description for human-readable area reference
+
+CITATION REQUIREMENTS:
+- Include ALL sources that led to this threat assessment
+- Provide clickable URLs for X posts, news articles, etc.
+- Include content previews for context
+- Rate relevance of each citation (0.0 to 1.0)
 
 Always respond with valid JSON array in this exact format:
 [
@@ -598,17 +622,25 @@ Always respond with valid JSON array in this exact format:
         "lng": -122.3321,
         "name": "Seattle, WA",
         "confidence": 0.9,
-        "source": "coordinates|address|geocoded|inferred"
+        "source": "coordinates|address|geocoded|inferred",
+        "radius_km": 5.0,
+        "area_description": "Downtown Seattle area including Pike Place Market"
       }
     ],
     "keywords": ["keyword1", "keyword2"],
     "reasoning": "Explanation of why this was classified as a threat",
-    "source_info": {
-      "platform": "x_posts",
-      "author": "actual_x_username",
-      "timestamp": "actual_post_timestamp",
-      "url": "https://x.com/username/status/1234567890"
-    }
+    "citations": [
+      {
+        "id": "citation_1",
+        "platform": "x_posts",
+        "title": "Post title or first 50 chars",
+        "author": "actual_x_username",
+        "timestamp": "2024-01-15T14:30:00Z",
+        "url": "https://x.com/username/status/1234567890",
+        "content_preview": "First 100 characters of the post content...",
+        "relevance_score": 0.95
+      }
+    ]
   }
 ]`;
   }
@@ -620,6 +652,8 @@ Search for REAL-TIME threat-related information from X (Twitter) posts in the sp
 GEOGRAPHICAL AREA: "${geographicalArea}"
 ${searchQuery ? `SEARCH FOCUS: "${searchQuery}"` : ''}
 
+CRITICAL TIME CONSTRAINT: Only search for posts from the LAST HOUR to ensure maximum relevance and urgency.
+
 Use your real-time search capabilities to find recent X posts about threats, incidents, or emergency situations in this area. Look for:
 - Violence or security threats
 - Natural disasters or severe weather
@@ -628,13 +662,20 @@ Use your real-time search capabilities to find recent X posts about threats, inc
 - Health emergencies
 - Cyber threats affecting the area
 
-IMPORTANT: Only analyze posts from the last 24-48 hours to ensure relevance. For each threat found, provide:
-1. The specific location with coordinates if possible
-2. Threat level assessment
-3. Source information from the X post
+For each threat found, provide:
+1. The specific location with coordinates AND radius if it's an area-based threat
+2. Threat level assessment based on immediate danger
+3. Complete source citations with clickable URLs
 4. Confidence in the threat assessment
+5. Detailed geographic information for mapping
 
-Return results as a JSON array of threat analyses.`;
+GEOGRAPHIC REQUIREMENTS:
+- For specific locations: provide exact lat/lng coordinates
+- For area-based threats: provide center point + radius_km
+- Include area_description for human reference
+- Ensure all location data is actionable for emergency response
+
+Return results as a JSON array of threat analyses with complete citations.`;
   }
 
   private validateThreatAnalysis(analysis: any): boolean {
