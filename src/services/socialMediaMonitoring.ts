@@ -298,8 +298,6 @@ export class SocialMediaMonitoringService {
       threat_type: threat.threat_type,
       title: this.generateThreatTitle(threat),
       description: threat.summary,
-      source_post_url: null, // No specific post for geographical searches
-      source_author: 'Grok Geographical Search',
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
     });
 
