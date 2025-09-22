@@ -587,9 +587,24 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         return res.status(404).json({ error: 'No annotations found to delete' });
       }
       
-      // Delete all annotations
+      // First, check which annotations can be safely deleted (not referenced by threat_analyses)
+      const annotationsWithThreats = await db.client('threat_analyses')
+        .whereIn('annotation_id', annotationIds)
+        .whereNotNull('annotation_id')
+        .select(['annotation_id']);
+      
+      const referencedAnnotationIds = new Set(annotationsWithThreats.map((t: any) => t.annotation_id));
+      const safeToDeleteIds = annotationIds.filter((id: string) => !referencedAnnotationIds.has(id));
+      
+      if (safeToDeleteIds.length === 0) {
+        return res.status(400).json({ 
+          error: 'Cannot delete annotations that are referenced by threat analyses. Please delete the threat analyses first.' 
+        });
+      }
+      
+      // Delete only the annotations that are safe to delete
       const deletedCount = await db.client('annotations')
-        .whereIn('id', annotationIds)
+        .whereIn('id', safeToDeleteIds)
         .delete();
       
       // Log audit entries for each deleted annotation
@@ -654,11 +669,20 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         }
       }
       
-      res.json({ 
+      const skippedCount = annotationIds.length - safeToDeleteIds.length;
+      const response: any = { 
         success: true, 
         deletedCount,
-        annotationIds: annotationsToDelete.map(a => a.id)
-      });
+        annotationIds: safeToDeleteIds
+      };
+      
+      if (skippedCount > 0) {
+        response.skippedCount = skippedCount;
+        response.skippedReason = 'Referenced by threat analyses';
+        response.warning = `${skippedCount} annotation(s) were skipped because they are referenced by threat analyses. Delete the threat analyses first to remove these annotations.`;
+      }
+      
+      res.json(response);
     } catch (err) { next(err); }
   });
 

@@ -2522,6 +2522,7 @@ class AdminMap {
     const confirmed = confirm(
       'Are you sure you want to clear ALL annotations?\n\n' +
       'This will permanently delete all annotations from the map.\n' +
+      'Note: Annotations linked to threat analyses will be skipped.\n' +
       'This action cannot be undone.\n\n' +
       'Click OK to continue or Cancel to abort.'
     );
@@ -2553,10 +2554,19 @@ class AdminMap {
       
       if (response.ok) {
         const result = await response.json();
-        this.showFeedback(`Successfully cleared ${result.deletedCount} annotations`, 3000);
         
-        // Clear local annotations array
-        this.annotations = [];
+        if (result.warning) {
+          // Show warning if some annotations were skipped
+          this.showFeedback(`${result.deletedCount} annotations cleared. ${result.warning}`, 8000);
+        } else {
+          // All annotations were cleared successfully
+          this.showFeedback(`Successfully cleared ${result.deletedCount} annotations`, 3000);
+        }
+        
+        // Remove only the successfully deleted annotations from local array
+        this.annotations = this.annotations.filter(annotation => 
+          !result.annotationIds.includes(annotation.id)
+        );
         
         // Update map immediately
         this.updateMapData();
