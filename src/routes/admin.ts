@@ -566,6 +566,102 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
     } catch (err) { next(err); }
   });
 
+  // Bulk delete annotations endpoint
+  router.post('/map/annotations/bulk-delete', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!db) return res.status(500).json({ error: 'Database not initialized' });
+      
+      const schema = Joi.object({
+        annotationIds: Joi.array().items(Joi.string().uuid()).min(1).required()
+      });
+      
+      const { annotationIds } = await schema.validateAsync(req.body);
+      const userId = (req.user as any)?.sub || 'admin';
+      
+      // Get all annotations that will be deleted for audit logging
+      const annotationsToDelete = await db.client('annotations')
+        .whereIn('id', annotationIds)
+        .select(['id', 'team_id', 'type']);
+      
+      if (annotationsToDelete.length === 0) {
+        return res.status(404).json({ error: 'No annotations found to delete' });
+      }
+      
+      // Delete all annotations
+      const deletedCount = await db.client('annotations')
+        .whereIn('id', annotationIds)
+        .delete();
+      
+      // Log audit entries for each deleted annotation
+      if (audit) {
+        for (const annotation of annotationsToDelete) {
+          await audit.log({ 
+            actorUserId: userId, 
+            action: 'annotation.bulk_delete', 
+            resourceType: 'annotation', 
+            resourceId: annotation.id, 
+            metadata: { teamId: annotation.team_id, type: annotation.type, bulkOperation: true } 
+          });
+        }
+      }
+      
+      // Emit real-time updates to admin clients
+      if (io) {
+        io.emit('admin:annotation_bulk_delete', {
+          annotationIds,
+          deletedCount,
+          userId,
+          userName: 'Admin',
+          userEmail: 'admin@system'
+        });
+        
+        // Broadcast to regular clients (Android clients listen for this)
+        // Group annotations by team for efficient broadcasting
+        const teamAnnotations = new Map<string, string[]>();
+        const globalAnnotations: string[] = [];
+        
+        annotationsToDelete.forEach(annotation => {
+          if (annotation.team_id) {
+            if (!teamAnnotations.has(annotation.team_id)) {
+              teamAnnotations.set(annotation.team_id, []);
+            }
+            teamAnnotations.get(annotation.team_id)!.push(annotation.id);
+          } else {
+            globalAnnotations.push(annotation.id);
+          }
+        });
+        
+        // Broadcast to team-specific rooms
+        for (const [teamId, ids] of teamAnnotations) {
+          io.to(`team:${teamId}`).emit('annotation:bulk_delete', {
+            annotationIds: ids,
+            teamId,
+            userId,
+            userName: 'Admin',
+            userEmail: 'admin@system'
+          });
+        }
+        
+        // Broadcast to global room for global annotations
+        if (globalAnnotations.length > 0) {
+          io.to('global').emit('annotation:bulk_delete', {
+            annotationIds: globalAnnotations,
+            teamId: null,
+            userId,
+            userName: 'Admin',
+            userEmail: 'admin@system'
+          });
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        deletedCount,
+        annotationIds: annotationsToDelete.map(a => a.id)
+      });
+    } catch (err) { next(err); }
+  });
+
   // --- Users management (admin) ---
   router.get('/users', async (_req: Request, res: Response, next: NextFunction) => {
     try {

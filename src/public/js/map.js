@@ -1813,6 +1813,14 @@ class AdminMap {
       });
     }
     
+    // Clear all annotations button
+    const clearAllBtn = document.getElementById('map_clear_all');
+    if (clearAllBtn) {
+      clearAllBtn.addEventListener('click', () => {
+        this.clearAllAnnotations();
+      });
+    }
+    
     // Show/hide toggles
     const showAnnotations = document.getElementById('map_show_annotations');
     if (showAnnotations) {
@@ -2507,6 +2515,62 @@ class AdminMap {
   
   centerMap() {
     this.centerMapOnData();
+  }
+  
+  async clearAllAnnotations() {
+    // Show confirmation dialog
+    const confirmed = confirm(
+      'Are you sure you want to clear ALL annotations?\n\n' +
+      'This will permanently delete all annotations from the map.\n' +
+      'This action cannot be undone.\n\n' +
+      'Click OK to continue or Cancel to abort.'
+    );
+    
+    if (!confirmed) {
+      return;
+    }
+    
+    try {
+      this.showFeedback('Clearing all annotations...', 3000);
+      
+      // Get all annotation IDs
+      const annotationIds = this.annotations.map(annotation => annotation.id);
+      
+      if (annotationIds.length === 0) {
+        this.showFeedback('No annotations to clear', 2000);
+        return;
+      }
+      
+      // Call the bulk delete API
+      const response = await fetch('/api/admin/map/annotations/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('taklite:token')}`
+        },
+        body: JSON.stringify({ annotationIds })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        this.showFeedback(`Successfully cleared ${result.deletedCount} annotations`, 3000);
+        
+        // Clear local annotations array
+        this.annotations = [];
+        
+        // Update map immediately
+        this.updateMapData();
+        
+        // Close any open popups
+        this.closeAllPopups();
+      } else {
+        const error = await response.json();
+        this.showFeedback(`Failed to clear annotations: ${error.error}`, 5000);
+      }
+    } catch (error) {
+      console.error('Failed to clear annotations:', error);
+      this.showFeedback('Failed to clear annotations', 5000);
+    }
   }
   
   // Calculate distance between two points using Haversine formula
