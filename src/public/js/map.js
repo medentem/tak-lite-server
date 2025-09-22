@@ -170,8 +170,9 @@ class AdminMap {
             'raster-opacity': 0.7
           }
         }
-      ],
-      glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf'
+      ]
+      // Removed glyphs configuration to prevent 404 errors from fonts.openmaptiles.org
+      // Since this is a simple raster style, custom fonts are not needed
     };
     
     try {
@@ -2165,26 +2166,16 @@ class AdminMap {
       
       switch (annotation.type) {
         case 'poi':
-          // Handle both Android format (lt, lng) and server format (lat, lng)
-          const lat = data.position?.lat ?? data.position?.lt;
-          const lng = data.position?.lng;
-          
-          // Validate coordinates before creating feature
-          if (data.position && 
-              typeof lat === 'number' && 
-              typeof lng === 'number' &&
-              !isNaN(lat) && 
-              !isNaN(lng) &&
-              isFinite(lat) && 
-              isFinite(lng)) {
-            
+          // Use consistent coordinate extraction logic
+          const poiCoords = this.extractCoordinates(data.position);
+          if (poiCoords) {
             // Create icon name based on shape and color (matching Android app pattern)
             const iconName = `poi-${(data.shape || 'circle').toLowerCase()}-${data.color.toLowerCase()}`;
             poiFeatures.push({
               type: 'Feature',
               geometry: {
                 type: 'Point',
-                coordinates: [lng, lat]
+                coordinates: poiCoords
               },
               properties: {
                 ...properties,
@@ -2194,63 +2185,77 @@ class AdminMap {
           } else {
             console.warn('Skipping POI annotation with invalid coordinates:', {
               id: annotation.id,
-              position: data.position,
-              lat: lat,
-              lng: lng,
-              originalLat: data.position?.lat,
-              originalLt: data.position?.lt
+              position: data.position
             });
           }
           break;
           
         case 'line':
-          // Handle both Android format (lt, lng) and server format (lat, lng)
-          const linePoints = data.points.map(p => {
-            const lat = p.lat ?? p.lt;
-            return [p.lng, lat];
-          });
-          lineFeatures.push({
-            type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: linePoints
-            },
-            properties
-          });
+          // Use consistent coordinate extraction logic
+          const linePoints = data.points.map(p => this.extractCoordinates(p)).filter(coord => coord !== null);
+          if (linePoints.length >= 2) {
+            lineFeatures.push({
+              type: 'Feature',
+              geometry: {
+                type: 'LineString',
+                coordinates: linePoints
+              },
+              properties
+            });
+          } else {
+            console.warn('Skipping line annotation with insufficient valid coordinates:', {
+              id: annotation.id,
+              validPoints: linePoints.length,
+              totalPoints: data.points.length
+            });
+          }
           break;
           
         case 'area':
-          // Handle both Android format (lt, lng) and server format (lat, lng)
-          const areaLat = data.center.lat ?? data.center.lt;
-          const areaPolygon = this.generateCirclePolygon(data.center.lng, areaLat, data.radius);
-          areaFeatures.push({
-            type: 'Feature',
-            geometry: {
-              type: 'Polygon',
-              coordinates: [areaPolygon]
-            },
-            properties: {
-              ...properties,
-              fillOpacity: 0.3,
-              strokeWidth: 3
-            }
-          });
+          // Use consistent coordinate extraction logic
+          const areaCoords = this.extractCoordinates(data.center);
+          if (areaCoords && data.radius && data.radius > 0) {
+            const areaPolygon = this.generateCirclePolygon(areaCoords[0], areaCoords[1], data.radius);
+            areaFeatures.push({
+              type: 'Feature',
+              geometry: {
+                type: 'Polygon',
+                coordinates: [areaPolygon]
+              },
+              properties: {
+                ...properties,
+                fillOpacity: 0.3,
+                strokeWidth: 3
+              }
+            });
+          } else {
+            console.warn('Skipping area annotation with invalid coordinates or radius:', {
+              id: annotation.id,
+              center: data.center,
+              radius: data.radius
+            });
+          }
           break;
           
         case 'polygon':
-          // Handle both Android format (lt, lng) and server format (lat, lng)
-          const polygonPoints = data.points.map(p => {
-            const lat = p.lat ?? p.lt;
-            return [p.lng, lat];
-          });
-          polygonFeatures.push({
-            type: 'Feature',
-            geometry: {
-              type: 'Polygon',
-              coordinates: [polygonPoints]
-            },
-            properties
-          });
+          // Use consistent coordinate extraction logic
+          const polygonPoints = data.points.map(p => this.extractCoordinates(p)).filter(coord => coord !== null);
+          if (polygonPoints.length >= 3) {
+            polygonFeatures.push({
+              type: 'Feature',
+              geometry: {
+                type: 'Polygon',
+                coordinates: [polygonPoints]
+              },
+              properties
+            });
+          } else {
+            console.warn('Skipping polygon annotation with insufficient valid coordinates:', {
+              id: annotation.id,
+              validPoints: polygonPoints.length,
+              totalPoints: data.points.length
+            });
+          }
           break;
       }
     });
@@ -2259,32 +2264,45 @@ class AdminMap {
     const now = Date.now();
     const stalenessThresholdMs = 10 * 60 * 1000; // 10 minutes (configurable)
     
-    const locationFeatures = this.locations.map(location => {
-      const locationAge = now - new Date(location.timestamp).getTime();
-      const isStale = locationAge > stalenessThresholdMs;
-      
-      return {
-        type: 'Feature',
-        geometry: {
-          type: 'Point',
-          coordinates: [location.longitude, location.latitude]
-        },
-        properties: {
-          id: location.id,
-          user_id: location.user_id,
-          user_name: location.user_name,
-          user_email: location.user_email,
-          latitude: location.latitude,
-          longitude: location.longitude,
-          altitude: location.altitude,
-          accuracy: location.accuracy,
-          timestamp: location.timestamp,
-          user_status: location.user_status || 'GREEN',
-          isStale: isStale,
-          ageMinutes: Math.round(locationAge / (60 * 1000))
+    const locationFeatures = this.locations
+      .map(location => {
+        const locationCoords = this.extractCoordinates(location);
+        if (!locationCoords) {
+          console.warn('Skipping location with invalid coordinates:', {
+            id: location.id,
+            user_id: location.user_id,
+            latitude: location.latitude,
+            longitude: location.longitude
+          });
+          return null;
         }
-      };
-    });
+        
+        const locationAge = now - new Date(location.timestamp).getTime();
+        const isStale = locationAge > stalenessThresholdMs;
+        
+        return {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: locationCoords
+          },
+          properties: {
+            id: location.id,
+            user_id: location.user_id,
+            user_name: location.user_name,
+            user_email: location.user_email,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            altitude: location.altitude,
+            accuracy: location.accuracy,
+            timestamp: location.timestamp,
+            user_status: location.user_status || 'GREEN',
+            isStale: isStale,
+            ageMinutes: Math.round(locationAge / (60 * 1000))
+          }
+        };
+      })
+      .filter(feature => feature !== null);
     
     // Update map sources
     this.map.getSource('annotations-poi').setData({
@@ -2353,6 +2371,27 @@ class AdminMap {
     }
   }
   
+  // Helper method to extract coordinates from different formats
+  extractCoordinates(coordObj) {
+    if (!coordObj) return null;
+    
+    // Handle different coordinate formats:
+    // Android format: { lt: number, lng: number }
+    // Server format: { lat: number, lng: number }
+    // Location format: { latitude: number, longitude: number }
+    const lat = coordObj.lat ?? coordObj.lt ?? coordObj.latitude;
+    const lng = coordObj.lng ?? coordObj.longitude;
+    
+    // Validate coordinates
+    if (typeof lng === 'number' && typeof lat === 'number' && 
+        !isNaN(lng) && !isNaN(lat) && 
+        isFinite(lng) && isFinite(lat) &&
+        lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90) {
+      return [lng, lat];
+    }
+    return null;
+  }
+
   // Center map on existing annotations and locations
   centerMapOnData() {
     if (!this.map) return;
@@ -2360,41 +2399,82 @@ class AdminMap {
     // Calculate bounds of all features
     const allFeatures = [];
     
+    // Helper function to validate coordinates
+    const isValidCoordinate = (lng, lat) => {
+      return typeof lng === 'number' && typeof lat === 'number' && 
+             !isNaN(lng) && !isNaN(lat) && 
+             isFinite(lng) && isFinite(lat) &&
+             lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90;
+    };
+    
+    // Use class method for coordinate extraction
+    
     // Add annotation features
     this.annotations.forEach(annotation => {
       const data = annotation.data;
       switch (annotation.type) {
         case 'poi':
-          allFeatures.push([data.position.lng, data.position.lt]);
+          const poiCoords = this.extractCoordinates(data.position);
+          if (poiCoords) {
+            allFeatures.push(poiCoords);
+          }
           break;
         case 'line':
-          data.points.forEach(p => allFeatures.push([p.lng, p.lt]));
+          if (data.points && Array.isArray(data.points)) {
+            data.points.forEach(p => {
+              const lineCoords = this.extractCoordinates(p);
+              if (lineCoords) {
+                allFeatures.push(lineCoords);
+              }
+            });
+          }
           break;
         case 'area':
-          allFeatures.push([data.center.lng, data.center.lt]);
+          const areaCoords = this.extractCoordinates(data.center);
+          if (areaCoords) {
+            allFeatures.push(areaCoords);
+          }
           break;
         case 'polygon':
-          data.points.forEach(p => allFeatures.push([p.lng, p.lt]));
+          if (data.points && Array.isArray(data.points)) {
+            data.points.forEach(p => {
+              const polyCoords = this.extractCoordinates(p);
+              if (polyCoords) {
+                allFeatures.push(polyCoords);
+              }
+            });
+          }
           break;
       }
     });
     
     // Add location features
     this.locations.forEach(location => {
-      allFeatures.push([location.longitude, location.latitude]);
+      const locCoords = this.extractCoordinates(location);
+      if (locCoords) {
+        allFeatures.push(locCoords);
+      }
     });
     
     if (allFeatures.length > 0) {
-      const bounds = allFeatures.reduce((bounds, coord) => {
-        return bounds.extend(coord);
-      }, new maplibregl.LngLatBounds(allFeatures[0], allFeatures[0]));
-      
-      this.map.fitBounds(bounds, { padding: 50, duration: 1000 });
-      console.log('Centered map on existing data');
+      try {
+        const bounds = allFeatures.reduce((bounds, coord) => {
+          return bounds.extend(coord);
+        }, new maplibregl.LngLatBounds(allFeatures[0], allFeatures[0]));
+        
+        this.map.fitBounds(bounds, { padding: 50, duration: 1000 });
+        console.log(`Centered map on ${allFeatures.length} valid coordinates`);
+      } catch (error) {
+        console.error('Error centering map on data:', error);
+        console.error('Problematic coordinates:', allFeatures.slice(0, 5)); // Log first 5 for debugging
+        // Fall back to default center
+        this.map.flyTo({ center: [-98.5795, 39.8283], zoom: 4, duration: 1000 });
+        console.log('Fell back to default US center due to bounds error');
+      }
     } else {
       // Default to US center if no data
       this.map.flyTo({ center: [-98.5795, 39.8283], zoom: 4, duration: 1000 });
-      console.log('No data found, using default US center');
+      console.log('No valid coordinates found, using default US center');
     }
   }
   
