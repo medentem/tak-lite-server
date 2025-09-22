@@ -366,6 +366,33 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           userEmail: 'admin@system',
           timestamp: data.timestamp
         });
+        
+        // Broadcast to regular clients (Android clients listen for this)
+        if (teamId) {
+          // Broadcast to specific team room
+          io.to(`team:${teamId}`).emit('annotation:update', {
+            id,
+            teamId,
+            type,
+            data: JSON.stringify(data), // Android client expects JSON string
+            userId,
+            userName: 'Admin',
+            userEmail: 'admin@system',
+            timestamp: data.timestamp
+          });
+        } else {
+          // Broadcast to global room for null team_id data
+          io.to('global').emit('annotation:update', {
+            id,
+            teamId,
+            type,
+            data: JSON.stringify(data), // Android client expects JSON string
+            userId,
+            userName: 'Admin',
+            userEmail: 'admin@system',
+            timestamp: data.timestamp
+          });
+        }
       }
       
       res.json({ 
@@ -447,6 +474,33 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           userEmail: 'admin@system',
           timestamp: mergedData.timestamp || Date.now()
         });
+        
+        // Broadcast to regular clients (Android clients listen for this)
+        if (existing.team_id) {
+          // Broadcast to specific team room
+          io.to(`team:${existing.team_id}`).emit('annotation:update', {
+            id: annotationId,
+            teamId: existing.team_id,
+            type: existing.type,
+            data: JSON.stringify(mergedData), // Android client expects JSON string
+            userId,
+            userName: 'Admin',
+            userEmail: 'admin@system',
+            timestamp: mergedData.timestamp || Date.now()
+          });
+        } else {
+          // Broadcast to global room for null team_id data
+          io.to('global').emit('annotation:update', {
+            id: annotationId,
+            teamId: existing.team_id,
+            type: existing.type,
+            data: JSON.stringify(mergedData), // Android client expects JSON string
+            userId,
+            userName: 'Admin',
+            userEmail: 'admin@system',
+            timestamp: mergedData.timestamp || Date.now()
+          });
+        }
       }
       
       res.json({ success: true });
@@ -485,6 +539,27 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           userName: 'Admin',
           userEmail: 'admin@system'
         });
+        
+        // Broadcast to regular clients (Android clients listen for this)
+        if (existing.team_id) {
+          // Broadcast to specific team room
+          io.to(`team:${existing.team_id}`).emit('annotation:delete', {
+            annotationId,
+            teamId: existing.team_id,
+            userId,
+            userName: 'Admin',
+            userEmail: 'admin@system'
+          });
+        } else {
+          // Broadcast to global room for null team_id data
+          io.to('global').emit('annotation:delete', {
+            annotationId,
+            teamId: existing.team_id,
+            userId,
+            userName: 'Admin',
+            userEmail: 'admin@system'
+          });
+        }
       }
       
       res.json({ success: true });
