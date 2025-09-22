@@ -139,23 +139,27 @@ export class SocketGateway {
         const annotation = await this.sync.handleAnnotationUpdate(user.id, data);
         
         // Broadcast to appropriate rooms based on team filtering logic
+        // Include all required fields for polymorphic deserialization
+        const clientData = {
+          ...annotation.data,
+          type: annotation.type, // Add discriminator field for Kotlinx Serialization
+          id: annotation.id, // Ensure ID is in the data object
+          creatorId: annotation.user_id, // Map user_id to creatorId
+          source: 'server', // Set source to server
+          originalSource: 'server' // Set original source to server
+        };
+        
         if (data.teamId) {
           // Broadcast to specific team room
           this.io.to(`team:${data.teamId}`).emit('annotation:update', {
             ...annotation,
-            data: JSON.stringify({
-              ...annotation.data,
-              type: annotation.type // Include type for polymorphic deserialization
-            })
+            data: JSON.stringify(clientData)
           });
         } else {
           // Broadcast to global room for null team_id data
           this.io.to('global').emit('annotation:update', {
             ...annotation,
-            data: JSON.stringify({
-              ...annotation.data,
-              type: annotation.type // Include type for polymorphic deserialization
-            })
+            data: JSON.stringify(clientData)
           });
         }
         

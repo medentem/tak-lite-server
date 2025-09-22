@@ -368,13 +368,23 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         });
         
         // Broadcast to regular clients (Android clients listen for this)
+        // Include all required fields for polymorphic deserialization
+        const clientData = {
+          ...data,
+          type: type, // Add discriminator field for Kotlinx Serialization
+          id: id, // Ensure ID is in the data object
+          creatorId: userId, // Map userId to creatorId
+          source: 'server', // Set source to server
+          originalSource: 'server' // Set original source to server
+        };
+        
         if (teamId) {
           // Broadcast to specific team room
           io.to(`team:${teamId}`).emit('annotation:update', {
             id,
             teamId,
             type,
-            data,
+            data: clientData,
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
@@ -386,7 +396,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id,
             teamId,
             type,
-            data,
+            data: clientData,
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
@@ -476,13 +486,23 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         });
         
         // Broadcast to regular clients (Android clients listen for this)
+        // Include all required fields for polymorphic deserialization
+        const clientData = {
+          ...mergedData,
+          type: existing.type, // Add discriminator field for Kotlinx Serialization
+          id: annotationId, // Ensure ID is in the data object
+          creatorId: userId, // Map userId to creatorId
+          source: 'server', // Set source to server
+          originalSource: 'server' // Set original source to server
+        };
+        
         if (existing.team_id) {
           // Broadcast to specific team room
           io.to(`team:${existing.team_id}`).emit('annotation:update', {
             id: annotationId,
             teamId: existing.team_id,
             type: existing.type,
-            data: mergedData,
+            data: clientData,
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
@@ -494,7 +514,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id: annotationId,
             teamId: existing.team_id,
             type: existing.type,
-            data: mergedData,
+            data: clientData,
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
@@ -1065,13 +1085,23 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         });
         
         // Broadcast to regular clients (Android clients listen for this)
+        // Include all required fields for polymorphic deserialization
+        const clientData = {
+          ...annotationData,
+          type: annotationType, // Add discriminator field for Kotlinx Serialization
+          id: annotationId, // Ensure ID is in the data object
+          creatorId: userId, // Map userId to creatorId
+          source: 'server', // Set source to server
+          originalSource: 'server' // Set original source to server
+        };
+        
         if (teamId) {
           // Broadcast to specific team room
           io.to(`team:${teamId}`).emit('annotation:update', {
             id: annotationId,
             teamId,
             type: annotationType,
-            data: annotationData,
+            data: clientData,
             userId,
             userName: 'System (Threat Detection)',
             userEmail: 'system@threat-detection',
@@ -1084,7 +1114,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id: annotationId,
             teamId,
             type: annotationType,
-            data: annotationData,
+            data: clientData,
             userId,
             userName: 'System (Threat Detection)',
             userEmail: 'system@threat-detection',
