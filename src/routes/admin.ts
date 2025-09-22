@@ -374,7 +374,10 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id,
             teamId,
             type,
-            data: JSON.stringify(data), // Android client expects JSON string
+            data: JSON.stringify({
+              ...data,
+              type // Include type for polymorphic deserialization
+            }),
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
@@ -386,7 +389,10 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id,
             teamId,
             type,
-            data: JSON.stringify(data), // Android client expects JSON string
+            data: JSON.stringify({
+              ...data,
+              type // Include type for polymorphic deserialization
+            }),
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
@@ -482,7 +488,10 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id: annotationId,
             teamId: existing.team_id,
             type: existing.type,
-            data: JSON.stringify(mergedData), // Android client expects JSON string
+            data: JSON.stringify({
+              ...mergedData,
+              type: existing.type // Include type for polymorphic deserialization
+            }),
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
@@ -494,7 +503,10 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id: annotationId,
             teamId: existing.team_id,
             type: existing.type,
-            data: JSON.stringify(mergedData), // Android client expects JSON string
+            data: JSON.stringify({
+              ...mergedData,
+              type: existing.type // Include type for polymorphic deserialization
+            }),
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
@@ -1071,7 +1083,10 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id: annotationId,
             teamId,
             type: annotationType,
-            data: JSON.stringify(annotationData), // Android client expects JSON string
+            data: JSON.stringify({
+              ...annotationData,
+              type: annotationType // Include type for polymorphic deserialization
+            }),
             userId,
             userName: 'System (Threat Detection)',
             userEmail: 'system@threat-detection',
@@ -1084,7 +1099,10 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id: annotationId,
             teamId,
             type: annotationType,
-            data: JSON.stringify(annotationData), // Android client expects JSON string
+            data: JSON.stringify({
+              ...annotationData,
+              type: annotationType // Include type for polymorphic deserialization
+            }),
             userId,
             userName: 'System (Threat Detection)',
             userEmail: 'system@threat-detection',

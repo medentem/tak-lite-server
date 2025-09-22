@@ -143,13 +143,19 @@ export class SocketGateway {
           // Broadcast to specific team room
           this.io.to(`team:${data.teamId}`).emit('annotation:update', {
             ...annotation,
-            data: JSON.stringify(annotation.data) // Android client expects JSON string
+            data: JSON.stringify({
+              ...annotation.data,
+              type: annotation.type // Include type for polymorphic deserialization
+            })
           });
         } else {
           // Broadcast to global room for null team_id data
           this.io.to('global').emit('annotation:update', {
             ...annotation,
-            data: JSON.stringify(annotation.data) // Android client expects JSON string
+            data: JSON.stringify({
+              ...annotation.data,
+              type: annotation.type // Include type for polymorphic deserialization
+            })
           });
         }
         
