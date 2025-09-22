@@ -67,6 +67,15 @@ export class SocketGateway {
       if (!user) return socket.emit('error', { message: 'Not authenticated' });
       try {
         console.log(`[SOCKET] User ${user.id} attempting to join team: ${teamId}`);
+        
+        if (teamId === 'global') {
+          // Special case: join global room for global annotations
+          await socket.join('global');
+          console.log(`[SOCKET] User ${user.id} successfully joined global room`);
+          socket.emit('team:joined', { teamId: 'global' });
+          return;
+        }
+        
         await this.sync.assertTeamMembership(user.id, teamId);
         
         // Join both the specific team room and the global room
