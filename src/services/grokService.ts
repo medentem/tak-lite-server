@@ -742,6 +742,22 @@ Return results as a JSON array of threat analyses with complete citations.`;
       return false;
     }
 
+    // Validate locations if provided
+    if (analysis.locations && Array.isArray(analysis.locations)) {
+      for (const location of analysis.locations) {
+        if (typeof location.lat !== 'number' || typeof location.lng !== 'number' ||
+            isNaN(location.lat) || isNaN(location.lng) ||
+            !isFinite(location.lat) || !isFinite(location.lng)) {
+          logger.warn('Invalid coordinates in threat analysis', { 
+            lat: location.lat, 
+            lng: location.lng,
+            analysis: analysis.summary 
+          });
+          return false;
+        }
+      }
+    }
+
     return true;
   }
 

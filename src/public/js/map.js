@@ -990,13 +990,8 @@ class AdminMap {
       return;
     }
     
-    if (!this.currentTeamId) {
-      this.showFeedback('Please select a specific team from the dropdown before creating annotations', 5000);
-      return;
-    }
-    
     const annotationData = {
-      teamId: this.currentTeamId,
+      teamId: this.currentTeamId, // Can be null for global annotations
       type: 'poi',
       data: {
         position: {
@@ -1243,13 +1238,8 @@ class AdminMap {
       return;
     }
     
-    if (!this.currentTeamId) {
-      this.showFeedback('Please select a specific team from the dropdown before creating annotations', 5000);
-      return;
-    }
-    
     const annotationData = {
-      teamId: this.currentTeamId,
+      teamId: this.currentTeamId, // Can be null for global annotations
       type: 'area',
       data: {
         center: {
@@ -1297,13 +1287,8 @@ class AdminMap {
       return;
     }
     
-    if (!this.currentTeamId) {
-      this.showFeedback('Please select a specific team from the dropdown before creating annotations', 5000);
-      return;
-    }
-    
     const annotationData = {
-      teamId: this.currentTeamId,
+      teamId: this.currentTeamId, // Can be null for global annotations
       type: 'line',
       data: {
         points: this.tempLinePoints.map(p => ({
@@ -2180,35 +2165,64 @@ class AdminMap {
       
       switch (annotation.type) {
         case 'poi':
-          // Create icon name based on shape and color (matching Android app pattern)
-          const iconName = `poi-${(data.shape || 'circle').toLowerCase()}-${data.color.toLowerCase()}`;
-          poiFeatures.push({
-            type: 'Feature',
-            geometry: {
-              type: 'Point',
-              coordinates: [data.position.lng, data.position.lt]
-            },
-            properties: {
-              ...properties,
-              icon: iconName
-            }
-          });
+          // Handle both Android format (lt, lng) and server format (lat, lng)
+          const lat = data.position?.lat ?? data.position?.lt;
+          const lng = data.position?.lng;
+          
+          // Validate coordinates before creating feature
+          if (data.position && 
+              typeof lat === 'number' && 
+              typeof lng === 'number' &&
+              !isNaN(lat) && 
+              !isNaN(lng) &&
+              isFinite(lat) && 
+              isFinite(lng)) {
+            
+            // Create icon name based on shape and color (matching Android app pattern)
+            const iconName = `poi-${(data.shape || 'circle').toLowerCase()}-${data.color.toLowerCase()}`;
+            poiFeatures.push({
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: [lng, lat]
+              },
+              properties: {
+                ...properties,
+                icon: iconName
+              }
+            });
+          } else {
+            console.warn('Skipping POI annotation with invalid coordinates:', {
+              id: annotation.id,
+              position: data.position,
+              lat: lat,
+              lng: lng,
+              originalLat: data.position?.lat,
+              originalLt: data.position?.lt
+            });
+          }
           break;
           
         case 'line':
+          // Handle both Android format (lt, lng) and server format (lat, lng)
+          const linePoints = data.points.map(p => {
+            const lat = p.lat ?? p.lt;
+            return [p.lng, lat];
+          });
           lineFeatures.push({
             type: 'Feature',
             geometry: {
               type: 'LineString',
-              coordinates: data.points.map(p => [p.lng, p.lt])
+              coordinates: linePoints
             },
             properties
           });
           break;
           
         case 'area':
-          // Generate polygon points for area (matching Android app approach)
-          const areaPolygon = this.generateCirclePolygon(data.center.lng, data.center.lt, data.radius);
+          // Handle both Android format (lt, lng) and server format (lat, lng)
+          const areaLat = data.center.lat ?? data.center.lt;
+          const areaPolygon = this.generateCirclePolygon(data.center.lng, areaLat, data.radius);
           areaFeatures.push({
             type: 'Feature',
             geometry: {
@@ -2224,11 +2238,16 @@ class AdminMap {
           break;
           
         case 'polygon':
+          // Handle both Android format (lt, lng) and server format (lat, lng)
+          const polygonPoints = data.points.map(p => {
+            const lat = p.lat ?? p.lt;
+            return [p.lng, lat];
+          });
           polygonFeatures.push({
             type: 'Feature',
             geometry: {
               type: 'Polygon',
-              coordinates: [data.points.map(p => [p.lng, p.lt])]
+              coordinates: [polygonPoints]
             },
             properties
           });

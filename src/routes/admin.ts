@@ -282,7 +282,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
       
       const schema = Joi.object({
-        teamId: Joi.string().uuid().required(),
+        teamId: Joi.string().uuid().allow(null).optional(),
         type: Joi.string().valid('poi', 'line', 'area', 'polygon').required(),
         data: Joi.object({
           position: Joi.object({
@@ -323,10 +323,12 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       
       const { teamId, type, data } = await schema.validateAsync(req.body);
       
-      // Verify team exists
-      const team = await db.client('teams').where({ id: teamId }).first();
-      if (!team) {
-        return res.status(404).json({ error: 'Team not found' });
+      // Verify team exists only if teamId is provided
+      if (teamId) {
+        const team = await db.client('teams').where({ id: teamId }).first();
+        if (!team) {
+          return res.status(404).json({ error: 'Team not found' });
+        }
       }
       
       const id = uuidv4();
@@ -748,13 +750,37 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       }
       
       // Extract location data from threat
-      const locations = threat.extracted_locations || [];
-      if (locations.length === 0) {
-        return res.status(400).json({ error: 'No location data available for this threat' });
+      let locations = threat.extracted_locations || [];
+      
+      // Ensure locations is properly parsed if it's a string
+      if (typeof locations === 'string') {
+        try {
+          locations = JSON.parse(locations);
+        } catch (error: any) {
+          return res.status(400).json({ 
+            error: 'Invalid location data format in threat analysis',
+            details: error.message 
+          });
+        }
+      }
+      
+      if (!Array.isArray(locations) || locations.length === 0) {
+        return res.status(400).json({ error: 'No valid location data available for this threat' });
       }
       
       // Use the first location for the annotation
       const primaryLocation = locations[0];
+      
+      // Validate coordinates to prevent NaN values
+      if (!primaryLocation.lat || !primaryLocation.lng || 
+          isNaN(primaryLocation.lat) || isNaN(primaryLocation.lng) ||
+          !isFinite(primaryLocation.lat) || !isFinite(primaryLocation.lng)) {
+        return res.status(400).json({ 
+          error: 'Invalid coordinates in threat location data',
+          location: primaryLocation,
+          message: 'Coordinates must be valid numbers (not NaN or infinite)'
+        });
+      }
       
       // Determine annotation properties based on threat level
       const threatLevelColors = {
@@ -842,6 +868,35 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           timestamp: new Date().toISOString(),
           source: 'threat_approval'
         });
+        
+        // Broadcast to regular clients (Android clients listen for this)
+        if (teamId) {
+          // Broadcast to specific team room
+          io.to(`team:${teamId}`).emit('annotation:update', {
+            id: annotationId,
+            teamId,
+            type: annotationType,
+            data: JSON.stringify(annotationData), // Android client expects JSON string
+            userId,
+            userName: 'System (Threat Detection)',
+            userEmail: 'system@threat-detection',
+            timestamp: new Date().toISOString(),
+            source: 'threat_approval'
+          });
+        } else {
+          // Broadcast to global room for null team_id data
+          io.to('global').emit('annotation:update', {
+            id: annotationId,
+            teamId,
+            type: annotationType,
+            data: JSON.stringify(annotationData), // Android client expects JSON string
+            userId,
+            userName: 'System (Threat Detection)',
+            userEmail: 'system@threat-detection',
+            timestamp: new Date().toISOString(),
+            source: 'threat_approval'
+          });
+        }
         
         // Emit sync activity for admin dashboard
         io.emit('admin:sync_activity', {

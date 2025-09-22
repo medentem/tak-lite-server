@@ -290,7 +290,10 @@ export class SocialMediaMonitoringService {
       id: annotationId,
       threat_analysis_id: threat.id,
       team_id: null, // Global threat annotation - visible to all teams
-      position: { lat: threat.locations[0]?.lat || 0, lng: threat.locations[0]?.lng || 0 },
+      position: { 
+        lat: (threat.locations[0]?.lat && !isNaN(threat.locations[0].lat)) ? threat.locations[0].lat : 0, 
+        lng: (threat.locations[0]?.lng && !isNaN(threat.locations[0].lng)) ? threat.locations[0].lng : 0 
+      },
       threat_level: threat.threat_level,
       threat_type: threat.threat_type,
       title: this.generateThreatTitle(threat),
