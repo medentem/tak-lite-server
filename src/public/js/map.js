@@ -620,22 +620,9 @@ class AdminMap {
             16, 1.2   // Larger when zoomed in
           ],
           'icon-allow-overlap': true,
-          'icon-ignore-placement': true,
-          'text-field': ['get', 'label'],
-          'text-size': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            8, 8,     // Small text when zoomed out
-            12, 10,   // Medium text at mid zoom
-            16, 12    // Larger text when zoomed in
-          ],
-          'text-offset': [0, -2],
-          'text-allow-overlap': true,
-          'text-ignore-placement': false
-        },
-        paint: {
-          'text-color': '#FFFFFF'
+          'icon-ignore-placement': true
+          // Removed text-field configuration to avoid glyphs requirement
+          // Labels can still be viewed in popups when clicking on annotations
         }
       });
     }
