@@ -374,10 +374,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id,
             teamId,
             type,
-            data: JSON.stringify({
-              ...data,
-              type // Include type for polymorphic deserialization
-            }),
+            data,
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
@@ -389,10 +386,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id,
             teamId,
             type,
-            data: JSON.stringify({
-              ...data,
-              type // Include type for polymorphic deserialization
-            }),
+            data,
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
@@ -488,10 +482,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id: annotationId,
             teamId: existing.team_id,
             type: existing.type,
-            data: JSON.stringify({
-              ...mergedData,
-              type: existing.type // Include type for polymorphic deserialization
-            }),
+            data: mergedData,
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
@@ -503,10 +494,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id: annotationId,
             teamId: existing.team_id,
             type: existing.type,
-            data: JSON.stringify({
-              ...mergedData,
-              type: existing.type // Include type for polymorphic deserialization
-            }),
+            data: mergedData,
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
@@ -1027,7 +1015,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         user_id: userId,
         team_id: teamId,
         type: annotationType,
-        data: JSON.stringify(annotationData),
+        data: annotationData,
         created_at: db.client.fn.now(),
         updated_at: db.client.fn.now()
       };
@@ -1083,10 +1071,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id: annotationId,
             teamId,
             type: annotationType,
-            data: JSON.stringify({
-              ...annotationData,
-              type: annotationType // Include type for polymorphic deserialization
-            }),
+            data: annotationData,
             userId,
             userName: 'System (Threat Detection)',
             userEmail: 'system@threat-detection',
@@ -1099,10 +1084,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id: annotationId,
             teamId,
             type: annotationType,
-            data: JSON.stringify({
-              ...annotationData,
-              type: annotationType // Include type for polymorphic deserialization
-            }),
+            data: annotationData,
             userId,
             userName: 'System (Threat Detection)',
             userEmail: 'system@threat-detection',
