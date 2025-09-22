@@ -540,6 +540,37 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         return res.status(404).json({ error: 'Annotation not found' });
       }
       
+      // Check if there are any threat analyses referencing this annotation
+      const associatedThreats = await db.client('threat_analyses')
+        .where('annotation_id', annotationId)
+        .select(['id', 'threat_level', 'threat_type']);
+      
+      // Delete associated threat analyses first
+      if (associatedThreats.length > 0) {
+        await db.client('threat_analyses')
+          .where('annotation_id', annotationId)
+          .delete();
+        
+        // Log audit entries for deleted threat analyses
+        if (audit) {
+          for (const threat of associatedThreats) {
+            await audit.log({ 
+              actorUserId: userId, 
+              action: 'threat.auto_delete', 
+              resourceType: 'threat_analysis', 
+              resourceId: threat.id, 
+              metadata: { 
+                reason: 'annotation_deleted', 
+                annotationId,
+                threatLevel: threat.threat_level,
+                threatType: threat.threat_type
+              } 
+            });
+          }
+        }
+      }
+      
+      // Now delete the annotation
       await db.client('annotations').where({ id: annotationId }).delete();
       
       if (audit) await audit.log({ 
@@ -582,7 +613,13 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         }
       }
       
-      res.json({ success: true });
+      const response: any = { success: true };
+      if (associatedThreats.length > 0) {
+        response.deletedThreatCount = associatedThreats.length;
+        response.message = `Deleted annotation and ${associatedThreats.length} associated threat analysis(es).`;
+      }
+      
+      res.json(response);
     } catch (err) { next(err); }
   });
 
@@ -607,24 +644,43 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         return res.status(404).json({ error: 'No annotations found to delete' });
       }
       
-      // First, check which annotations can be safely deleted (not referenced by threat_analyses)
+      // First, find all threat analyses that reference these annotations
       const annotationsWithThreats = await db.client('threat_analyses')
         .whereIn('annotation_id', annotationIds)
         .whereNotNull('annotation_id')
-        .select(['annotation_id']);
+        .select(['id', 'annotation_id', 'threat_level', 'threat_type']);
       
       const referencedAnnotationIds = new Set(annotationsWithThreats.map((t: any) => t.annotation_id));
-      const safeToDeleteIds = annotationIds.filter((id: string) => !referencedAnnotationIds.has(id));
+      const threatIdsToDelete = annotationsWithThreats.map((t: any) => t.id);
       
-      if (safeToDeleteIds.length === 0) {
-        return res.status(400).json({ 
-          error: 'Cannot delete annotations that are referenced by threat analyses. Please delete the threat analyses first.' 
-        });
+      // Delete associated threat analyses first
+      if (threatIdsToDelete.length > 0) {
+        await db.client('threat_analyses')
+          .whereIn('id', threatIdsToDelete)
+          .delete();
+        
+        // Log audit entries for deleted threat analyses
+        if (audit) {
+          for (const threat of annotationsWithThreats) {
+            await audit.log({ 
+              actorUserId: userId, 
+              action: 'threat.auto_delete', 
+              resourceType: 'threat_analysis', 
+              resourceId: threat.id, 
+              metadata: { 
+                reason: 'annotation_deleted', 
+                annotationId: threat.annotation_id,
+                threatLevel: threat.threat_level,
+                threatType: threat.threat_type
+              } 
+            });
+          }
+        }
       }
       
-      // Delete only the annotations that are safe to delete
+      // Now delete all annotations (no longer blocked by threat analyses)
       const deletedCount = await db.client('annotations')
-        .whereIn('id', safeToDeleteIds)
+        .whereIn('id', annotationIds)
         .delete();
       
       // Log audit entries for each deleted annotation
@@ -689,17 +745,17 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         }
       }
       
-      const skippedCount = annotationIds.length - safeToDeleteIds.length;
       const response: any = { 
         success: true, 
         deletedCount,
-        annotationIds: safeToDeleteIds
+        annotationIds,
+        deletedThreatCount: threatIdsToDelete.length
       };
       
-      if (skippedCount > 0) {
-        response.skippedCount = skippedCount;
-        response.skippedReason = 'Referenced by threat analyses';
-        response.warning = `${skippedCount} annotation(s) were skipped because they are referenced by threat analyses. Delete the threat analyses first to remove these annotations.`;
+      if (threatIdsToDelete.length > 0) {
+        response.message = `Deleted ${deletedCount} annotation(s) and ${threatIdsToDelete.length} associated threat analysis(es).`;
+      } else {
+        response.message = `Deleted ${deletedCount} annotation(s).`;
       }
       
       res.json(response);
@@ -1142,6 +1198,51 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           created_at: new Date().toISOString()
         }
       });
+    } catch (err) { next(err); }
+  });
+
+  router.delete('/threats/:threatId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!db) return res.status(500).json({ error: 'Database not initialized' });
+      
+      const threatId = req.params.threatId;
+      const userId = (req.user as any)?.sub || 'admin';
+      
+      // Check if threat exists
+      const threat = await db.client('threat_analyses')
+        .where('id', threatId)
+        .first();
+      
+      if (!threat) {
+        return res.status(404).json({ error: 'Threat not found' });
+      }
+      
+      // Delete the threat analysis
+      await db.client('threat_analyses')
+        .where('id', threatId)
+        .delete();
+      
+      if (audit) await audit.log({ 
+        actorUserId: userId, 
+        action: 'threat.delete', 
+        resourceType: 'threat_analysis', 
+        resourceId: threatId, 
+        metadata: { threatLevel: threat.threat_level, threatType: threat.threat_type } 
+      });
+      
+      // Emit real-time update to admin clients
+      if (io) {
+        io.emit('admin:threat_deleted', {
+          threatId,
+          threatLevel: threat.threat_level,
+          threatType: threat.threat_type,
+          userId,
+          userName: 'Admin',
+          userEmail: 'admin@system'
+        });
+      }
+      
+      res.json({ success: true });
     } catch (err) { next(err); }
   });
 

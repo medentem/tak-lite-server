@@ -264,6 +264,9 @@ function updateThreatsDisplay() {
             <button onclick="showThreatDetails('${threat.id}')" style="background: #3b82f6; color: white; padding: 6px 12px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
               View Details
             </button>
+            <button onclick="deleteThreat('${threat.id}')" style="background: #ef4444; color: white; padding: 6px 12px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
+              Delete
+            </button>
           </div>
         </div>
       </div>
@@ -315,13 +318,42 @@ async function reviewThreat(threatId, status) {
       }
       
       addActivityLog(`Threat ${status}`, 'success');
+      showMessage(`Threat ${status} successfully`, 'success', 3000);
     }
     
-    await loadThreats(); // Refresh the list
+    // Force refresh the threats list to ensure status updates are visible
+    await loadThreats();
   } catch (error) {
     console.error('Failed to review threat:', error);
     addActivityLog(`Failed to review threat: ${error.message}`, 'error');
     showMessage(`Failed to review threat: ${error.message}`, 'error');
+  }
+}
+
+async function deleteThreat(threatId) {
+  if (!confirm('Are you sure you want to delete this threat? This action cannot be undone.')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/admin/threats/${threatId}`, {
+      method: 'DELETE',
+      headers: hdrs()
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to delete threat: ${response.status}`);
+    }
+    
+    addActivityLog(`Threat deleted`, 'success');
+    showMessage('Threat deleted successfully', 'success', 3000);
+    
+    // Force refresh the threats list
+    await loadThreats();
+  } catch (error) {
+    console.error('Failed to delete threat:', error);
+    addActivityLog(`Failed to delete threat: ${error.message}`, 'error');
+    showMessage(`Failed to delete threat: ${error.message}`, 'error');
   }
 }
 
@@ -580,6 +612,13 @@ function handleThreatAnnotationCreated(data) {
   }
 }
 
+function handleThreatDeleted(data) {
+  addActivityLog(`Threat deleted: ${data.threatLevel} ${data.threatType}`, 'info');
+  
+  // Refresh threats list
+  loadThreats();
+}
+
 // WebSocket connection management
 function connectWebSocket() {
   // Check if Socket.IO library is loaded first
@@ -714,6 +753,11 @@ function connectWebSocket() {
     // Listen for threat annotation created events
     socket.on('admin:threat_annotation_created', (data) => {
       handleThreatAnnotationCreated(data);
+    });
+    
+    // Listen for threat deleted events
+    socket.on('admin:threat_deleted', (data) => {
+      handleThreatDeleted(data);
     });
     
   } catch (error) {

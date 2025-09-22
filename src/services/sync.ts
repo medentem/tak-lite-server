@@ -211,16 +211,34 @@ export class SyncService {
     const { teamId, annotationId } = await schema.validateAsync(payload, { abortEarly: false, stripUnknown: true });
     await this.assertTeamMembership(userId, teamId);
     
+    // Check if there are any threat analyses referencing this annotation
+    const associatedThreats = await this.db.client('threat_analyses')
+      .where('annotation_id', annotationId)
+      .select(['id', 'threat_level', 'threat_type']);
+    
+    // Delete associated threat analyses first
+    if (associatedThreats.length > 0) {
+      await this.db.client('threat_analyses')
+        .where('annotation_id', annotationId)
+        .delete();
+      
+      console.log(`[SYNC] Auto-deleted ${associatedThreats.length} threat analysis(es) for annotation ${annotationId}`);
+    }
+    
     // Delete the annotation from the database
     const deleted = await this.db.client('annotations')
       .where({ id: annotationId, team_id: teamId })
       .del();
     
     if (deleted > 0) {
-      this.emitSyncActivity('annotation_delete', `User ${userId} deleted annotation ${annotationId} in team ${teamId}`);
+      this.emitSyncActivity('annotation_delete', `User ${userId} deleted annotation ${annotationId} in team ${teamId}${associatedThreats.length > 0 ? ` (and ${associatedThreats.length} associated threat analysis(es))` : ''}`);
     }
     
-    return { annotationId, deleted: deleted > 0 };
+    return { 
+      annotationId, 
+      deleted: deleted > 0,
+      deletedThreatCount: associatedThreats.length
+    };
   }
 
   async handleBulkAnnotationDelete(userId: string, payload: any) {
@@ -240,6 +258,23 @@ export class SyncService {
     
     await this.assertTeamMembership(userId, teamId);
     
+    // First, find all threat analyses that reference these annotations
+    const annotationsWithThreats = await this.db.client('threat_analyses')
+      .whereIn('annotation_id', annotationIds)
+      .whereNotNull('annotation_id')
+      .select(['id', 'annotation_id', 'threat_level', 'threat_type']);
+    
+    const threatIdsToDelete = annotationsWithThreats.map((t: any) => t.id);
+    
+    // Delete associated threat analyses first
+    if (threatIdsToDelete.length > 0) {
+      await this.db.client('threat_analyses')
+        .whereIn('id', threatIdsToDelete)
+        .delete();
+      
+      console.log(`[SYNC] Auto-deleted ${threatIdsToDelete.length} threat analysis(es) for bulk annotation deletion`);
+    }
+    
     // Delete annotations in batch
     console.log('[SYNC] Executing bulk delete query for annotations:', annotationIds);
     const deleted = await this.db.client('annotations')
@@ -251,13 +286,14 @@ export class SyncService {
     
     if (deleted > 0) {
       this.emitSyncActivity('annotation_bulk_delete', 
-        `User ${userId} deleted ${deleted} annotations in team ${teamId}`);
+        `User ${userId} deleted ${deleted} annotations in team ${teamId}${threatIdsToDelete.length > 0 ? ` (and ${threatIdsToDelete.length} associated threat analysis(es))` : ''}`);
     }
     
     return { 
       annotationIds, 
       deleted, 
-      requested: annotationIds.length 
+      requested: annotationIds.length,
+      deletedThreatCount: threatIdsToDelete.length
     };
   }
 
