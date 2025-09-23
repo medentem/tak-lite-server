@@ -243,6 +243,8 @@ class AdminMap {
         this.initializeAnnotationUI();
         // Setup interaction handlers after map is loaded
         this.setupMapInteractionHandlers();
+        // Setup map movement handlers to dismiss menus
+        this.setupMapMovementHandlers();
       });
       
       this.map.on('error', (e) => {
@@ -781,6 +783,42 @@ class AdminMap {
     });
     
     console.log('Map interaction handlers setup complete');
+  }
+  
+  setupMapMovementHandlers() {
+    console.log('Setting up map movement handlers...');
+    
+    if (!this.map) {
+      console.error('Map not initialized, cannot setup movement handlers');
+      return;
+    }
+    
+    // Dismiss menus when map is moved (pan, zoom, etc.)
+    this.map.on('move', () => {
+      console.log('Map moved, dismissing menus');
+      this.hideFanMenu();
+      this.hideColorMenu();
+    });
+    
+    this.map.on('zoom', () => {
+      console.log('Map zoomed, dismissing menus');
+      this.hideFanMenu();
+      this.hideColorMenu();
+    });
+    
+    this.map.on('rotate', () => {
+      console.log('Map rotated, dismissing menus');
+      this.hideFanMenu();
+      this.hideColorMenu();
+    });
+    
+    this.map.on('pitch', () => {
+      console.log('Map pitch changed, dismissing menus');
+      this.hideFanMenu();
+      this.hideColorMenu();
+    });
+    
+    console.log('Map movement handlers setup complete');
   }
   
   startLongPress(e) {
