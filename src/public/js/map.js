@@ -25,7 +25,6 @@ class AdminMap {
     this.longPressTimer = null;
     this.longPressThreshold = 500; // ms
     this.isLongPressing = false;
-    this.longPressInProgress = false;
     this.tempLinePoints = [];
     this.tempAreaCenter = null;
     this.tempAreaRadius = 0;
@@ -745,7 +744,6 @@ class AdminMap {
         console.log('Long press detected, showing fan menu');
         longPressTriggered = true;
         longPressEvent = e; // Store the event that triggered the long press
-        this.longPressInProgress = true;
         this.showFanMenu(e.point);
         this.showFeedback('Long press detected - choose annotation type');
       }, this.longPressThreshold);
@@ -764,8 +762,6 @@ class AdminMap {
         e.originalEvent._longPressHandled = true;
         longPressTriggered = false;
         longPressEvent = null;
-        // Reset the flag immediately - the long press is complete
-        this.longPressInProgress = false;
       }
     });
     
@@ -776,7 +772,6 @@ class AdminMap {
       }
       longPressTriggered = false;
       longPressEvent = null;
-      this.longPressInProgress = false;
     });
     
     console.log('Map interaction handlers setup complete');
@@ -1080,9 +1075,9 @@ class AdminMap {
       console.log('Event _longPressHandled:', e._longPressHandled);
       console.log('longPressInProgress:', this.longPressInProgress);
       
-      // Don't dismiss if this was a long press event or long press is in progress
-      if (e._longPressHandled || this.longPressInProgress) {
-        console.log('Ignoring click dismissal due to long press');
+      // Don't dismiss if this was a long press event
+      if (e._longPressHandled) {
+        console.log('Ignoring click dismissal due to long press event');
         return;
       }
       
@@ -1283,9 +1278,9 @@ class AdminMap {
       console.log('Color menu children:', this.colorMenu ? this.colorMenu.children.length : 'no color menu');
       console.log('Contains target:', this.colorMenu ? this.colorMenu.contains(e.target) : 'no color menu');
       
-      // Don't dismiss if this was a long press event or long press is in progress
-      if (e._longPressHandled || this.longPressInProgress) {
-        console.log('Ignoring color menu dismissal due to long press');
+      // Don't dismiss if this was a long press event
+      if (e._longPressHandled) {
+        console.log('Ignoring color menu dismissal due to long press event');
         return;
       }
       
