@@ -953,8 +953,8 @@ class AdminMap {
       const segmentEl = document.createElement('div');
       segmentEl.className = 'fan-menu-segment';
       segmentEl.innerHTML = `
-        <svg width="300" height="300" viewBox="0 0 300 300" style="position: absolute; top: 0; left: 0;">
-          <path d="${pathData}" />
+        <svg width="300" height="300" viewBox="0 0 300 300" style="position: absolute; top: 0; left: 0; pointer-events: none;">
+          <path d="${pathData}" style="pointer-events: auto;" />
         </svg>
         <div class="fan-menu-segment-icon ${option.iconClass}" style="position: absolute; left: ${iconX}px; top: ${iconY}px; transform: translate(-50%, -50%);"></div>
       `;
@@ -964,6 +964,20 @@ class AdminMap {
         e.stopPropagation();
         this.handleFanMenuOption(option.type, point);
       });
+      
+      // Add hover handlers for proper hover effects
+      const pathElement = segmentEl.querySelector('path');
+      if (pathElement) {
+        pathElement.addEventListener('mouseenter', () => {
+          pathElement.style.fill = 'rgba(0, 0, 0, 0.9)';
+          pathElement.style.stroke = 'rgba(255, 255, 255, 0.9)';
+        });
+        
+        pathElement.addEventListener('mouseleave', () => {
+          pathElement.style.fill = '';
+          pathElement.style.stroke = '';
+        });
+      }
       
       this.fanMenu.appendChild(segmentEl);
     });
@@ -1129,8 +1143,8 @@ class AdminMap {
       const segmentEl = document.createElement('div');
       segmentEl.className = 'fan-menu-segment';
       segmentEl.innerHTML = `
-        <svg width="300" height="300" viewBox="0 0 300 300" style="position: absolute; top: 0; left: 0;">
-          <path d="${pathData}" style="fill: ${color.hex}; stroke: white; stroke-width: 3;" />
+        <svg width="300" height="300" viewBox="0 0 300 300" style="position: absolute; top: 0; left: 0; pointer-events: none;">
+          <path d="${pathData}" style="fill: ${color.hex}; stroke: white; stroke-width: 3; pointer-events: auto;" />
         </svg>
       `;
       
@@ -1139,6 +1153,23 @@ class AdminMap {
         e.stopPropagation();
         this.handleColorSelection(color.name, annotationType);
       });
+      
+      // Add hover handlers for proper hover effects
+      const pathElement = segmentEl.querySelector('path');
+      if (pathElement) {
+        const originalFill = color.hex;
+        const originalStroke = 'white';
+        
+        pathElement.addEventListener('mouseenter', () => {
+          pathElement.style.fill = 'rgba(0, 0, 0, 0.9)';
+          pathElement.style.stroke = 'rgba(255, 255, 255, 0.9)';
+        });
+        
+        pathElement.addEventListener('mouseleave', () => {
+          pathElement.style.fill = originalFill;
+          pathElement.style.stroke = originalStroke;
+        });
+      }
       
       this.colorMenu.appendChild(segmentEl);
     });
@@ -1160,8 +1191,8 @@ class AdminMap {
     
     // Add click listener to document to dismiss color menu when clicking outside
     this.colorMenuDismissHandler = (e) => {
-      // Don't dismiss if this was a long press event
-      if (e._longPressHandled) {
+      // Don't dismiss if this was a long press event or long press is in progress
+      if (e._longPressHandled || this.longPressInProgress) {
         console.log('Ignoring color menu dismissal due to long press');
         return;
       }
