@@ -1598,19 +1598,10 @@ class AdminMap {
       return;
     }
     
-    console.log('Starting area drawing with:', this.pendingAnnotation);
-    
     this.tempAreaCenter = this.pendingAnnotation;
     this.tempAreaRadiusPixels = 50; // Start with 50 pixels radius
     this.tempAreaRadius = this.pixelsToMeters(50); // Convert to meters
     this.isDrawingArea = true;
-    
-    console.log('Area drawing state set:', {
-      isDrawingArea: this.isDrawingArea,
-      tempAreaCenter: this.tempAreaCenter,
-      tempAreaRadiusPixels: this.tempAreaRadiusPixels,
-      tempAreaRadius: this.tempAreaRadius
-    });
     
     // Create temporary area feature for visual feedback
     this.createTempAreaFeature();
@@ -1618,19 +1609,11 @@ class AdminMap {
     // Add mouse move and click handlers for area drawing
     this.setupAreaDrawingHandlers();
     
-    console.log('Area drawing handlers setup complete');
-    
     this.showFeedback('Move mouse to adjust radius, click to create area, right-click or ESC to cancel', 5000);
   }
   
   createTempAreaFeature() {
     if (!this.tempAreaCenter || !this.map) return;
-    
-    console.log('Creating temp area feature with:', {
-      tempAreaCenter: this.tempAreaCenter,
-      tempAreaRadius: this.tempAreaRadius,
-      currentColor: this.currentColor
-    });
     
     // Remove existing temp area if it exists
     this.removeTempAreaFeature();
@@ -1641,8 +1624,6 @@ class AdminMap {
       this.tempAreaCenter.lat, 
       this.tempAreaRadius
     );
-    
-    console.log('Generated circle polygon:', circlePolygon.length, 'points');
     
     // Add temporary source and layer for visual feedback
     if (!this.map.getSource('temp-area')) {
@@ -1682,7 +1663,7 @@ class AdminMap {
     }
     
     // Update the temp area data
-    const featureData = {
+    this.map.getSource('temp-area').setData({
       type: 'FeatureCollection',
       features: [{
         type: 'Feature',
@@ -1692,11 +1673,7 @@ class AdminMap {
         },
         properties: {}
       }]
-    };
-    
-    console.log('Setting temp area data:', featureData);
-    this.map.getSource('temp-area').setData(featureData);
-    console.log('Temp area data set successfully');
+    });
   }
   
   removeTempAreaFeature() {
@@ -1712,18 +1689,9 @@ class AdminMap {
   }
   
   setupAreaDrawingHandlers() {
-    // Store original handlers to restore later
-    this.originalMouseMoveHandler = this.map._handlers.find(h => h._container && h._container.style);
-    
     // Add mouse move handler for radius adjustment
     this.areaMouseMoveHandler = (e) => {
       if (!this.isDrawingArea || !this.tempAreaCenter) return;
-      
-      console.log('Area mouse move handler triggered', {
-        isDrawingArea: this.isDrawingArea,
-        tempAreaCenter: this.tempAreaCenter,
-        mousePoint: e.point
-      });
       
       // Calculate distance from center to mouse position
       const centerPoint = this.map.project(this.tempAreaCenter);
@@ -1733,21 +1701,9 @@ class AdminMap {
         Math.pow(mousePoint.y - centerPoint.y, 2)
       );
       
-      console.log('Distance calculation:', {
-        centerPoint,
-        mousePoint,
-        distancePixels,
-        currentRadius: this.tempAreaRadiusPixels
-      });
-      
       // Update radius (minimum 10 pixels, maximum 500 pixels)
       this.tempAreaRadiusPixels = Math.max(10, Math.min(500, distancePixels));
       this.tempAreaRadius = this.pixelsToMeters(this.tempAreaRadiusPixels);
-      
-      console.log('Updated radius:', {
-        tempAreaRadiusPixels: this.tempAreaRadiusPixels,
-        tempAreaRadius: this.tempAreaRadius
-      });
       
       // Update visual feedback
       this.createTempAreaFeature();
