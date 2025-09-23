@@ -1165,8 +1165,10 @@ class AdminMap {
     // Show color menu
     this.colorMenu.classList.add('visible');
     
-    // Add click-outside-to-dismiss functionality
-    this.setupColorMenuDismiss();
+    // Add click-outside-to-dismiss functionality after a small delay to ensure segments are added
+    setTimeout(() => {
+      this.setupColorMenuDismiss();
+    }, 50);
   }
   
   createColorDonutSegments(colors, point, annotationType) {
@@ -1229,13 +1231,16 @@ class AdminMap {
       
       pathElement.addEventListener('mouseenter', () => {
         console.log('Hovering over color:', color.name);
-        pathElement.style.fill = 'rgba(0, 0, 0, 0.9)';
+        // Make the color slightly brighter/lighter on hover instead of black
+        pathElement.style.filter = 'brightness(1.2) saturate(1.1)';
         pathElement.style.stroke = 'rgba(255, 255, 255, 0.9)';
+        pathElement.style.strokeWidth = '4';
       });
       
       pathElement.addEventListener('mouseleave', () => {
-        pathElement.style.fill = originalFill;
+        pathElement.style.filter = '';
         pathElement.style.stroke = originalStroke;
+        pathElement.style.strokeWidth = '3';
       });
       
       svgElement.appendChild(pathElement);
@@ -1265,6 +1270,11 @@ class AdminMap {
     
     // Add click listener to document to dismiss color menu when clicking outside
     this.colorMenuDismissHandler = (e) => {
+      console.log('Color menu dismiss handler triggered, target:', e.target);
+      console.log('Color menu element:', this.colorMenu);
+      console.log('Color menu children:', this.colorMenu ? this.colorMenu.children.length : 'no color menu');
+      console.log('Contains target:', this.colorMenu ? this.colorMenu.contains(e.target) : 'no color menu');
+      
       // Don't dismiss if this was a long press event or long press is in progress
       if (e._longPressHandled || this.longPressInProgress) {
         console.log('Ignoring color menu dismissal due to long press');
@@ -1275,6 +1285,8 @@ class AdminMap {
       if (this.colorMenu && !this.colorMenu.contains(e.target)) {
         console.log('Clicking outside color menu, dismissing');
         this.hideColorMenu();
+      } else {
+        console.log('Click was inside color menu, not dismissing');
       }
     };
     
