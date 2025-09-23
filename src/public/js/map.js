@@ -817,8 +817,8 @@ class AdminMap {
     }, duration);
   }
   
-  showFanMenu(point) {
-    console.log('showFanMenu called with point:', point);
+  showFanMenu(point, isEditMode = false) {
+    console.log('showFanMenu called with point:', point, 'isEditMode:', isEditMode);
     console.log('fanMenu element:', this.fanMenu);
     
     if (!this.fanMenu) {
@@ -831,69 +831,164 @@ class AdminMap {
       }
     }
     
-    // Clear existing options
+    // Clear existing segments but keep center hole
+    const centerHole = this.fanMenu.querySelector('.fan-menu-center');
     this.fanMenu.innerHTML = '';
+    if (centerHole) {
+      this.fanMenu.appendChild(centerHole);
+    }
     
-    // Create shape options (matching Android app)
-    const shapes = [
-      { type: 'circle', icon: '●', class: 'shape-circle' },
-      { type: 'square', icon: '■', class: 'shape-square' },
-      { type: 'triangle', icon: '▲', class: 'shape-triangle' },
-      { type: 'exclamation', icon: '!', class: 'shape-exclamation' }
-    ];
+    // Get map coordinates for center text
+    const lngLat = this.map.unproject(point);
+    this.pendingAnnotation = lngLat;
     
-    // Create area and line options
-    const otherOptions = [
-      { type: 'area', icon: '◯', class: 'area' },
-      { type: 'line', icon: '━', class: 'line' }
-    ];
+    // Update center text with coordinates
+    this.updateFanMenuCenterText(lngLat);
     
-    const allOptions = [...shapes, ...otherOptions];
-    
-    // Get map container position for relative positioning
-    const mapContainer = document.getElementById('map_container');
-    const containerRect = mapContainer.getBoundingClientRect();
+    // Define options based on mode
+    const options = isEditMode ? this.getEditModeOptions() : this.getCreateModeOptions();
     
     // Position fan menu at click point relative to map container
-    this.fanMenu.style.left = point.x + 'px';
-    this.fanMenu.style.top = point.y + 'px';
+    this.fanMenu.style.left = (point.x - 150) + 'px'; // Center the 300px menu
+    this.fanMenu.style.top = (point.y - 150) + 'px';
     this.fanMenu.style.position = 'absolute';
     
-    // Create option elements
-    allOptions.forEach((option, index) => {
-      const optionEl = document.createElement('div');
-      optionEl.className = `fan-menu-option ${option.class}`;
-      optionEl.innerHTML = `<span class="icon">${option.icon}</span>`;
+    // Create donut ring segments
+    this.createDonutRingSegments(options, point);
+    
+    // Show fan menu
+    this.fanMenu.classList.add('visible');
+    console.log('Fan menu made visible with', options.length, 'options');
+    
+    // Add click-outside-to-dismiss functionality
+    this.setupFanMenuDismiss();
+  }
+  
+  getCreateModeOptions() {
+    return [
+      { type: 'circle', iconClass: 'shape-circle', label: 'Circle' },
+      { type: 'square', iconClass: 'shape-square', label: 'Square' },
+      { type: 'triangle', iconClass: 'shape-triangle', label: 'Triangle' },
+      { type: 'exclamation', iconClass: 'shape-exclamation', label: 'Exclamation' },
+      { type: 'area', iconClass: 'area', label: 'Area' },
+      { type: 'line', iconClass: 'line', label: 'Line' }
+    ];
+  }
+  
+  getEditModeOptions() {
+    return [
+      { type: 'edit', iconClass: 'edit', label: 'Edit' },
+      { type: 'delete', iconClass: 'delete', label: 'Delete' }
+    ];
+  }
+  
+  updateFanMenuCenterText(lngLat) {
+    const coordsEl = document.getElementById('fan_menu_coords');
+    const distanceEl = document.getElementById('fan_menu_distance');
+    
+    if (coordsEl) {
+      coordsEl.textContent = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
+    }
+    
+    if (distanceEl) {
+      // For now, just show a placeholder distance
+      // In a real implementation, you'd calculate distance from user location
+      distanceEl.textContent = '0.0 mi away';
+    }
+  }
+  
+  createDonutRingSegments(options, point) {
+    const centerX = 150; // Center of 300px menu
+    const centerY = 150;
+    const innerRadius = 65; // Half of 130px center hole
+    const outerRadius = 100; // Ring thickness
+    const gapAngle = 4; // Degrees between segments
+    
+    const totalAngle = 360 - (options.length * gapAngle);
+    const segmentAngle = totalAngle / options.length;
+    
+    options.forEach((option, index) => {
+      const startAngle = (index * (segmentAngle + gapAngle)) - 90; // Start from top
+      const endAngle = startAngle + segmentAngle;
       
-      // Position options in a fan pattern
-      const angle = (index * 360) / allOptions.length;
-      const radius = 80;
-      const x = Math.cos(angle * Math.PI / 180) * radius;
-      const y = Math.sin(angle * Math.PI / 180) * radius;
+      // Create SVG path for donut segment
+      const pathData = this.createDonutSegmentPath(centerX, centerY, innerRadius, outerRadius, startAngle, endAngle);
       
-      optionEl.style.left = x + 'px';
-      optionEl.style.top = y + 'px';
+      // Create segment element
+      const segmentEl = document.createElement('div');
+      segmentEl.className = 'fan-menu-segment';
+      segmentEl.innerHTML = `
+        <svg width="300" height="300" viewBox="0 0 300 300">
+          <path d="${pathData}" />
+        </svg>
+        <div class="fan-menu-segment-icon ${option.iconClass}"></div>
+      `;
       
-      optionEl.addEventListener('click', (e) => {
+      // Add click handler
+      segmentEl.addEventListener('click', (e) => {
         e.stopPropagation();
         this.handleFanMenuOption(option.type, point);
       });
       
-      this.fanMenu.appendChild(optionEl);
+      this.fanMenu.appendChild(segmentEl);
     });
+  }
+  
+  createDonutSegmentPath(centerX, centerY, innerRadius, outerRadius, startAngle, endAngle) {
+    const startAngleRad = (startAngle * Math.PI) / 180;
+    const endAngleRad = (endAngle * Math.PI) / 180;
     
-    // Show fan menu
-    this.fanMenu.classList.add('visible');
-    console.log('Fan menu made visible, classes:', this.fanMenu.className);
+    const x1 = centerX + innerRadius * Math.cos(startAngleRad);
+    const y1 = centerY + innerRadius * Math.sin(startAngleRad);
+    const x2 = centerX + outerRadius * Math.cos(startAngleRad);
+    const y2 = centerY + outerRadius * Math.sin(startAngleRad);
+    const x3 = centerX + outerRadius * Math.cos(endAngleRad);
+    const y3 = centerY + outerRadius * Math.sin(endAngleRad);
+    const x4 = centerX + innerRadius * Math.cos(endAngleRad);
+    const y4 = centerY + innerRadius * Math.sin(endAngleRad);
     
-    // Store the map coordinates for later use
-    this.pendingAnnotation = this.map.unproject(point);
+    const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+    
+    return `M ${x1} ${y1} L ${x2} ${y2} A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${x3} ${y3} L ${x4} ${y4} A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${x1} ${y1} Z`;
   }
   
   hideFanMenu() {
     if (this.fanMenu) {
       this.fanMenu.classList.remove('visible');
+      // Clear segments but keep center hole structure
+      const centerHole = this.fanMenu.querySelector('.fan-menu-center');
       this.fanMenu.innerHTML = '';
+      if (centerHole) {
+        this.fanMenu.appendChild(centerHole);
+      }
+    }
+    
+    // Clean up dismiss event listener
+    this.cleanupFanMenuDismiss();
+  }
+  
+  setupFanMenuDismiss() {
+    // Clean up any existing dismiss listener
+    this.cleanupFanMenuDismiss();
+    
+    // Add click listener to document to dismiss fan menu when clicking outside
+    this.fanMenuDismissHandler = (e) => {
+      // Check if click is outside the fan menu
+      if (this.fanMenu && !this.fanMenu.contains(e.target)) {
+        this.hideFanMenu();
+      }
+    };
+    
+    // Use a small delay to prevent immediate dismissal from the click that opened the menu
+    setTimeout(() => {
+      document.addEventListener('click', this.fanMenuDismissHandler);
+    }, 100);
+  }
+  
+  cleanupFanMenuDismiss() {
+    if (this.fanMenuDismissHandler) {
+      document.removeEventListener('click', this.fanMenuDismissHandler);
+      this.fanMenuDismissHandler = null;
     }
   }
   
@@ -901,16 +996,36 @@ class AdminMap {
     this.hideFanMenu();
     
     if (['circle', 'square', 'triangle', 'exclamation'].includes(optionType)) {
-      // Show color menu for POI shapes
+      // Show color menu for POI shapes (two-step flow)
       this.currentShape = optionType;
       this.showColorMenu(point, 'poi');
     } else if (optionType === 'area') {
-      // Start area drawing
-      this.startAreaDrawing(point);
+      // Show color menu for area (two-step flow)
+      this.currentShape = 'area';
+      this.showColorMenu(point, 'area');
     } else if (optionType === 'line') {
-      // Start line drawing
-      this.startLineDrawing(point);
+      // Show color menu for line (two-step flow)
+      this.currentShape = 'line';
+      this.showColorMenu(point, 'line');
+    } else if (optionType === 'edit') {
+      // Handle edit mode
+      this.handleEditAnnotation();
+    } else if (optionType === 'delete') {
+      // Handle delete mode
+      this.handleDeleteAnnotation();
     }
+  }
+  
+  handleEditAnnotation() {
+    // This would be called when editing an existing annotation
+    // For now, just show feedback
+    this.showFeedback('Edit functionality not yet implemented', 3000);
+  }
+  
+  handleDeleteAnnotation() {
+    // This would be called when deleting an existing annotation
+    // For now, just show feedback
+    this.showFeedback('Delete functionality not yet implemented', 3000);
   }
   
   showColorMenu(point, annotationType) {
@@ -919,43 +1034,97 @@ class AdminMap {
     // Clear existing options
     this.colorMenu.innerHTML = '';
     
-    const colors = ['green', 'yellow', 'red', 'black', 'white'];
+    const colors = [
+      { name: 'green', hex: '#4CAF50' },
+      { name: 'yellow', hex: '#FBC02D' },
+      { name: 'red', hex: '#F44336' },
+      { name: 'black', hex: '#000000' },
+      { name: 'white', hex: '#FFFFFF' }
+    ];
     
     // Position color menu at click point relative to map container
-    this.colorMenu.style.left = point.x + 'px';
-    this.colorMenu.style.top = point.y + 'px';
+    this.colorMenu.style.left = (point.x - 150) + 'px'; // Center the 300px menu
+    this.colorMenu.style.top = (point.y - 150) + 'px';
     this.colorMenu.style.position = 'absolute';
     
-    // Create color options
-    colors.forEach((color, index) => {
-      const colorEl = document.createElement('div');
-      colorEl.className = `color-option ${color}`;
-      
-      // Position colors in a smaller fan pattern
-      const angle = (index * 360) / colors.length;
-      const radius = 60;
-      const x = Math.cos(angle * Math.PI / 180) * radius;
-      const y = Math.sin(angle * Math.PI / 180) * radius;
-      
-      colorEl.style.left = x + 'px';
-      colorEl.style.top = y + 'px';
-      
-      colorEl.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.handleColorSelection(color, annotationType);
-      });
-      
-      this.colorMenu.appendChild(colorEl);
-    });
+    // Create donut ring segments for colors
+    this.createColorDonutSegments(colors, point, annotationType);
     
     // Show color menu
     this.colorMenu.classList.add('visible');
+    
+    // Add click-outside-to-dismiss functionality
+    this.setupColorMenuDismiss();
+  }
+  
+  createColorDonutSegments(colors, point, annotationType) {
+    const centerX = 150; // Center of 300px menu
+    const centerY = 150;
+    const innerRadius = 65; // Half of 130px center hole
+    const outerRadius = 100; // Ring thickness
+    const gapAngle = 4; // Degrees between segments
+    
+    const totalAngle = 360 - (colors.length * gapAngle);
+    const segmentAngle = totalAngle / colors.length;
+    
+    colors.forEach((color, index) => {
+      const startAngle = (index * (segmentAngle + gapAngle)) - 90; // Start from top
+      const endAngle = startAngle + segmentAngle;
+      
+      // Create SVG path for donut segment
+      const pathData = this.createDonutSegmentPath(centerX, centerY, innerRadius, outerRadius, startAngle, endAngle);
+      
+      // Create segment element
+      const segmentEl = document.createElement('div');
+      segmentEl.className = 'fan-menu-segment';
+      segmentEl.innerHTML = `
+        <svg width="300" height="300" viewBox="0 0 300 300">
+          <path d="${pathData}" style="fill: ${color.hex}; stroke: white; stroke-width: 3;" />
+        </svg>
+      `;
+      
+      // Add click handler
+      segmentEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.handleColorSelection(color.name, annotationType);
+      });
+      
+      this.colorMenu.appendChild(segmentEl);
+    });
   }
   
   hideColorMenu() {
     if (this.colorMenu) {
       this.colorMenu.classList.remove('visible');
       this.colorMenu.innerHTML = '';
+    }
+    
+    // Clean up dismiss event listener
+    this.cleanupColorMenuDismiss();
+  }
+  
+  setupColorMenuDismiss() {
+    // Clean up any existing dismiss listener
+    this.cleanupColorMenuDismiss();
+    
+    // Add click listener to document to dismiss color menu when clicking outside
+    this.colorMenuDismissHandler = (e) => {
+      // Check if click is outside the color menu
+      if (this.colorMenu && !this.colorMenu.contains(e.target)) {
+        this.hideColorMenu();
+      }
+    };
+    
+    // Use a small delay to prevent immediate dismissal from the click that opened the menu
+    setTimeout(() => {
+      document.addEventListener('click', this.colorMenuDismissHandler);
+    }, 100);
+  }
+  
+  cleanupColorMenuDismiss() {
+    if (this.colorMenuDismissHandler) {
+      document.removeEventListener('click', this.colorMenuDismissHandler);
+      this.colorMenuDismissHandler = null;
     }
   }
   
@@ -1221,8 +1390,8 @@ class AdminMap {
   }
   
   createArea() {
-    if (!this.tempAreaCenter) {
-      this.showFeedback('No area center selected', 3000);
+    if (!this.pendingAnnotation) {
+      this.showFeedback('No location selected', 3000);
       return;
     }
     
@@ -1231,10 +1400,10 @@ class AdminMap {
       type: 'area',
       data: {
         center: {
-          lng: this.tempAreaCenter.lng,
-          lt: this.tempAreaCenter.lat
+          lng: this.pendingAnnotation.lng,
+          lt: this.pendingAnnotation.lat
         },
-        radius: this.tempAreaRadius,
+        radius: 100, // Default 100m radius
         color: this.currentColor,
         label: '',
         timestamp: Date.now()
@@ -1242,7 +1411,7 @@ class AdminMap {
     };
     
     this.createAnnotation(annotationData);
-    this.finishAreaDrawing();
+    this.pendingAnnotation = null;
   }
   
   finishAreaDrawing() {
@@ -1270,19 +1439,21 @@ class AdminMap {
   }
   
   createLine() {
-    if (!this.tempLinePoints.length || this.tempLinePoints.length < 2) {
-      this.showFeedback('Need at least 2 points for a line', 3000);
+    if (!this.pendingAnnotation) {
+      this.showFeedback('No location selected', 3000);
       return;
     }
     
+    // For now, create a simple line with just the selected point
+    // In a full implementation, you'd allow the user to draw multiple points
     const annotationData = {
       teamId: this.currentTeamId, // Can be null for global annotations
       type: 'line',
       data: {
-        points: this.tempLinePoints.map(p => ({
-          lng: p.lng,
-          lt: p.lat
-        })),
+        points: [{
+          lng: this.pendingAnnotation.lng,
+          lt: this.pendingAnnotation.lat
+        }],
         color: this.currentColor,
         label: '',
         timestamp: Date.now()
@@ -1290,7 +1461,7 @@ class AdminMap {
     };
     
     this.createAnnotation(annotationData);
-    this.finishLineDrawing();
+    this.pendingAnnotation = null;
   }
   
   finishLineDrawing() {
@@ -2612,6 +2783,10 @@ class AdminMap {
     this.hideFanMenu();
     this.hideColorMenu();
     this.hideEditForm();
+    
+    // Clean up dismiss handlers
+    this.cleanupFanMenuDismiss();
+    this.cleanupColorMenuDismiss();
     
     // Clear any timers
     if (this.longPressTimer) {

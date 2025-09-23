@@ -306,7 +306,7 @@
         }
       }
       
-      /* Fan Menu Styles (matching Android app) */
+      /* Fan Menu Styles (matching Android app donut ring design) */
       .fan-menu {
         position: absolute;
         z-index: 1000;
@@ -314,6 +314,9 @@
         opacity: 0;
         transform: scale(0.8);
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        width: 300px;
+        height: 300px;
+        transform-origin: center;
       }
       
       .fan-menu.visible {
@@ -322,72 +325,113 @@
         transform: scale(1);
       }
       
-      .fan-menu-option {
+      /* Center hole with dot and coordinate text */
+      .fan-menu-center {
         position: absolute;
-        width: 48px;
-        height: 48px;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 130px;
+        height: 130px;
         border-radius: 50%;
-        background: rgba(0, 0, 0, 0.8);
-        border: 2px solid rgba(255, 255, 255, 0.3);
+        background: transparent;
+        border: 4px solid rgba(255, 255, 255, 0.8);
         display: flex;
         align-items: center;
         justify-content: center;
+        pointer-events: none;
+      }
+      
+      .fan-menu-center-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: white;
+        position: absolute;
+      }
+      
+      .fan-menu-center-text {
+        position: absolute;
+        color: #CCCCCC;
+        font-size: 12px;
+        font-weight: 500;
+        text-align: center;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+      
+      .fan-menu-center-coords {
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      
+      .fan-menu-center-distance {
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      
+      /* Donut ring segments */
+      .fan-menu-segment {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform-origin: center;
         cursor: pointer;
         transition: all 0.2s ease;
-        backdrop-filter: blur(10px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        pointer-events: auto;
       }
       
-      .fan-menu-option:hover {
-        background: rgba(0, 0, 0, 0.9);
-        border-color: rgba(255, 255, 255, 0.6);
-        transform: scale(1.1);
+      .fan-menu-segment:hover {
+        transform: scale(1.05);
       }
       
-      .fan-menu-option.shape-circle {
-        background: linear-gradient(135deg, #4CAF50, #45a049);
+      .fan-menu-segment svg {
+        display: block;
       }
       
-      .fan-menu-option.shape-square {
-        background: linear-gradient(135deg, #FBC02D, #F57F17);
+      .fan-menu-segment path {
+        fill: rgba(0, 0, 0, 0.8);
+        stroke: white;
+        stroke-width: 3;
+        transition: all 0.2s ease;
       }
       
-      .fan-menu-option.shape-triangle {
-        background: linear-gradient(135deg, #F44336, #D32F2F);
+      .fan-menu-segment:hover path {
+        fill: rgba(0, 0, 0, 0.9);
+        stroke: rgba(255, 255, 255, 0.9);
       }
       
-      .fan-menu-option.shape-exclamation {
-        background: linear-gradient(135deg, #000000, #424242);
+      .fan-menu-segment.selected path {
+        fill: rgba(255, 255, 255, 0.2);
+        stroke: rgba(255, 255, 255, 1);
       }
       
-      .fan-menu-option.area {
-        background: linear-gradient(135deg, #2196F3, #1976D2);
-      }
-      
-      .fan-menu-option.line {
-        background: linear-gradient(135deg, #9C27B0, #7B1FA2);
-      }
-      
-      .fan-menu-option.polygon {
-        background: linear-gradient(135deg, #FF9800, #F57C00);
-      }
-      
-      .fan-menu-option.edit {
-        background: linear-gradient(135deg, #607D8B, #455A64);
-      }
-      
-      .fan-menu-option.delete {
-        background: linear-gradient(135deg, #E91E63, #C2185B);
-      }
-      
-      .fan-menu-option .icon {
+      /* Icon positioning within segments */
+      .fan-menu-segment-icon {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
         color: white;
-        font-size: 20px;
+        font-size: 18px;
         font-weight: bold;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        pointer-events: none;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
       }
       
-      /* Color Menu Styles */
+      /* Shape-specific icon styling */
+      .fan-menu-segment-icon.shape-circle::before { content: '●'; }
+      .fan-menu-segment-icon.shape-square::before { content: '■'; }
+      .fan-menu-segment-icon.shape-triangle::before { content: '▲'; }
+      .fan-menu-segment-icon.shape-exclamation::before { content: '!'; }
+      .fan-menu-segment-icon.area::before { content: '◯'; }
+      .fan-menu-segment-icon.line::before { content: '━'; }
+      .fan-menu-segment-icon.edit::before { content: '✏️'; }
+      .fan-menu-segment-icon.delete::before { content: '🗑️'; }
+      
+      /* Color Menu Styles (matching Android app donut ring design) */
       .color-menu {
         position: absolute;
         z-index: 1001;
@@ -395,6 +439,9 @@
         opacity: 0;
         transform: scale(0.8);
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        width: 300px;
+        height: 300px;
+        transform-origin: center;
       }
       
       .color-menu.visible {
@@ -402,29 +449,6 @@
         opacity: 1;
         transform: scale(1);
       }
-      
-      .color-option {
-        position: absolute;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        border: 3px solid rgba(255, 255, 255, 0.8);
-        cursor: pointer;
-        transition: all 0.2s ease;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-      }
-      
-      .color-option:hover {
-        transform: scale(1.15);
-        border-color: white;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-      }
-      
-      .color-option.green { background: #4CAF50; }
-      .color-option.yellow { background: #FBC02D; }
-      .color-option.red { background: #F44336; }
-      .color-option.black { background: #000000; }
-      .color-option.white { background: #FFFFFF; border-color: #CCCCCC; }
       
       /* Annotation Edit Form Styles */
       .annotation-edit-form {
@@ -668,7 +692,13 @@
           <div id="map_container" style="height: 500px; border-radius: 8px; overflow: hidden; background: #0c1527; border: 1px solid #1f2a44; position: relative;">
             <!-- Fan Menu for Annotation Creation -->
             <div id="fan_menu" class="fan-menu">
-              <!-- Shape options will be dynamically added here -->
+              <!-- Center hole with dot and coordinate text -->
+              <div class="fan-menu-center">
+                <div class="fan-menu-center-dot"></div>
+                <div class="fan-menu-center-text fan-menu-center-coords" id="fan_menu_coords">0.00000, 0.00000</div>
+                <div class="fan-menu-center-text fan-menu-center-distance" id="fan_menu_distance">0.0 mi away</div>
+              </div>
+              <!-- Donut ring segments will be dynamically added here -->
             </div>
             
             <!-- Color Menu for Annotation Creation -->
