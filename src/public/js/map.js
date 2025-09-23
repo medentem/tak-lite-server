@@ -918,7 +918,7 @@ class AdminMap {
       const segmentEl = document.createElement('div');
       segmentEl.className = 'fan-menu-segment';
       segmentEl.innerHTML = `
-        <svg width="300" height="300" viewBox="0 0 300 300">
+        <svg width="300" height="300" viewBox="0 0 300 300" style="position: absolute; top: 0; left: 0;">
           <path d="${pathData}" />
         </svg>
         <div class="fan-menu-segment-icon ${option.iconClass}"></div>
@@ -938,6 +938,7 @@ class AdminMap {
     const startAngleRad = (startAngle * Math.PI) / 180;
     const endAngleRad = (endAngle * Math.PI) / 180;
     
+    // Calculate points on inner and outer circles
     const x1 = centerX + innerRadius * Math.cos(startAngleRad);
     const y1 = centerY + innerRadius * Math.sin(startAngleRad);
     const x2 = centerX + outerRadius * Math.cos(startAngleRad);
@@ -949,7 +950,15 @@ class AdminMap {
     
     const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
     
-    return `M ${x1} ${y1} L ${x2} ${y2} A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${x3} ${y3} L ${x4} ${y4} A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${x1} ${y1} Z`;
+    // Create the donut segment path
+    const path = `M ${x1} ${y1} L ${x2} ${y2} A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${x3} ${y3} L ${x4} ${y4} A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${x1} ${y1} Z`;
+    
+    console.log('Donut segment path:', {
+      centerX, centerY, innerRadius, outerRadius, startAngle, endAngle,
+      path
+    });
+    
+    return path;
   }
   
   hideFanMenu() {
@@ -1078,7 +1087,7 @@ class AdminMap {
       const segmentEl = document.createElement('div');
       segmentEl.className = 'fan-menu-segment';
       segmentEl.innerHTML = `
-        <svg width="300" height="300" viewBox="0 0 300 300">
+        <svg width="300" height="300" viewBox="0 0 300 300" style="position: absolute; top: 0; left: 0;">
           <path d="${pathData}" style="fill: ${color.hex}; stroke: white; stroke-width: 3;" />
         </svg>
       `;
