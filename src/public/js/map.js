@@ -29,6 +29,8 @@ class AdminMap {
     this.tempAreaCenter = null;
     this.tempAreaRadius = 0;
     this.tempAreaRadiusPixels = 0;
+    this.isDrawingArea = false;
+    this.tempAreaFeature = null;
     this.currentColor = 'green';
     this.currentShape = 'circle';
     
@@ -1354,7 +1356,7 @@ class AdminMap {
     if (annotationType === 'poi') {
       this.createPOI();
     } else if (annotationType === 'area') {
-      this.createArea();
+      this.startAreaDrawing();
     } else if (annotationType === 'line') {
       this.createLine();
     }
@@ -1587,13 +1589,230 @@ class AdminMap {
     }
   }
   
-  startAreaDrawing(point) {
-    this.tempAreaCenter = this.map.unproject(point);
-    this.tempAreaRadiusPixels = 0;
-    this.tempAreaRadius = 0;
-    this.isEditingMode = true;
+  startAreaDrawing() {
+    if (!this.pendingAnnotation) {
+      this.showFeedback('No location selected', 3000);
+      return;
+    }
     
-    this.showFeedback('Click to set area radius', 3000);
+    this.tempAreaCenter = this.pendingAnnotation;
+    this.tempAreaRadiusPixels = 50; // Start with 50 pixels radius
+    this.tempAreaRadius = this.pixelsToMeters(50); // Convert to meters
+    this.isDrawingArea = true;
+    
+    // Create temporary area feature for visual feedback
+    this.createTempAreaFeature();
+    
+    // Add mouse move and click handlers for area drawing
+    this.setupAreaDrawingHandlers();
+    
+    this.showFeedback('Move mouse to adjust radius, click to create area, right-click or ESC to cancel', 5000);
+  }
+  
+  createTempAreaFeature() {
+    if (!this.tempAreaCenter || !this.map) return;
+    
+    // Remove existing temp area if it exists
+    this.removeTempAreaFeature();
+    
+    // Create circle polygon
+    const circlePolygon = this.generateCirclePolygon(
+      this.tempAreaCenter.lng, 
+      this.tempAreaCenter.lat, 
+      this.tempAreaRadius
+    );
+    
+    // Add temporary source and layer for visual feedback
+    if (!this.map.getSource('temp-area')) {
+      this.map.addSource('temp-area', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+    }
+    
+    if (!this.map.getLayer('temp-area-fill')) {
+      this.map.addLayer({
+        id: 'temp-area-fill',
+        type: 'fill',
+        source: 'temp-area',
+        paint: {
+          'fill-color': this.getColorHex(this.currentColor),
+          'fill-opacity': 0.3
+        }
+      });
+    }
+    
+    if (!this.map.getLayer('temp-area-stroke')) {
+      this.map.addLayer({
+        id: 'temp-area-stroke',
+        type: 'line',
+        source: 'temp-area',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': this.getColorHex(this.currentColor),
+          'line-width': 3,
+          'line-opacity': 0.8
+        }
+      });
+    }
+    
+    // Update the temp area data
+    this.map.getSource('temp-area').setData({
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        geometry: {
+          type: 'Polygon',
+          coordinates: [circlePolygon]
+        },
+        properties: {}
+      }]
+    });
+  }
+  
+  removeTempAreaFeature() {
+    if (this.map.getLayer('temp-area-fill')) {
+      this.map.removeLayer('temp-area-fill');
+    }
+    if (this.map.getLayer('temp-area-stroke')) {
+      this.map.removeLayer('temp-area-stroke');
+    }
+    if (this.map.getSource('temp-area')) {
+      this.map.removeSource('temp-area');
+    }
+  }
+  
+  setupAreaDrawingHandlers() {
+    // Store original handlers to restore later
+    this.originalMouseMoveHandler = this.map._handlers.find(h => h._container && h._container.style);
+    
+    // Add mouse move handler for radius adjustment
+    this.areaMouseMoveHandler = (e) => {
+      if (!this.isDrawingArea || !this.tempAreaCenter) return;
+      
+      // Calculate distance from center to mouse position
+      const centerPoint = this.map.project(this.tempAreaCenter);
+      const mousePoint = e.point;
+      const distancePixels = Math.sqrt(
+        Math.pow(mousePoint.x - centerPoint.x, 2) + 
+        Math.pow(mousePoint.y - centerPoint.y, 2)
+      );
+      
+      // Update radius (minimum 10 pixels, maximum 500 pixels)
+      this.tempAreaRadiusPixels = Math.max(10, Math.min(500, distancePixels));
+      this.tempAreaRadius = this.pixelsToMeters(this.tempAreaRadiusPixels);
+      
+      // Update visual feedback
+      this.createTempAreaFeature();
+    };
+    
+    // Add click handler to finalize area
+    this.areaClickHandler = (e) => {
+      if (!this.isDrawingArea) return;
+      
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Finalize the area creation
+      this.finalizeAreaDrawing();
+    };
+    
+    // Add right-click handler to cancel area drawing
+    this.areaRightClickHandler = (e) => {
+      if (!this.isDrawingArea) return;
+      
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Cancel area drawing
+      this.cancelAreaDrawing();
+    };
+    
+    // Add escape key handler to cancel area drawing
+    this.areaEscapeHandler = (e) => {
+      if (!this.isDrawingArea) return;
+      
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        this.cancelAreaDrawing();
+      }
+    };
+    
+    // Add the handlers
+    this.map.on('mousemove', this.areaMouseMoveHandler);
+    this.map.on('click', this.areaClickHandler);
+    this.map.on('contextmenu', this.areaRightClickHandler);
+    document.addEventListener('keydown', this.areaEscapeHandler);
+  }
+  
+  removeAreaDrawingHandlers() {
+    if (this.areaMouseMoveHandler) {
+      this.map.off('mousemove', this.areaMouseMoveHandler);
+      this.areaMouseMoveHandler = null;
+    }
+    if (this.areaClickHandler) {
+      this.map.off('click', this.areaClickHandler);
+      this.areaClickHandler = null;
+    }
+    if (this.areaRightClickHandler) {
+      this.map.off('contextmenu', this.areaRightClickHandler);
+      this.areaRightClickHandler = null;
+    }
+    if (this.areaEscapeHandler) {
+      document.removeEventListener('keydown', this.areaEscapeHandler);
+      this.areaEscapeHandler = null;
+    }
+  }
+  
+  finalizeAreaDrawing() {
+    if (!this.isDrawingArea || !this.tempAreaCenter) return;
+    
+    // Create the actual area annotation
+    this.createArea();
+    
+    // Clean up drawing state
+    this.cleanupAreaDrawing();
+  }
+  
+  cancelAreaDrawing() {
+    if (!this.isDrawingArea) return;
+    
+    // Clean up drawing state without creating annotation
+    this.cleanupAreaDrawing();
+    
+    this.showFeedback('Area drawing cancelled', 2000);
+  }
+  
+  cleanupAreaDrawing() {
+    this.isDrawingArea = false;
+    this.tempAreaCenter = null;
+    this.tempAreaRadius = 0;
+    this.tempAreaRadiusPixels = 0;
+    this.pendingAnnotation = null;
+    
+    // Remove visual feedback
+    this.removeTempAreaFeature();
+    
+    // Remove event handlers
+    this.removeAreaDrawingHandlers();
+    
+    this.showFeedback('Area created successfully', 2000);
+  }
+  
+  // Convert pixels to meters at current zoom level
+  pixelsToMeters(pixels) {
+    if (!this.map) return 0;
+    
+    const center = this.map.getCenter();
+    const zoom = this.map.getZoom();
+    
+    // Calculate meters per pixel at this zoom level and latitude
+    const metersPerPixel = (156543.03392 * Math.cos(center.lat * Math.PI / 180)) / Math.pow(2, zoom);
+    
+    return pixels * metersPerPixel;
   }
   
   updateAreaRadius(lngLat) {
@@ -1609,8 +1828,8 @@ class AdminMap {
   }
   
   createArea() {
-    if (!this.pendingAnnotation) {
-      this.showFeedback('No location selected', 3000);
+    if (!this.tempAreaCenter) {
+      this.showFeedback('No area center selected', 3000);
       return;
     }
     
@@ -1619,10 +1838,10 @@ class AdminMap {
       type: 'area',
       data: {
         center: {
-          lng: this.pendingAnnotation.lng,
-          lt: this.pendingAnnotation.lat
+          lng: this.tempAreaCenter.lng,
+          lt: this.tempAreaCenter.lat
         },
-        radius: 100, // Default 100m radius
+        radius: this.tempAreaRadius, // Use the radius from drawing process
         color: this.currentColor,
         label: '',
         timestamp: Date.now()
@@ -1630,7 +1849,6 @@ class AdminMap {
     };
     
     this.createAnnotation(annotationData);
-    this.pendingAnnotation = null;
   }
   
   finishAreaDrawing() {
@@ -3002,6 +3220,11 @@ class AdminMap {
     this.hideFanMenu();
     this.hideColorMenu();
     this.hideEditForm();
+    
+    // Clean up area drawing state
+    if (this.isDrawingArea) {
+      this.cleanupAreaDrawing();
+    }
     
     // Clean up dismiss handlers
     this.cleanupFanMenuDismiss();
