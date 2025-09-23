@@ -727,6 +727,7 @@ class AdminMap {
     // Long press detection for annotation creation
     let longPressTimer = null;
     let longPressTriggered = false;
+    let longPressEvent = null;
     
     this.map.on('mousedown', (e) => {
       // Only handle if not clicking on existing annotations or UI elements
@@ -743,6 +744,7 @@ class AdminMap {
       longPressTimer = setTimeout(() => {
         console.log('Long press detected, showing fan menu');
         longPressTriggered = true;
+        longPressEvent = e; // Store the event that triggered the long press
         this.longPressInProgress = true;
         this.showFanMenu(e.point);
         this.showFeedback('Long press detected - choose annotation type');
@@ -758,13 +760,12 @@ class AdminMap {
       // If long press was triggered, prevent the click event from dismissing the menu
       if (longPressTriggered) {
         console.log('Long press completed, preventing click dismissal');
-        // Mark this event as handled to prevent click-outside dismissal
+        // Mark this specific event as handled to prevent click-outside dismissal
         e.originalEvent._longPressHandled = true;
         longPressTriggered = false;
-        // Reset the flag after a short delay to allow normal click handling
-        setTimeout(() => {
-          this.longPressInProgress = false;
-        }, 200);
+        longPressEvent = null;
+        // Reset the flag immediately - the long press is complete
+        this.longPressInProgress = false;
       }
     });
     
@@ -774,6 +775,7 @@ class AdminMap {
         longPressTimer = null;
       }
       longPressTriggered = false;
+      longPressEvent = null;
       this.longPressInProgress = false;
     });
     
@@ -1074,6 +1076,10 @@ class AdminMap {
     
     // Add click listener to document to dismiss fan menu when clicking outside
     this.fanMenuDismissHandler = (e) => {
+      console.log('Fan menu dismiss handler triggered');
+      console.log('Event _longPressHandled:', e._longPressHandled);
+      console.log('longPressInProgress:', this.longPressInProgress);
+      
       // Don't dismiss if this was a long press event or long press is in progress
       if (e._longPressHandled || this.longPressInProgress) {
         console.log('Ignoring click dismissal due to long press');
@@ -1084,6 +1090,8 @@ class AdminMap {
       if (this.fanMenu && !this.fanMenu.contains(e.target)) {
         console.log('Clicking outside fan menu, dismissing');
         this.hideFanMenu();
+      } else {
+        console.log('Click was inside fan menu, not dismissing');
       }
     };
     
