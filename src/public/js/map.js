@@ -877,8 +877,8 @@ class AdminMap {
     const options = isEditMode ? this.getEditModeOptions() : this.getCreateModeOptions();
     
     // Position fan menu at click point relative to map container
-    this.fanMenu.style.left = (point.x - 150) + 'px'; // Center the 300px menu
-    this.fanMenu.style.top = (point.y - 150) + 'px';
+    this.fanMenu.style.left = (point.x - 100) + 'px'; // Center the donut ring (200px diameter)
+    this.fanMenu.style.top = (point.y - 100) + 'px';
     this.fanMenu.style.position = 'absolute';
     
     // Create donut ring segments
@@ -923,10 +923,10 @@ class AdminMap {
   }
   
   createDonutRingSegments(options, point) {
-    const centerX = 150; // Center of 300px menu
-    const centerY = 150;
-    const innerRadius = 65; // Half of 130px center hole
-    const outerRadius = 100; // Ring thickness
+    const centerX = 100; // Center of 200px menu
+    const centerY = 100;
+    const innerRadius = 40; // Smaller center hole
+    const outerRadius = 80; // Ring thickness
     const gapAngle = 4; // Degrees between segments
 
     const totalAngle = 360 - (options.length * gapAngle);
@@ -938,13 +938,13 @@ class AdminMap {
     svgContainer.style.position = 'absolute';
     svgContainer.style.top = '0';
     svgContainer.style.left = '0';
-    svgContainer.style.width = '300px';
-    svgContainer.style.height = '300px';
+    svgContainer.style.width = '200px';
+    svgContainer.style.height = '200px';
     
     const svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svgElement.setAttribute('width', '300');
-    svgElement.setAttribute('height', '300');
-    svgElement.setAttribute('viewBox', '0 0 300 300');
+    svgElement.setAttribute('width', '200');
+    svgElement.setAttribute('height', '200');
+    svgElement.setAttribute('viewBox', '0 0 200 200');
     svgElement.style.position = 'absolute';
     svgElement.style.top = '0';
     svgElement.style.left = '0';
@@ -1161,8 +1161,8 @@ class AdminMap {
     ];
     
     // Position color menu at click point relative to map container
-    this.colorMenu.style.left = (point.x - 150) + 'px'; // Center the 300px menu
-    this.colorMenu.style.top = (point.y - 150) + 'px';
+    this.colorMenu.style.left = (point.x - 100) + 'px'; // Center the donut ring (200px diameter)
+    this.colorMenu.style.top = (point.y - 100) + 'px';
     this.colorMenu.style.position = 'absolute';
     
     // Create donut ring segments for colors
@@ -1178,10 +1178,10 @@ class AdminMap {
   }
   
   createColorDonutSegments(colors, point, annotationType) {
-    const centerX = 150; // Center of 300px menu
-    const centerY = 150;
-    const innerRadius = 65; // Half of 130px center hole
-    const outerRadius = 100; // Ring thickness
+    const centerX = 100; // Center of 200px menu
+    const centerY = 100;
+    const innerRadius = 40; // Smaller center hole
+    const outerRadius = 80; // Ring thickness
     const gapAngle = 4; // Degrees between segments
 
     const totalAngle = 360 - (colors.length * gapAngle);
@@ -1193,13 +1193,13 @@ class AdminMap {
     svgContainer.style.position = 'absolute';
     svgContainer.style.top = '0';
     svgContainer.style.left = '0';
-    svgContainer.style.width = '300px';
-    svgContainer.style.height = '300px';
+    svgContainer.style.width = '200px';
+    svgContainer.style.height = '200px';
     
     const svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svgElement.setAttribute('width', '300');
-    svgElement.setAttribute('height', '300');
-    svgElement.setAttribute('viewBox', '0 0 300 300');
+    svgElement.setAttribute('width', '200');
+    svgElement.setAttribute('height', '200');
+    svgElement.setAttribute('viewBox', '0 0 200 200');
     svgElement.style.position = 'absolute';
     svgElement.style.top = '0';
     svgElement.style.left = '0';
