@@ -746,6 +746,11 @@ class AdminMap {
         longPressEvent = e; // Store the event that triggered the long press
         this.showFanMenu(e.point);
         this.showFeedback('Long press detected - choose annotation type');
+        
+        // Set up dismiss handler after a delay to ensure the long press is complete
+        setTimeout(() => {
+          this.setupFanMenuDismiss();
+        }, 200);
       }, this.longPressThreshold);
     });
     
@@ -760,6 +765,7 @@ class AdminMap {
         console.log('Long press completed, preventing click dismissal');
         // Mark this specific event as handled to prevent click-outside dismissal
         e.originalEvent._longPressHandled = true;
+        e._longPressHandled = true; // Also mark the main event
         longPressTriggered = false;
         longPressEvent = null;
       }
@@ -881,9 +887,6 @@ class AdminMap {
     // Show fan menu
     this.fanMenu.classList.add('visible');
     console.log('Fan menu made visible with', options.length, 'options');
-    
-    // Add click-outside-to-dismiss functionality
-    this.setupFanMenuDismiss();
   }
   
   getCreateModeOptions() {
