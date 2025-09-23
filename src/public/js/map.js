@@ -1716,8 +1716,11 @@ class AdminMap {
     this.areaClickHandler = (e) => {
       if (!this.isDrawingArea) return;
       
-      e.preventDefault();
-      e.stopPropagation();
+      // Prevent default behavior and stop propagation on the original event
+      if (e.originalEvent) {
+        e.originalEvent.preventDefault();
+        e.originalEvent.stopPropagation();
+      }
       
       // Finalize the area creation
       this.finalizeAreaDrawing();
@@ -1727,8 +1730,11 @@ class AdminMap {
     this.areaRightClickHandler = (e) => {
       if (!this.isDrawingArea) return;
       
-      e.preventDefault();
-      e.stopPropagation();
+      // Prevent default behavior and stop propagation on the original event
+      if (e.originalEvent) {
+        e.originalEvent.preventDefault();
+        e.originalEvent.stopPropagation();
+      }
       
       // Cancel area drawing
       this.cancelAreaDrawing();
@@ -2088,12 +2094,15 @@ class AdminMap {
       if (!this.isDrawingLine) return;
       
       // Don't add points if clicking on control icons
-      if (e.originalEvent.target.closest('.line-control-icons')) {
+      if (e.originalEvent && e.originalEvent.target.closest('.line-control-icons')) {
         return;
       }
       
-      e.preventDefault();
-      e.stopPropagation();
+      // Prevent default behavior and stop propagation on the original event
+      if (e.originalEvent) {
+        e.originalEvent.preventDefault();
+        e.originalEvent.stopPropagation();
+      }
       
       // Add new point
       this.addLinePoint(e.lngLat);
