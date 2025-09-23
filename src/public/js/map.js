@@ -914,6 +914,21 @@ class AdminMap {
       // Create SVG path for donut segment
       const pathData = this.createDonutSegmentPath(centerX, centerY, innerRadius, outerRadius, startAngle, endAngle);
       
+      // Calculate icon position within the segment
+      const iconAngle = startAngle + (segmentAngle / 2); // Center of the segment
+      const iconRadius = (innerRadius + outerRadius) / 2; // Middle of the donut ring
+      const iconAngleRad = (iconAngle * Math.PI) / 180;
+      const iconX = centerX + iconRadius * Math.cos(iconAngleRad);
+      const iconY = centerY + iconRadius * Math.sin(iconAngleRad);
+      
+      console.log('Icon positioning:', {
+        option: option.type,
+        segmentIndex: index,
+        startAngle, endAngle, segmentAngle,
+        iconAngle, iconRadius,
+        iconX, iconY
+      });
+      
       // Create segment element
       const segmentEl = document.createElement('div');
       segmentEl.className = 'fan-menu-segment';
@@ -921,7 +936,7 @@ class AdminMap {
         <svg width="300" height="300" viewBox="0 0 300 300" style="position: absolute; top: 0; left: 0;">
           <path d="${pathData}" />
         </svg>
-        <div class="fan-menu-segment-icon ${option.iconClass}"></div>
+        <div class="fan-menu-segment-icon ${option.iconClass}" style="position: absolute; left: ${iconX}px; top: ${iconY}px; transform: translate(-50%, -50%);"></div>
       `;
       
       // Add click handler
