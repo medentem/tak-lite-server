@@ -31,6 +31,9 @@ class AdminMap {
     this.tempAreaRadiusPixels = 0;
     this.isDrawingArea = false;
     this.tempAreaFeature = null;
+    this.isDrawingLine = false;
+    this.tempLineFeature = null;
+    this.lineControlIcons = null;
     this.currentColor = 'green';
     this.currentShape = 'circle';
     
@@ -1358,7 +1361,7 @@ class AdminMap {
     } else if (annotationType === 'area') {
       this.startAreaDrawing();
     } else if (annotationType === 'line') {
-      this.createLine();
+      this.startLineDrawing();
     }
   }
   
@@ -1858,39 +1861,336 @@ class AdminMap {
     this.isEditingMode = false;
   }
   
-  startLineDrawing(point) {
-    this.tempLinePoints = [this.map.unproject(point)];
-    this.isEditingMode = true;
-    
-    this.showFeedback('Click to add line points, right-click to finish', 3000);
-  }
-  
-  addLinePoint(lngLat) {
-    this.tempLinePoints.push(lngLat);
-    
-    if (this.tempLinePoints.length >= 2) {
-      // Show color menu for line
-      const point = this.map.project(lngLat);
-      this.showColorMenu(point, 'line');
-    }
-  }
-  
-  createLine() {
+  startLineDrawing() {
     if (!this.pendingAnnotation) {
       this.showFeedback('No location selected', 3000);
       return;
     }
     
-    // For now, create a simple line with just the selected point
-    // In a full implementation, you'd allow the user to draw multiple points
+    // Start with the first point at the long press location
+    this.tempLinePoints = [this.pendingAnnotation];
+    this.isDrawingLine = true;
+    
+    // Create visual feedback for the line points
+    this.createTempLineFeature();
+    
+    // Create floating control icons
+    this.createLineControlIcons();
+    
+    // Add click handler for adding more points
+    this.setupLineDrawingHandlers();
+    
+    this.showFeedback('Click to add more points, use check mark to finish or X to cancel', 5000);
+  }
+  
+  createTempLineFeature() {
+    if (!this.tempLinePoints || this.tempLinePoints.length === 0 || !this.map) return;
+    
+    // Remove existing temp line if it exists
+    this.removeTempLineFeature();
+    
+    // Add temporary source and layer for visual feedback
+    if (!this.map.getSource('temp-line')) {
+      this.map.addSource('temp-line', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+    }
+    
+    if (!this.map.getLayer('temp-line-stroke')) {
+      this.map.addLayer({
+        id: 'temp-line-stroke',
+        type: 'line',
+        source: 'temp-line',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': this.getColorHex(this.currentColor),
+          'line-width': 3,
+          'line-opacity': 0.8
+        }
+      });
+    }
+    
+    if (!this.map.getLayer('temp-line-points')) {
+      this.map.addLayer({
+        id: 'temp-line-points',
+        type: 'circle',
+        source: 'temp-line',
+        paint: {
+          'circle-radius': 6,
+          'circle-color': this.getColorHex(this.currentColor),
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#FFFFFF'
+        }
+      });
+    }
+    
+    // Create features for the line and points
+    const features = [];
+    
+    // Add line feature if we have at least 2 points
+    if (this.tempLinePoints.length >= 2) {
+      features.push({
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: this.tempLinePoints.map(point => [point.lng, point.lat])
+        },
+        properties: { type: 'line' }
+      });
+    }
+    
+    // Add point features
+    this.tempLinePoints.forEach((point, index) => {
+      features.push({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [point.lng, point.lat]
+        },
+        properties: { 
+          type: 'point',
+          index: index
+        }
+      });
+    });
+    
+    // Update the temp line data
+    this.map.getSource('temp-line').setData({
+      type: 'FeatureCollection',
+      features: features
+    });
+  }
+  
+  removeTempLineFeature() {
+    if (this.map.getLayer('temp-line-stroke')) {
+      this.map.removeLayer('temp-line-stroke');
+    }
+    if (this.map.getLayer('temp-line-points')) {
+      this.map.removeLayer('temp-line-points');
+    }
+    if (this.map.getSource('temp-line')) {
+      this.map.removeSource('temp-line');
+    }
+  }
+  
+  createLineControlIcons() {
+    // Remove existing control icons if they exist
+    this.removeLineControlIcons();
+    
+    // Create container for control icons
+    this.lineControlIcons = document.createElement('div');
+    this.lineControlIcons.className = 'line-control-icons';
+    this.lineControlIcons.style.cssText = `
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: flex;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    `;
+    
+    // Create check mark icon
+    const checkIcon = document.createElement('div');
+    checkIcon.className = 'line-control-check';
+    checkIcon.innerHTML = '✓';
+    checkIcon.style.cssText = `
+      width: 40px;
+      height: 40px;
+      background: #4CAF50;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 20px;
+      font-weight: bold;
+      transition: all 0.2s ease;
+    `;
+    
+    // Create cancel icon
+    const cancelIcon = document.createElement('div');
+    cancelIcon.className = 'line-control-cancel';
+    cancelIcon.innerHTML = '✕';
+    cancelIcon.style.cssText = `
+      width: 40px;
+      height: 40px;
+      background: #F44336;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 20px;
+      font-weight: bold;
+      transition: all 0.2s ease;
+    `;
+    
+    // Add hover effects
+    checkIcon.addEventListener('mouseenter', () => {
+      checkIcon.style.transform = 'scale(1.1)';
+      checkIcon.style.boxShadow = '0 4px 15px rgba(76, 175, 80, 0.4)';
+    });
+    checkIcon.addEventListener('mouseleave', () => {
+      checkIcon.style.transform = 'scale(1)';
+      checkIcon.style.boxShadow = 'none';
+    });
+    
+    cancelIcon.addEventListener('mouseenter', () => {
+      cancelIcon.style.transform = 'scale(1.1)';
+      cancelIcon.style.boxShadow = '0 4px 15px rgba(244, 67, 54, 0.4)';
+    });
+    cancelIcon.addEventListener('mouseleave', () => {
+      cancelIcon.style.transform = 'scale(1)';
+      cancelIcon.style.boxShadow = 'none';
+    });
+    
+    // Add click handlers
+    checkIcon.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.finalizeLineDrawing();
+    });
+    
+    cancelIcon.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.cancelLineDrawing();
+    });
+    
+    // Add icons to container
+    this.lineControlIcons.appendChild(checkIcon);
+    this.lineControlIcons.appendChild(cancelIcon);
+    
+    // Add to map container
+    const mapContainer = document.getElementById('map_container');
+    mapContainer.appendChild(this.lineControlIcons);
+  }
+  
+  removeLineControlIcons() {
+    if (this.lineControlIcons) {
+      this.lineControlIcons.remove();
+      this.lineControlIcons = null;
+    }
+  }
+  
+  setupLineDrawingHandlers() {
+    // Add click handler for adding more points
+    this.lineClickHandler = (e) => {
+      if (!this.isDrawingLine) return;
+      
+      // Don't add points if clicking on control icons
+      if (e.originalEvent.target.closest('.line-control-icons')) {
+        return;
+      }
+      
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Add new point
+      this.addLinePoint(e.lngLat);
+    };
+    
+    // Add escape key handler to cancel line drawing
+    this.lineEscapeHandler = (e) => {
+      if (!this.isDrawingLine) return;
+      
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        this.cancelLineDrawing();
+      }
+    };
+    
+    // Add the handlers
+    this.map.on('click', this.lineClickHandler);
+    document.addEventListener('keydown', this.lineEscapeHandler);
+  }
+  
+  removeLineDrawingHandlers() {
+    if (this.lineClickHandler) {
+      this.map.off('click', this.lineClickHandler);
+      this.lineClickHandler = null;
+    }
+    if (this.lineEscapeHandler) {
+      document.removeEventListener('keydown', this.lineEscapeHandler);
+      this.lineEscapeHandler = null;
+    }
+  }
+  
+  addLinePoint(lngLat) {
+    if (!this.isDrawingLine) return;
+    
+    // Add the new point
+    this.tempLinePoints.push(lngLat);
+    
+    // Update visual feedback
+    this.createTempLineFeature();
+    
+    // Update feedback message
+    this.showFeedback(`Line has ${this.tempLinePoints.length} points. Click to add more, or use check mark to finish.`, 3000);
+  }
+  
+  finalizeLineDrawing() {
+    if (!this.isDrawingLine || this.tempLinePoints.length < 2) {
+      this.showFeedback('Line needs at least 2 points', 3000);
+      return;
+    }
+    
+    // Create the actual line annotation
+    this.createLine();
+    
+    // Clean up drawing state
+    this.cleanupLineDrawing();
+  }
+  
+  cancelLineDrawing() {
+    if (!this.isDrawingLine) return;
+    
+    // Clean up drawing state without creating annotation
+    this.cleanupLineDrawing();
+    
+    this.showFeedback('Line drawing cancelled', 2000);
+  }
+  
+  cleanupLineDrawing() {
+    this.isDrawingLine = false;
+    this.tempLinePoints = [];
+    this.pendingAnnotation = null;
+    
+    // Remove visual feedback
+    this.removeTempLineFeature();
+    
+    // Remove control icons
+    this.removeLineControlIcons();
+    
+    // Remove event handlers
+    this.removeLineDrawingHandlers();
+    
+    this.showFeedback('Line created successfully', 2000);
+  }
+  
+  createLine() {
+    if (!this.tempLinePoints || this.tempLinePoints.length < 2) {
+      this.showFeedback('Line needs at least 2 points', 3000);
+      return;
+    }
+    
     const annotationData = {
       teamId: this.currentTeamId, // Can be null for global annotations
       type: 'line',
       data: {
-        points: [{
-          lng: this.pendingAnnotation.lng,
-          lt: this.pendingAnnotation.lat
-        }],
+        points: this.tempLinePoints.map(point => ({
+          lng: point.lng,
+          lt: point.lat
+        })),
         color: this.currentColor,
         label: '',
         timestamp: Date.now()
@@ -1898,7 +2198,6 @@ class AdminMap {
     };
     
     this.createAnnotation(annotationData);
-    this.pendingAnnotation = null;
   }
   
   finishLineDrawing() {
@@ -3224,6 +3523,11 @@ class AdminMap {
     // Clean up area drawing state
     if (this.isDrawingArea) {
       this.cleanupAreaDrawing();
+    }
+    
+    // Clean up line drawing state
+    if (this.isDrawingLine) {
+      this.cleanupLineDrawing();
     }
     
     // Clean up dismiss handlers
