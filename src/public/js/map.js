@@ -1140,7 +1140,11 @@ class AdminMap {
     if (!this.colorMenu) return;
     
     // Clear existing options
+    const existingSegments = this.colorMenu.querySelector('.color-menu-segments-container');
     this.colorMenu.innerHTML = '';
+    if (existingSegments) {
+      existingSegments.remove();
+    }
     
     const colors = [
       { name: 'green', hex: '#4CAF50' },
@@ -1171,10 +1175,29 @@ class AdminMap {
     const innerRadius = 65; // Half of 130px center hole
     const outerRadius = 100; // Ring thickness
     const gapAngle = 4; // Degrees between segments
-    
+
     const totalAngle = 360 - (colors.length * gapAngle);
     const segmentAngle = totalAngle / colors.length;
+
+    // Create a single SVG container for all color segments
+    const svgContainer = document.createElement('div');
+    svgContainer.className = 'color-menu-segments-container';
+    svgContainer.style.position = 'absolute';
+    svgContainer.style.top = '0';
+    svgContainer.style.left = '0';
+    svgContainer.style.width = '300px';
+    svgContainer.style.height = '300px';
     
+    const svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svgElement.setAttribute('width', '300');
+    svgElement.setAttribute('height', '300');
+    svgElement.setAttribute('viewBox', '0 0 300 300');
+    svgElement.style.position = 'absolute';
+    svgElement.style.top = '0';
+    svgElement.style.left = '0';
+    
+    svgContainer.appendChild(svgElement);
+
     colors.forEach((color, index) => {
       const startAngle = (index * (segmentAngle + gapAngle)) - 90; // Start from top
       const endAngle = startAngle + segmentAngle;
@@ -1182,46 +1205,54 @@ class AdminMap {
       // Create SVG path for donut segment
       const pathData = this.createDonutSegmentPath(centerX, centerY, innerRadius, outerRadius, startAngle, endAngle);
       
-      // Create segment element
-      const segmentEl = document.createElement('div');
-      segmentEl.className = 'fan-menu-segment';
-      segmentEl.innerHTML = `
-        <svg width="300" height="300" viewBox="0 0 300 300" style="position: absolute; top: 0; left: 0; pointer-events: none;">
-          <path d="${pathData}" style="fill: ${color.hex}; stroke: white; stroke-width: 3; pointer-events: auto;" />
-        </svg>
-      `;
+      // Create path element
+      const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      pathElement.setAttribute('d', pathData);
+      pathElement.setAttribute('data-color-name', color.name);
+      pathElement.setAttribute('data-color-index', index.toString());
+      pathElement.style.fill = color.hex;
+      pathElement.style.stroke = 'white';
+      pathElement.style.strokeWidth = '3';
+      pathElement.style.transition = 'all 0.2s ease';
+      pathElement.style.cursor = 'pointer';
       
-      // Add click handler
-      segmentEl.addEventListener('click', (e) => {
+      // Add click handler to path
+      pathElement.addEventListener('click', (e) => {
         e.stopPropagation();
+        console.log('Clicked on color:', color.name);
         this.handleColorSelection(color.name, annotationType);
       });
       
       // Add hover handlers for proper hover effects
-      const pathElement = segmentEl.querySelector('path');
-      if (pathElement) {
-        const originalFill = color.hex;
-        const originalStroke = 'white';
-        
-        pathElement.addEventListener('mouseenter', () => {
-          pathElement.style.fill = 'rgba(0, 0, 0, 0.9)';
-          pathElement.style.stroke = 'rgba(255, 255, 255, 0.9)';
-        });
-        
-        pathElement.addEventListener('mouseleave', () => {
-          pathElement.style.fill = originalFill;
-          pathElement.style.stroke = originalStroke;
-        });
-      }
+      const originalFill = color.hex;
+      const originalStroke = 'white';
       
-      this.colorMenu.appendChild(segmentEl);
+      pathElement.addEventListener('mouseenter', () => {
+        console.log('Hovering over color:', color.name);
+        pathElement.style.fill = 'rgba(0, 0, 0, 0.9)';
+        pathElement.style.stroke = 'rgba(255, 255, 255, 0.9)';
+      });
+      
+      pathElement.addEventListener('mouseleave', () => {
+        pathElement.style.fill = originalFill;
+        pathElement.style.stroke = originalStroke;
+      });
+      
+      svgElement.appendChild(pathElement);
     });
+    
+    this.colorMenu.appendChild(svgContainer);
   }
   
   hideColorMenu() {
     if (this.colorMenu) {
       this.colorMenu.classList.remove('visible');
+      const segmentsContainer = this.colorMenu.querySelector('.color-menu-segments-container');
+      
       this.colorMenu.innerHTML = '';
+      if (segmentsContainer) {
+        segmentsContainer.remove();
+      }
     }
     
     // Clean up dismiss event listener
