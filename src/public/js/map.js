@@ -25,6 +25,7 @@ class AdminMap {
     this.longPressTimer = null;
     this.longPressThreshold = 500; // ms
     this.isLongPressing = false;
+    this.longPressInProgress = false;
     this.tempLinePoints = [];
     this.tempAreaCenter = null;
     this.tempAreaRadius = 0;
@@ -723,8 +724,9 @@ class AdminMap {
       return;
     }
     
-    // Simple long press detection for annotation creation
+    // Long press detection for annotation creation
     let longPressTimer = null;
+    let longPressTriggered = false;
     
     this.map.on('mousedown', (e) => {
       // Only handle if not clicking on existing annotations or UI elements
@@ -736,8 +738,12 @@ class AdminMap {
         return;
       }
       
+      longPressTriggered = false;
+      
       longPressTimer = setTimeout(() => {
         console.log('Long press detected, showing fan menu');
+        longPressTriggered = true;
+        this.longPressInProgress = true;
         this.showFanMenu(e.point);
         this.showFeedback('Long press detected - choose annotation type');
       }, this.longPressThreshold);
@@ -748,6 +754,18 @@ class AdminMap {
         clearTimeout(longPressTimer);
         longPressTimer = null;
       }
+      
+      // If long press was triggered, prevent the click event from dismissing the menu
+      if (longPressTriggered) {
+        console.log('Long press completed, preventing click dismissal');
+        // Mark this event as handled to prevent click-outside dismissal
+        e.originalEvent._longPressHandled = true;
+        longPressTriggered = false;
+        // Reset the flag after a short delay to allow normal click handling
+        setTimeout(() => {
+          this.longPressInProgress = false;
+        }, 200);
+      }
     });
     
     this.map.on('mouseleave', (e) => {
@@ -755,6 +773,8 @@ class AdminMap {
         clearTimeout(longPressTimer);
         longPressTimer = null;
       }
+      longPressTriggered = false;
+      this.longPressInProgress = false;
     });
     
     console.log('Map interaction handlers setup complete');
@@ -997,8 +1017,15 @@ class AdminMap {
     
     // Add click listener to document to dismiss fan menu when clicking outside
     this.fanMenuDismissHandler = (e) => {
+      // Don't dismiss if this was a long press event or long press is in progress
+      if (e._longPressHandled || this.longPressInProgress) {
+        console.log('Ignoring click dismissal due to long press');
+        return;
+      }
+      
       // Check if click is outside the fan menu
       if (this.fanMenu && !this.fanMenu.contains(e.target)) {
+        console.log('Clicking outside fan menu, dismissing');
         this.hideFanMenu();
       }
     };
@@ -1133,8 +1160,15 @@ class AdminMap {
     
     // Add click listener to document to dismiss color menu when clicking outside
     this.colorMenuDismissHandler = (e) => {
+      // Don't dismiss if this was a long press event
+      if (e._longPressHandled) {
+        console.log('Ignoring color menu dismissal due to long press');
+        return;
+      }
+      
       // Check if click is outside the color menu
       if (this.colorMenu && !this.colorMenu.contains(e.target)) {
+        console.log('Clicking outside color menu, dismissing');
         this.hideColorMenu();
       }
     };
