@@ -1053,6 +1053,52 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         });
       }
       
+      // Determine annotation type based on location confidence and specificity
+      const determineAnnotationType = (location: any, customType?: string): 'poi' | 'area' => {
+        // Allow custom override
+        if (customType && ['poi', 'area'].includes(customType)) {
+          return customType as 'poi' | 'area';
+        }
+        
+        // Use area annotation if:
+        // 1. Location has a radius (indicating area-based threat)
+        // 2. Low confidence (< 0.7) suggesting uncertainty
+        // 3. Source is 'inferred' (least reliable)
+        // 4. No specific address/name provided
+        const hasRadius = location.radius_km && location.radius_km > 0;
+        const lowConfidence = location.confidence < 0.7;
+        const isInferred = location.source === 'inferred';
+        const hasSpecificLocation = location.name && location.name.trim().length > 0;
+        
+        if (hasRadius || lowConfidence || isInferred || !hasSpecificLocation) {
+          return 'area';
+        }
+        
+        // Use POI for high-confidence, specific locations
+        return 'poi';
+      };
+      
+      const smartAnnotationType = determineAnnotationType(primaryLocation, annotationType);
+      
+      // Log the decision for debugging
+      console.log('Smart annotation type decision:', {
+        threatId: req.params.threatId,
+        location: {
+          confidence: primaryLocation.confidence,
+          source: primaryLocation.source,
+          radius_km: primaryLocation.radius_km,
+          name: primaryLocation.name
+        },
+        customType: annotationType,
+        smartType: smartAnnotationType,
+        reasoning: {
+          hasRadius: primaryLocation.radius_km && primaryLocation.radius_km > 0,
+          lowConfidence: primaryLocation.confidence < 0.7,
+          isInferred: primaryLocation.source === 'inferred',
+          hasSpecificLocation: primaryLocation.name && primaryLocation.name.trim().length > 0
+        }
+      });
+      
       // Determine annotation properties based on threat level
       const threatLevelColors = {
         'LOW': 'green',
@@ -1064,12 +1110,8 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       const color = customColor || threatLevelColors[threat.threat_level as keyof typeof threatLevelColors] || 'red';
       const label = customLabel || `${threat.threat_level} Threat: ${threat.threat_type || 'Unknown'}`;
       
-      // Create annotation data
-      const annotationData = {
-        position: {
-          lng: primaryLocation.lng,
-          lat: primaryLocation.lat
-        },
+      // Create annotation data based on type
+      const annotationData: any = {
         color: color,
         shape: 'exclamation', // Use exclamation for threats
         label: label,
@@ -1080,9 +1122,26 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           threatType: threat.threat_type,
           confidenceScore: threat.confidence_score,
           summary: threat.ai_summary,
-          source: 'AI Threat Detection'
+          source: 'AI Threat Detection',
+          locationConfidence: primaryLocation.confidence,
+          locationSource: primaryLocation.source
         }
       };
+      
+      if (smartAnnotationType === 'area') {
+        // For area annotations, use center and radius
+        annotationData.center = {
+          lng: primaryLocation.lng,
+          lat: primaryLocation.lat
+        };
+        annotationData.radius = primaryLocation.radius_km || 1.0; // Default 1km radius if not specified
+      } else {
+        // For POI annotations, use position
+        annotationData.position = {
+          lng: primaryLocation.lng,
+          lat: primaryLocation.lat
+        };
+      }
       
       // Create the annotation
       const annotationId = uuidv4();
@@ -1090,7 +1149,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         id: annotationId,
         user_id: userId,
         team_id: teamId,
-        type: annotationType,
+        type: smartAnnotationType, // Use the smart-determined type
         data: annotationData,
         created_at: db.client.fn.now(),
         updated_at: db.client.fn.now()
@@ -1131,7 +1190,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         io.emit('admin:annotation_update', {
           id: annotationId,
           teamId,
-          type: annotationType,
+          type: smartAnnotationType,
           data: annotationData,
           userId,
           userName: 'System (Threat Detection)',
@@ -1144,7 +1203,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         // Include all required fields for polymorphic deserialization
         const clientData = {
           ...annotationData,
-          type: annotationType, // Add discriminator field for Kotlinx Serialization
+          type: smartAnnotationType, // Add discriminator field for Kotlinx Serialization
           id: annotationId, // Ensure ID is in the data object
           creatorId: userId, // Map userId to creatorId
           source: 'server', // Set source to server
@@ -1156,7 +1215,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           io.to(`team:${teamId}`).emit('annotation:update', {
             id: annotationId,
             teamId,
-            type: annotationType,
+            type: smartAnnotationType,
             data: clientData,
             userId,
             userName: 'System (Threat Detection)',
@@ -1169,7 +1228,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           io.to('global').emit('annotation:update', {
             id: annotationId,
             teamId,
-            type: annotationType,
+            type: smartAnnotationType,
             data: clientData,
             userId,
             userName: 'System (Threat Detection)',
@@ -1193,7 +1252,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           id: annotationId,
           user_id: userId,
           team_id: teamId,
-          type: annotationType,
+          type: smartAnnotationType,
           data: annotationData,
           created_at: new Date().toISOString()
         }
