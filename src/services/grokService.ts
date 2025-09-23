@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
+import * as crypto from 'crypto';
 import { DatabaseService } from './database';
 import { SecurityService } from './security';
 import { ConfigService } from './config';
@@ -64,6 +65,41 @@ export interface GeographicalSearch {
   created_by?: string;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface ExistingThreatContext {
+  id: string;
+  threat_level: string;
+  threat_type?: string;
+  summary: string;
+  locations: LocationData[];
+  keywords: string[];
+  confidence_score: number;
+  created_at: string;
+  last_updated_at?: string;
+  update_count: number;
+  citations?: any[];
+}
+
+export interface AIThreatDecision {
+  action: 'new_threat' | 'update_existing' | 'duplicate';
+  threat_id?: string; // For updates
+  threat_data?: ThreatAnalysis; // For new threats
+  update_data?: Partial<ThreatAnalysis>; // For updates
+  reasoning: string;
+  confidence: number;
+}
+
+export interface ThreatUpdateData {
+  threat_level?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  threat_type?: 'VIOLENCE' | 'TERRORISM' | 'NATURAL_DISASTER' | 'CIVIL_UNREST' | 'INFRASTRUCTURE' | 'CYBER' | 'HEALTH_EMERGENCY';
+  confidence_score?: number;
+  summary?: string;
+  locations?: LocationData[];
+  keywords?: string[];
+  reasoning?: string;
+  citations?: any[];
+  new_information?: string[]; // What new information was added
 }
 
 export class GrokService {
@@ -366,169 +402,61 @@ export class GrokService {
           continue; // Retry on parse error
         }
 
-        // Validate and process each analysis
+        // Validate and process each analysis with AI-enhanced deduplication
         const validAnalyses: ThreatAnalysis[] = [];
+        
+        // Get existing threats for AI context (only once per batch)
+        const existingThreats = await this.getCandidateThreats(geographicalArea, 24);
+        
         for (const analysis of analyses) {
           if (this.validateThreatAnalysis(analysis)) {
-            // Check for duplicate threats (same location, similar content, within 24 hours)
-            const isDuplicate = await this.checkForDuplicateThreat(analysis, geographicalArea);
-            if (isDuplicate) {
-              logger.info('Skipping duplicate threat', { 
-                threatLevel: analysis.threat_level,
-                threatType: analysis.threat_type,
-                geographicalArea
-              });
-              continue;
-            }
+            // Use AI to determine if this is a new threat, update, or duplicate
+            const aiDecision = await this.analyzeWithAIContext(analysis, existingThreats, geographicalArea);
             
-            const analysisId = uuidv4();
+            logger.info('AI threat analysis decision', {
+              action: aiDecision.action,
+              confidence: aiDecision.confidence,
+              reasoning: aiDecision.reasoning.substring(0, 100) + '...',
+              threatLevel: analysis.threat_level,
+              threatType: analysis.threat_type
+            });
             
-            // Prepare database insertion data
-            const dbInsertData = {
-              id: analysisId,
-              // Don't include post_id for geographical searches - let database use DEFAULT
-              grok_analysis: response.data,
-              threat_level: analysis.threat_level,
-              threat_type: analysis.threat_type,
-              confidence_score: analysis.confidence_score,
-              ai_summary: analysis.summary,
-              extracted_locations: analysis.locations,
-              keywords: analysis.keywords,
-              search_query: searchQuery || null, // Ensure search_query is not undefined
-              geographical_area: geographicalArea,
-              location_confidence: {
-                average_confidence: analysis.locations?.reduce((acc: number, loc: any) => acc + (loc.confidence || 0), 0) / (analysis.locations?.length || 1),
-                total_locations: analysis.locations?.length || 0
-              },
-              citations: analysis.citations || [], // Store citations for UI display
-              processing_metadata: {
-                model: grokConfig.model,
-                tokens_used: response.data.usage?.total_tokens,
-                processing_time: processingTime,
-                prompt_tokens: response.data.usage?.prompt_tokens,
-                completion_tokens: response.data.usage?.completion_tokens,
-                search_type: 'geographical',
-                attempt: attempt
+            // Process the AI decision
+            const processedThreat = await this.processAIThreatDecision(aiDecision, geographicalArea, searchQuery);
+            
+            if (processedThreat) {
+              validAnalyses.push(processedThreat);
+              
+              // Update existing threats list for subsequent analyses in this batch
+              if (aiDecision.action === 'new_threat') {
+                existingThreats.unshift({
+                  id: processedThreat.id,
+                  threat_level: processedThreat.threat_level,
+                  threat_type: processedThreat.threat_type,
+                  summary: processedThreat.summary,
+                  locations: processedThreat.locations,
+                  keywords: processedThreat.keywords,
+                  confidence_score: processedThreat.confidence_score,
+                  created_at: new Date().toISOString(),
+                  update_count: 0,
+                  citations: processedThreat.citations
+                });
+              } else if (aiDecision.action === 'update_existing') {
+                // Update the existing threat in our context list
+                const existingIndex = existingThreats.findIndex(t => t.id === aiDecision.threat_id);
+                if (existingIndex >= 0) {
+                  existingThreats[existingIndex] = {
+                    ...existingThreats[existingIndex],
+                    ...aiDecision.update_data,
+                    last_updated_at: new Date().toISOString(),
+                    update_count: existingThreats[existingIndex].update_count + 1
+                  };
+                }
               }
-            };
-            
-            // Debug: Log database insertion data structure
-            logger.info('Database insertion data debug', {
-              analysisId,
-              threatLevel: dbInsertData.threat_level,
-              threatType: dbInsertData.threat_type,
-              confidenceScore: dbInsertData.confidence_score,
-              aiSummaryLength: dbInsertData.ai_summary?.length || 0,
-              extractedLocationsCount: dbInsertData.extracted_locations?.length || 0,
-              keywordsCount: dbInsertData.keywords?.length || 0,
-              grokAnalysisKeys: Object.keys(dbInsertData.grok_analysis || {}),
-              locationConfidenceKeys: Object.keys(dbInsertData.location_confidence || {}),
-              processingMetadataKeys: Object.keys(dbInsertData.processing_metadata || {})
-            });
-            
-            // Test JSON serialization of each field
-            try {
-              JSON.stringify(dbInsertData.grok_analysis);
-              logger.info('grok_analysis JSON serialization: OK');
-            } catch (e: any) {
-              logger.error('grok_analysis JSON serialization failed', { error: e.message });
             }
             
-            try {
-              JSON.stringify(dbInsertData.extracted_locations);
-              logger.info('extracted_locations JSON serialization: OK');
-            } catch (e: any) {
-              logger.error('extracted_locations JSON serialization failed', { error: e.message });
-            }
-            
-            try {
-              JSON.stringify(dbInsertData.keywords);
-              logger.info('keywords JSON serialization: OK');
-            } catch (e: any) {
-              logger.error('keywords JSON serialization failed', { error: e.message });
-            }
-            
-            try {
-              JSON.stringify(dbInsertData.location_confidence);
-              logger.info('location_confidence JSON serialization: OK');
-            } catch (e: any) {
-              logger.error('location_confidence JSON serialization failed', { error: e.message });
-            }
-            
-            try {
-              JSON.stringify(dbInsertData.processing_metadata);
-              logger.info('processing_metadata JSON serialization: OK');
-            } catch (e: any) {
-              logger.error('processing_metadata JSON serialization failed', { error: e.message });
-            }
-            
-            // Store analysis in database - explicitly stringify JSONB fields
-            const dbInsertDataStringified = {
-              id: dbInsertData.id,
-              // post_id is now nullable - omit for geographical searches
-              grok_analysis: JSON.stringify(dbInsertData.grok_analysis),
-              threat_level: dbInsertData.threat_level,
-              threat_type: dbInsertData.threat_type,
-              confidence_score: dbInsertData.confidence_score,
-              ai_summary: dbInsertData.ai_summary,
-              extracted_locations: JSON.stringify(dbInsertData.extracted_locations),
-              keywords: JSON.stringify(dbInsertData.keywords),
-              search_query: dbInsertData.search_query, // Keep as null/string, not JSONB
-              geographical_area: dbInsertData.geographical_area,
-              location_confidence: JSON.stringify(dbInsertData.location_confidence),
-              citations: JSON.stringify(dbInsertData.citations), // Store citations as JSONB
-              processing_metadata: JSON.stringify(dbInsertData.processing_metadata)
-            };
-            
-            try {
-              await this.db.client('threat_analyses').insert(dbInsertDataStringified);
-              logger.info('Database insertion successful', { analysisId });
-            } catch (dbError: any) {
-              logger.error('Database insertion failed', { 
-                error: dbError.message,
-                errorCode: dbError.code,
-                analysisId,
-                // Log the problematic data structure
-                dataKeys: Object.keys(dbInsertDataStringified),
-                dataTypes: Object.entries(dbInsertDataStringified).map(([key, value]) => ({
-                  key,
-                  type: typeof value,
-                  isArray: Array.isArray(value),
-                  isObject: value && typeof value === 'object' && !Array.isArray(value)
-                }))
-              });
-              throw dbError;
-            }
-
-            validAnalyses.push({
-              id: analysisId,
-              threat_level: analysis.threat_level,
-              threat_type: analysis.threat_type,
-              confidence_score: analysis.confidence_score,
-              summary: analysis.summary,
-              locations: analysis.locations || [],
-              keywords: analysis.keywords || [],
-              reasoning: analysis.reasoning,
-              source_info: analysis.source_info,
-              citations: analysis.citations || []
-            });
-
-            // Emit real-time notification for new threat
-            if (this.io) {
-              this.io.emit('admin:new_threat_detected', {
-                id: analysisId,
-                threat_level: analysis.threat_level,
-                threat_type: analysis.threat_type,
-                confidence_score: analysis.confidence_score,
-                summary: analysis.summary,
-                locations: analysis.locations || [],
-                keywords: analysis.keywords || [],
-                citations: analysis.citations || [],
-                geographical_area: geographicalArea,
-                search_query: searchQuery,
-                created_at: new Date().toISOString()
-              });
-            }
+            // Skip the old manual deduplication logic - AI handles it now
+            continue;
           }
         }
 
@@ -896,5 +824,444 @@ Return results as a JSON array of threat analyses with complete citations.`;
               Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
+  }
+
+  // Enhanced AI-powered deduplication methods
+
+  /**
+   * Get candidate threats for AI context analysis
+   */
+  private async getCandidateThreats(geographicalArea: string, timeWindowHours: number = 24): Promise<ExistingThreatContext[]> {
+    const timeWindow = new Date(Date.now() - timeWindowHours * 60 * 60 * 1000);
+    
+    const candidates = await this.db.client('threat_analyses')
+      .where('geographical_area', geographicalArea)
+      .where('created_at', '>', timeWindow)
+      .select([
+        'id', 'threat_level', 'threat_type', 'ai_summary', 
+        'extracted_locations', 'keywords', 'citations', 'created_at',
+        'last_updated_at', 'update_count', 'confidence_score'
+      ])
+      .orderBy('created_at', 'desc')
+      .limit(15); // Limit for AI context efficiency
+
+    return candidates.map(threat => ({
+      id: threat.id,
+      threat_level: threat.threat_level,
+      threat_type: threat.threat_type,
+      summary: threat.ai_summary,
+      locations: threat.extracted_locations || [],
+      keywords: threat.keywords || [],
+      confidence_score: threat.confidence_score,
+      created_at: threat.created_at,
+      last_updated_at: threat.last_updated_at,
+      update_count: threat.update_count || 0,
+      citations: threat.citations || []
+    }));
+  }
+
+  /**
+   * Generate semantic hash for quick similarity detection
+   */
+  private generateSemanticHash(threat: any): string {
+    const hashInput = [
+      threat.threat_level,
+      threat.threat_type,
+      threat.summary?.substring(0, 100), // First 100 chars
+      threat.keywords?.join(','),
+      threat.locations?.map((loc: any) => `${loc.lat.toFixed(2)},${loc.lng.toFixed(2)}`).join('|')
+    ].filter(Boolean).join('|');
+    
+    return crypto.createHash('sha256').update(hashInput).digest('hex').substring(0, 16);
+  }
+
+  /**
+   * Analyze new threat with AI context for deduplication and updates
+   */
+  private async analyzeWithAIContext(
+    newAnalysis: any, 
+    existingThreats: ExistingThreatContext[], 
+    geographicalArea: string
+  ): Promise<AIThreatDecision> {
+    const grokConfig = await this.getGrokConfiguration();
+    if (!grokConfig) {
+      throw new Error('No active Grok configuration found');
+    }
+
+    const prompt = this.buildContextualAnalysisPrompt(newAnalysis, existingThreats, geographicalArea);
+    
+    const requestBody = {
+      model: grokConfig.model,
+      messages: [
+        {
+          role: 'system',
+          content: this.getContextualThreatSystemPrompt()
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      search_parameters: {
+        mode: 'auto'
+      },
+      stream: false,
+      temperature: 0.1 // Low temperature for consistent decisions
+    };
+
+    const decryptedApiKey = await this.securityService.decryptApiKey(grokConfig.api_key_encrypted);
+    const cleanApiKey = decryptedApiKey.trim().replace(/[\r\n\t]/g, '');
+    
+    const response = await axios.post('https://api.x.ai/v1/chat/completions', requestBody, {
+      headers: {
+        'Authorization': `Bearer ${cleanApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000
+    });
+
+    const analysisText = response.data.choices[0].message.content;
+    
+    try {
+      const decision = JSON.parse(analysisText);
+      return this.validateAIThreatDecision(decision);
+    } catch (parseError) {
+      logger.error('Failed to parse AI threat decision', { 
+        error: parseError, 
+        response: analysisText 
+      });
+      
+      // Fallback to new threat if parsing fails
+      return {
+        action: 'new_threat',
+        threat_data: newAnalysis,
+        reasoning: 'AI analysis failed, treating as new threat',
+        confidence: 0.5
+      };
+    }
+  }
+
+  /**
+   * Build contextual analysis prompt for AI
+   */
+  private buildContextualAnalysisPrompt(
+    newAnalysis: any, 
+    existingThreats: ExistingThreatContext[], 
+    geographicalArea: string
+  ): string {
+    return `
+Analyze this new threat information against existing known threats in ${geographicalArea}.
+
+NEW THREAT INFORMATION:
+${JSON.stringify(newAnalysis, null, 2)}
+
+EXISTING KNOWN THREATS (last 24 hours):
+${JSON.stringify(existingThreats, null, 2)}
+
+INSTRUCTIONS:
+1. Compare the new information against existing threats
+2. Determine the appropriate action:
+   - "new_threat": Completely different threat not related to any existing ones
+   - "update_existing": Same threat with new/updated information (provide threat_id)
+   - "duplicate": Same threat with no significant new information
+
+3. For "update_existing", provide:
+   - Updated threat level if situation has changed
+   - New location information if more precise
+   - Additional citations and keywords
+   - Updated confidence score
+   - List of new information added
+
+4. Consider:
+   - Geographic proximity (within 5km radius)
+   - Temporal proximity (within 6 hours)
+   - Content similarity (same type of incident)
+   - Threat level changes (escalation/de-escalation)
+
+RESPONSE FORMAT (JSON only):
+{
+  "action": "new_threat|update_existing|duplicate",
+  "threat_id": "uuid-if-updating",
+  "threat_data": { /* complete threat data if new_threat */ },
+  "update_data": { /* partial update data if update_existing */ },
+  "reasoning": "detailed explanation of decision",
+  "confidence": 0.85
+}`;
+  }
+
+  /**
+   * Enhanced system prompt for contextual threat analysis
+   */
+  private getContextualThreatSystemPrompt(): string {
+    return `You are an expert threat analysis AI specializing in deduplication and threat evolution tracking for emergency services.
+
+CRITICAL CAPABILITIES:
+1. Analyze new threat information against existing threats
+2. Determine if threats are duplicates, updates, or new incidents
+3. Identify threat evolution patterns (escalation, de-escalation, location refinement)
+4. Provide detailed reasoning for all decisions
+
+THREAT SIMILARITY CRITERIA:
+- Geographic proximity: Threats within 5km are likely related
+- Temporal proximity: Threats within 6 hours may be the same incident
+- Content similarity: Same threat type, keywords, and description patterns
+- Source overlap: Similar citations or social media sources
+
+THREAT EVOLUTION INDICATORS:
+- Escalation: Threat level increases (LOW→MEDIUM→HIGH→CRITICAL)
+- De-escalation: Threat level decreases or situation resolves
+- Location refinement: More precise coordinates or expanded area
+- Information addition: New citations, witnesses, or details
+- Confidence changes: Based on new evidence or verification
+
+DECISION GUIDELINES:
+- Be conservative with duplicates - only mark as duplicate if very certain
+- Prefer updates over duplicates when new information is available
+- Consider threat evolution patterns and temporal relationships
+- Provide detailed reasoning for transparency and auditability
+
+Always respond with valid JSON in the exact format specified.`;
+  }
+
+  /**
+   * Validate AI threat decision structure
+   */
+  private validateAIThreatDecision(decision: any): AIThreatDecision {
+    const validActions = ['new_threat', 'update_existing', 'duplicate'];
+    
+    if (!validActions.includes(decision.action)) {
+      throw new Error(`Invalid action: ${decision.action}`);
+    }
+    
+    if (decision.action === 'update_existing' && !decision.threat_id) {
+      throw new Error('threat_id required for update_existing action');
+    }
+    
+    if (decision.action === 'new_threat' && !decision.threat_data) {
+      throw new Error('threat_data required for new_threat action');
+    }
+    
+    if (decision.action === 'update_existing' && !decision.update_data) {
+      throw new Error('update_data required for update_existing action');
+    }
+    
+    return {
+      action: decision.action,
+      threat_id: decision.threat_id,
+      threat_data: decision.threat_data,
+      update_data: decision.update_data,
+      reasoning: decision.reasoning || 'No reasoning provided',
+      confidence: Math.max(0, Math.min(1, decision.confidence || 0.5))
+    };
+  }
+
+  /**
+   * Process AI threat decision and take appropriate action
+   */
+  private async processAIThreatDecision(
+    decision: AIThreatDecision, 
+    geographicalArea: string, 
+    searchQuery?: string
+  ): Promise<ThreatAnalysis | null> {
+    switch (decision.action) {
+      case 'new_threat':
+        return await this.createNewThreat(decision.threat_data!, geographicalArea, searchQuery);
+        
+      case 'update_existing':
+        return await this.updateExistingThreat(decision.threat_id!, decision.update_data!, decision.reasoning);
+        
+      case 'duplicate':
+        await this.logDuplicateThreat(decision.reasoning, geographicalArea);
+        return null;
+        
+      default:
+        throw new Error(`Unknown action: ${decision.action}`);
+    }
+  }
+
+  /**
+   * Create new threat with enhanced tracking
+   */
+  private async createNewThreat(
+    threatData: ThreatAnalysis, 
+    geographicalArea: string, 
+    searchQuery?: string
+  ): Promise<ThreatAnalysis> {
+    const analysisId = uuidv4();
+    const semanticHash = this.generateSemanticHash(threatData);
+    
+    const dbInsertData = {
+      id: analysisId,
+      grok_analysis: JSON.stringify(threatData),
+      threat_level: threatData.threat_level,
+      threat_type: threatData.threat_type,
+      confidence_score: threatData.confidence_score,
+      ai_summary: threatData.summary,
+      extracted_locations: JSON.stringify(threatData.locations),
+      keywords: JSON.stringify(threatData.keywords),
+      search_query: searchQuery || null,
+      geographical_area: geographicalArea,
+      location_confidence: JSON.stringify({
+        average_confidence: threatData.locations?.reduce((acc: number, loc: any) => acc + (loc.confidence || 0), 0) / (threatData.locations?.length || 1),
+        total_locations: threatData.locations?.length || 0
+      }),
+      citations: JSON.stringify(threatData.citations || []),
+      semantic_hash: semanticHash,
+      update_count: 0,
+      last_updated_at: new Date(),
+      processing_metadata: JSON.stringify({
+        model: 'grok-4-fast-reasoning-latest',
+        search_type: 'geographical',
+        ai_decision: 'new_threat'
+      })
+    };
+    
+    await this.db.client('threat_analyses').insert(dbInsertData);
+    
+    logger.info('Created new threat with AI-enhanced deduplication', { 
+      analysisId, 
+      threatLevel: threatData.threat_level,
+      geographicalArea 
+    });
+    
+    // Emit real-time notification
+    if (this.io) {
+      this.io.emit('admin:new_threat_detected', {
+        id: analysisId,
+        threat_level: threatData.threat_level,
+        threat_type: threatData.threat_type,
+        confidence_score: threatData.confidence_score,
+        summary: threatData.summary,
+        locations: threatData.locations || [],
+        keywords: threatData.keywords || [],
+        citations: threatData.citations || [],
+        geographical_area: geographicalArea,
+        search_query: searchQuery,
+        created_at: new Date().toISOString()
+      });
+    }
+    
+    return threatData;
+  }
+
+  /**
+   * Update existing threat with new information
+   */
+  private async updateExistingThreat(
+    threatId: string, 
+    updateData: ThreatUpdateData, 
+    reasoning: string
+  ): Promise<ThreatAnalysis | null> {
+    try {
+      // Get current threat data
+      const currentThreat = await this.db.client('threat_analyses')
+        .where('id', threatId)
+        .first();
+      
+      if (!currentThreat) {
+        logger.warn('Attempted to update non-existent threat', { threatId });
+        return null;
+      }
+      
+      // Prepare update data
+      const updateFields: any = {
+        last_updated_at: new Date(),
+        last_update_reasoning: reasoning
+      };
+      
+      // Update fields if provided
+      if (updateData.threat_level) updateFields.threat_level = updateData.threat_level;
+      if (updateData.threat_type) updateFields.threat_type = updateData.threat_type;
+      if (updateData.confidence_score !== undefined) updateFields.confidence_score = updateData.confidence_score;
+      if (updateData.summary) updateFields.ai_summary = updateData.summary;
+      if (updateData.locations) updateFields.extracted_locations = JSON.stringify(updateData.locations);
+      if (updateData.keywords) updateFields.keywords = JSON.stringify(updateData.keywords);
+      if (updateData.citations) updateFields.citations = JSON.stringify(updateData.citations);
+      
+      // Increment update count
+      updateFields.update_count = (currentThreat.update_count || 0) + 1;
+      
+      // Create update history entry
+      const updateHistory = {
+        timestamp: new Date().toISOString(),
+        reasoning: reasoning,
+        changes: updateData,
+        new_information: updateData.new_information || []
+      };
+      
+      // Merge with existing update history
+      const existingHistory = currentThreat.update_history || [];
+      updateFields.update_history = JSON.stringify([...existingHistory, updateHistory]);
+      
+      // Update semantic hash if key fields changed
+      if (updateData.threat_level || updateData.threat_type || updateData.summary || updateData.keywords) {
+        const updatedThreat = { ...currentThreat, ...updateFields };
+        updateFields.semantic_hash = this.generateSemanticHash(updatedThreat);
+      }
+      
+      // Perform database update
+      await this.db.client('threat_analyses')
+        .where('id', threatId)
+        .update(updateFields);
+      
+      logger.info('Updated existing threat with new information', { 
+        threatId, 
+        updateCount: updateFields.update_count,
+        changes: Object.keys(updateData),
+        reasoning: reasoning.substring(0, 100) + '...'
+      });
+      
+      // Emit real-time notification for threat update
+      if (this.io) {
+        this.io.emit('admin:threat_updated', {
+          id: threatId,
+          threat_level: updateData.threat_level || currentThreat.threat_level,
+          threat_type: updateData.threat_type || currentThreat.threat_type,
+          confidence_score: updateData.confidence_score || currentThreat.confidence_score,
+          summary: updateData.summary || currentThreat.ai_summary,
+          update_reasoning: reasoning,
+          update_count: updateFields.update_count,
+          updated_at: new Date().toISOString()
+        });
+      }
+      
+      // Return updated threat data
+      const updatedThreat = await this.db.client('threat_analyses')
+        .where('id', threatId)
+        .first();
+      
+      return {
+        id: updatedThreat.id,
+        threat_level: updatedThreat.threat_level,
+        threat_type: updatedThreat.threat_type,
+        confidence_score: updatedThreat.confidence_score,
+        summary: updatedThreat.ai_summary,
+        locations: updatedThreat.extracted_locations || [],
+        keywords: updatedThreat.keywords || [],
+        reasoning: reasoning,
+        citations: updatedThreat.citations || []
+      };
+      
+    } catch (error: any) {
+      logger.error('Failed to update existing threat', { 
+        threatId, 
+        error: error.message,
+        updateData 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Log duplicate threat for audit purposes
+   */
+  private async logDuplicateThreat(reasoning: string, geographicalArea: string): Promise<void> {
+    logger.info('AI determined threat is duplicate, skipping', { 
+      reasoning: reasoning.substring(0, 200) + '...',
+      geographicalArea,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Could add to a separate duplicates log table if needed for analytics
   }
 }

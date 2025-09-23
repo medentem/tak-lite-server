@@ -619,6 +619,17 @@ function handleThreatDeleted(data) {
   loadThreats();
 }
 
+function handleThreatUpdated(data) {
+  addActivityLog(`Threat updated: ${data.threat_level} ${data.threat_type} (Update #${data.update_count})`, 'info');
+  
+  // Show notification with update reasoning
+  const reasoning = data.update_reasoning ? data.update_reasoning.substring(0, 100) + '...' : 'No reasoning provided';
+  showMessage(`Threat updated: ${data.threat_level} ${data.threat_type}`, 'info', 5000);
+  
+  // Refresh threats list
+  loadThreats();
+}
+
 // WebSocket connection management
 function connectWebSocket() {
   // Check if Socket.IO library is loaded first
@@ -758,6 +769,10 @@ function connectWebSocket() {
     // Listen for threat deleted events
     socket.on('admin:threat_deleted', (data) => {
       handleThreatDeleted(data);
+    });
+    
+    socket.on('admin:threat_updated', (data) => {
+      handleThreatUpdated(data);
     });
     
   } catch (error) {
