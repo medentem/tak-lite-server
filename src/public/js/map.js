@@ -853,9 +853,14 @@ class AdminMap {
     
     // Clear existing segments but keep center hole
     const centerHole = this.fanMenu.querySelector('.fan-menu-center');
+    const existingSegments = this.fanMenu.querySelector('.fan-menu-segments-container');
+    
     this.fanMenu.innerHTML = '';
     if (centerHole) {
       this.fanMenu.appendChild(centerHole);
+    }
+    if (existingSegments) {
+      existingSegments.remove();
     }
     
     // Get map coordinates for center text
@@ -923,10 +928,30 @@ class AdminMap {
     const innerRadius = 65; // Half of 130px center hole
     const outerRadius = 100; // Ring thickness
     const gapAngle = 4; // Degrees between segments
-    
+
     const totalAngle = 360 - (options.length * gapAngle);
     const segmentAngle = totalAngle / options.length;
+
+    // Create a single SVG container for all segments
+    const svgContainer = document.createElement('div');
+    svgContainer.className = 'fan-menu-segments-container';
+    svgContainer.style.position = 'absolute';
+    svgContainer.style.top = '0';
+    svgContainer.style.left = '0';
+    svgContainer.style.width = '300px';
+    svgContainer.style.height = '300px';
     
+    const svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svgElement.setAttribute('width', '300');
+    svgElement.setAttribute('height', '300');
+    svgElement.setAttribute('viewBox', '0 0 300 300');
+    svgElement.style.position = 'absolute';
+    svgElement.style.top = '0';
+    svgElement.style.left = '0';
+    
+    svgContainer.appendChild(svgElement);
+    
+    // Create all paths and icons
     options.forEach((option, index) => {
       const startAngle = (index * (segmentAngle + gapAngle)) - 90; // Start from top
       const endAngle = startAngle + segmentAngle;
@@ -949,38 +974,51 @@ class AdminMap {
         iconX, iconY
       });
       
-      // Create segment element
-      const segmentEl = document.createElement('div');
-      segmentEl.className = 'fan-menu-segment';
-      segmentEl.innerHTML = `
-        <svg width="300" height="300" viewBox="0 0 300 300" style="position: absolute; top: 0; left: 0; pointer-events: none;">
-          <path d="${pathData}" style="pointer-events: auto;" />
-        </svg>
-        <div class="fan-menu-segment-icon ${option.iconClass}" style="position: absolute; left: ${iconX}px; top: ${iconY}px; transform: translate(-50%, -50%);"></div>
-      `;
+      // Create path element
+      const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      pathElement.setAttribute('d', pathData);
+      pathElement.setAttribute('data-option-type', option.type);
+      pathElement.setAttribute('data-option-index', index.toString());
+      pathElement.style.fill = 'rgba(0, 0, 0, 0.8)';
+      pathElement.style.stroke = 'white';
+      pathElement.style.strokeWidth = '3';
+      pathElement.style.transition = 'all 0.2s ease';
+      pathElement.style.cursor = 'pointer';
       
-      // Add click handler
-      segmentEl.addEventListener('click', (e) => {
+      // Add click handler to path
+      pathElement.addEventListener('click', (e) => {
         e.stopPropagation();
+        console.log('Clicked on option:', option.type);
         this.handleFanMenuOption(option.type, point);
       });
       
       // Add hover handlers for proper hover effects
-      const pathElement = segmentEl.querySelector('path');
-      if (pathElement) {
-        pathElement.addEventListener('mouseenter', () => {
-          pathElement.style.fill = 'rgba(0, 0, 0, 0.9)';
-          pathElement.style.stroke = 'rgba(255, 255, 255, 0.9)';
-        });
-        
-        pathElement.addEventListener('mouseleave', () => {
-          pathElement.style.fill = '';
-          pathElement.style.stroke = '';
-        });
-      }
+      pathElement.addEventListener('mouseenter', () => {
+        console.log('Hovering over option:', option.type);
+        pathElement.style.fill = 'rgba(0, 0, 0, 0.9)';
+        pathElement.style.stroke = 'rgba(255, 255, 255, 0.9)';
+      });
       
-      this.fanMenu.appendChild(segmentEl);
+      pathElement.addEventListener('mouseleave', () => {
+        pathElement.style.fill = 'rgba(0, 0, 0, 0.8)';
+        pathElement.style.stroke = 'white';
+      });
+      
+      svgElement.appendChild(pathElement);
+      
+      // Create icon element
+      const iconElement = document.createElement('div');
+      iconElement.className = `fan-menu-segment-icon ${option.iconClass}`;
+      iconElement.style.position = 'absolute';
+      iconElement.style.left = `${iconX}px`;
+      iconElement.style.top = `${iconY}px`;
+      iconElement.style.transform = 'translate(-50%, -50%)';
+      iconElement.style.pointerEvents = 'none';
+      
+      svgContainer.appendChild(iconElement);
     });
+    
+    this.fanMenu.appendChild(svgContainer);
   }
   
   createDonutSegmentPath(centerX, centerY, innerRadius, outerRadius, startAngle, endAngle) {
@@ -1015,9 +1053,14 @@ class AdminMap {
       this.fanMenu.classList.remove('visible');
       // Clear segments but keep center hole structure
       const centerHole = this.fanMenu.querySelector('.fan-menu-center');
+      const segmentsContainer = this.fanMenu.querySelector('.fan-menu-segments-container');
+      
       this.fanMenu.innerHTML = '';
       if (centerHole) {
         this.fanMenu.appendChild(centerHole);
+      }
+      if (segmentsContainer) {
+        segmentsContainer.remove();
       }
     }
     
