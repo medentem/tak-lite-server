@@ -39,6 +39,45 @@ import { createSocialMediaRouter } from './routes/socialMedia';
 // Load environment variables
 dotenv.config();
 
+// Service configuration validation
+async function validateServiceConfiguration(
+  databaseService: DatabaseService, 
+  configService: ConfigService, 
+  securityService: SecurityService
+): Promise<void> {
+  try {
+    logger.info('Starting service configuration validation...');
+    
+    // Validate database connection
+    await databaseService.client.raw('SELECT 1');
+    logger.info('Database connection validated');
+    
+    // Validate encryption key
+    const encryptionKey = await securityService.getEncryptionKey();
+    if (encryptionKey && encryptionKey.length >= 32) {
+      logger.info('Encryption key validated');
+    } else {
+      logger.error('Invalid encryption key');
+      throw new Error('Invalid encryption key');
+    }
+    
+    // Validate basic configuration
+    const corsOrigin = await configService.get<string>('security.cors_origin');
+    const orgName = await configService.get<string>('org.name');
+    const retention = await configService.get<number>('features.retention_days');
+    
+    logger.info('Configuration validation complete', {
+      hasCorsOrigin: !!corsOrigin,
+      hasOrgName: !!orgName,
+      retentionDays: retention || 0
+    });
+    
+  } catch (error) {
+    logger.error('Service configuration validation failed', { error });
+    throw error;
+  }
+}
+
 const app = express();
 const server = createServer(app);
 // WebSocket CORS will be configured dynamically in the socket service
@@ -307,34 +346,74 @@ app.use(errorHandler);
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
   
+  // Stop social media monitoring first
+  try {
+    if (socialMediaService) {
+      await socialMediaService.shutdown();
+      logger.info('Social media service shutdown complete');
+    }
+  } catch (error) {
+    logger.error('Error shutting down social media service', { error });
+  }
+  
+  // Stop retention service
+  try {
+    retentionService.stop();
+    logger.info('Retention service stopped');
+  } catch (error) {
+    logger.error('Error stopping retention service', { error });
+  }
+  
   // Close server
   server.close(() => {
     logger.info('HTTP server closed');
   });
-
-  // Shutdown social media monitoring
-  await socialMediaService.shutdown();
-
+  
   // Close database connections
-  await databaseService.close();
-
+  try {
+    await databaseService.close();
+    logger.info('Database connections closed');
+  } catch (error) {
+    logger.error('Error closing database connections', { error });
+  }
+  
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully');
   
+  // Stop social media monitoring first
+  try {
+    if (socialMediaService) {
+      await socialMediaService.shutdown();
+      logger.info('Social media service shutdown complete');
+    }
+  } catch (error) {
+    logger.error('Error shutting down social media service', { error });
+  }
+  
+  // Stop retention service
+  try {
+    retentionService.stop();
+    logger.info('Retention service stopped');
+  } catch (error) {
+    logger.error('Error stopping retention service', { error });
+  }
+  
   // Close server
   server.close(() => {
     logger.info('HTTP server closed');
   });
-
-  // Shutdown social media monitoring
-  await socialMediaService.shutdown();
-
+  
   // Close database connections
-  await databaseService.close();
-
+  try {
+    await databaseService.close();
+    logger.info('Database connections closed');
+  } catch (error) {
+    logger.error('Error closing database connections', { error });
+  }
+  
   process.exit(0);
 });
 
@@ -351,13 +430,47 @@ process.on('SIGINT', async () => {
     } catch (error) {
       logger.error('Failed to initialize encryption key', { error });
     }
+
+    // Validate service configuration
+    await validateServiceConfiguration(databaseService, configService, securityService);
     
     // Initialize social media services after migrations
     socialMediaConfigService = new SocialMediaConfigService(databaseService);
     socialMediaService = new SocialMediaMonitoringService(databaseService, syncService, socialMediaConfigService, io);
     
+    // Start health monitoring for social media service
+    socialMediaService.startHealthMonitoring();
+    socialMediaService.startRecoveryMonitoring();
+    
+    // Make services available globally for status endpoint
+    (global as any).socialMediaService = socialMediaService;
+    (global as any).retentionService = retentionService;
+    
     // Register social media routes after services are initialized
     app.use('/api/social-media', auth.authenticate, auth.adminOnly, createSocialMediaRouter(databaseService, socialMediaService, socialMediaConfigService));
+    
+    // Auto-start monitors if configured
+    try {
+      const serviceConfig = await socialMediaConfigService.getServiceConfig();
+      if (serviceConfig.service_enabled && serviceConfig.auto_start_monitors) {
+        logger.info('Auto-starting geographical monitors...');
+        const result = await socialMediaService.startAllMonitors();
+        logger.info('Auto-started monitors', { 
+          started: result.started, 
+          failed: result.failed, 
+          errors: result.errors 
+        });
+      } else {
+        logger.info('Auto-start disabled or service disabled', { 
+          serviceEnabled: serviceConfig.service_enabled,
+          autoStart: serviceConfig.auto_start_monitors 
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to auto-start monitors', { error });
+      // Don't fail server startup - just log the error
+    }
+    
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, () => {
       logger.info(`TAK Lite Server running on port ${PORT}`);

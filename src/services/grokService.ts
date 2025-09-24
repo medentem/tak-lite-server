@@ -110,31 +110,64 @@ export class GrokService {
     this.securityService = new SecurityService(configService);
   }
 
-  async createGrokConfiguration(configData: Partial<GrokConfiguration>, createdBy: string): Promise<GrokConfiguration> {
-    const id = uuidv4();
-    const encryptedApiKey = await this.securityService.encryptApiKey(configData.api_key_encrypted!);
+  // Retry logic for critical operations
+  private async withRetry<T>(
+    operation: () => Promise<T>, 
+    maxRetries: number = 3,
+    delay: number = 1000
+  ): Promise<T> {
+    let lastError: any;
     
-    const config: GrokConfiguration = {
-      id,
-      api_key_encrypted: encryptedApiKey,
-      model: configData.model || 'grok-4-fast-reasoning-latest',
-      search_enabled: configData.search_enabled !== false,
-      is_active: configData.is_active !== false,
-      created_by: createdBy,
-      created_at: new Date(),
-      updated_at: new Date()
-    };
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+        if (attempt === maxRetries) break;
+        
+        logger.warn(`Operation failed, retrying in ${delay}ms`, { 
+          attempt, 
+          maxRetries, 
+          error: (error as Error).message 
+        });
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2; // Exponential backoff
+      }
+    }
+    
+    throw lastError;
+  }
 
-    await this.db.client('grok_configurations').insert(config);
-    
-    logger.info('Created Grok configuration', { id, model: config.model });
-    return config;
+  async createGrokConfiguration(configData: Partial<GrokConfiguration>, createdBy: string): Promise<GrokConfiguration> {
+    return await this.withRetry(async () => {
+      const id = uuidv4();
+      const encryptedApiKey = await this.securityService.encryptApiKey(configData.api_key_encrypted!);
+      
+      const config: GrokConfiguration = {
+        id,
+        api_key_encrypted: encryptedApiKey,
+        model: configData.model || 'grok-4-fast-reasoning-latest',
+        search_enabled: configData.search_enabled !== false,
+        is_active: configData.is_active !== false,
+        created_by: createdBy,
+        created_at: new Date(),
+        updated_at: new Date()
+      };
+
+      await this.db.client('grok_configurations').insert(config);
+      
+      logger.info('Created Grok configuration', { id, model: config.model });
+      return config;
+    });
   }
 
   async getGrokConfiguration(): Promise<GrokConfiguration | null> {
-    return await this.db.client('grok_configurations')
-      .where({ is_active: true })
-      .first() || null;
+    return await this.withRetry(async () => {
+      return await this.db.client('grok_configurations')
+        .where({ is_active: true })
+        .first() || null;
+    });
   }
 
   async updateGrokConfiguration(configId: string, updates: Partial<GrokConfiguration>): Promise<GrokConfiguration> {

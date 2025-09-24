@@ -8,6 +8,7 @@ import { DatabaseService } from '../services/database';
 import Joi from 'joi';
 import { ConfigService } from '../services/config';
 import { AuditService } from '../services/audit';
+import { logger } from '../utils/logger';
 const bcrypt = require('bcryptjs');
 import { v4 as uuidv4 } from 'uuid';
 
@@ -20,6 +21,72 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
     const orgName = await config.get<string>('org.name');
     const retention = await config.get<number>('features.retention_days');
     res.json({ corsOrigin: corsOrigin || '', orgName: orgName || '', retentionDays: retention || 0 });
+  });
+
+  // Service status endpoint
+  router.get('/service-status', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const status = {
+        server: {
+          uptime: process.uptime(),
+          memory: process.memoryUsage(),
+          version: process.version,
+          platform: process.platform,
+          arch: process.arch
+        },
+        database: {
+          connected: true, // We'll add actual connection check
+          lastCheck: new Date().toISOString()
+        },
+        socialMedia: {
+          serviceEnabled: false,
+          activeMonitors: 0,
+          totalMonitors: 0,
+          healthMonitoring: false,
+          recoveryMonitoring: false
+        },
+        retention: {
+          running: false,
+          lastRun: 'N/A'
+        },
+        websockets: {
+          connectedClients: 0,
+          lastActivity: new Date().toISOString()
+        }
+      };
+
+      // Get social media service status if available
+      try {
+        // We'll get this from the global service instance
+        const socialMediaService = (global as any).socialMediaService;
+        if (socialMediaService) {
+          const socialMediaStatus = await socialMediaService.getServiceStatus();
+          status.socialMedia = {
+            ...status.socialMedia,
+            ...socialMediaStatus,
+            healthMonitoring: socialMediaService.healthCheckInterval !== null,
+            recoveryMonitoring: socialMediaService.recoveryInterval !== null
+          };
+        }
+      } catch (error) {
+        logger.warn('Failed to get social media service status', { error });
+      }
+
+      // Get retention service status
+      const retentionService = (global as any).retentionService;
+      if (retentionService) {
+        status.retention.running = retentionService.task !== null;
+      }
+
+      // Get WebSocket status
+      if (io) {
+        status.websockets.connectedClients = io.engine.clientsCount;
+      }
+
+      res.json(status);
+    } catch (err) { 
+      next(err); 
+    }
   });
 
   router.put('/config', async (req: Request, res: Response, next: NextFunction) => {

@@ -234,9 +234,20 @@
         border-radius:50%; 
         display:inline-block; 
         margin-right:8px;
+        transition: all 0.3s ease;
       }
-      .status-indicator.active { background:var(--ok); }
-      .status-indicator.inactive { background:var(--bad); }
+      .status-indicator.active { 
+        background:var(--ok); 
+        box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+      }
+      .status-indicator.inactive { 
+        background:var(--bad); 
+        box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+      }
+      .status-indicator.warning { 
+        background:var(--warning); 
+        box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+      }
       
       /* Responsive */
       @media (max-width: 768px) {
@@ -279,7 +290,8 @@
         <div class="card" style="margin-bottom: 20px;">
           <h2>Social Media Monitoring Setup</h2>
           <div class="help-text">
-            <strong>Configure AI-powered threat detection</strong> for geographical areas using Grok AI.<br>
+            <strong>Configure AI-powered threat detection</strong> for geographical areas using Grok AI with automatic health monitoring and recovery.<br>
+            <strong>Features:</strong> Auto-start monitors, health monitoring, recovery mechanisms, and real-time status updates.<br>
             <strong>Note:</strong> Threat review and management is handled in the <a href="/admin" style="color: var(--accent);">Admin Dashboard</a>.
           </div>
         </div>
@@ -308,12 +320,41 @@
               <div class="value" id="service-posts-today">0</div>
               <div class="label">Posts Today</div>
             </div>
+            <div class="kpi">
+              <div class="value" id="service-health-status">Unknown</div>
+              <div class="label">Health Status</div>
+            </div>
           </div>
           
-          <div style="display:flex; gap:12px;">
+          <!-- Enhanced Service Status Details -->
+          <div id="service-health-details" style="margin-bottom:20px; padding:16px; background:#0d1b34; border-radius:8px; border:1px solid #223056;">
+            <h3 style="margin:0 0 12px; font-size:14px; color:#cbd5e1;">Service Health Monitoring</h3>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div id="health-monitoring-indicator" class="status-indicator inactive"></div>
+                <span style="font-size:12px; color:var(--muted);">Health Monitoring</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div id="recovery-monitoring-indicator" class="status-indicator inactive"></div>
+                <span style="font-size:12px; color:var(--muted);">Recovery Monitoring</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div id="database-status-indicator" class="status-indicator inactive"></div>
+                <span style="font-size:12px; color:var(--muted);">Database</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div id="ai-service-indicator" class="status-indicator inactive"></div>
+                <span style="font-size:12px; color:var(--muted);">AI Service</span>
+              </div>
+            </div>
+          </div>
+          
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
             <button onclick="startAllMonitors()" class="secondary" id="start-all-btn" disabled>Start All Monitors</button>
             <button onclick="stopAllMonitors()" class="danger" id="stop-all-btn" disabled>Stop All Monitors</button>
             <button onclick="showServiceConfigModal()" class="secondary">Service Settings</button>
+            <button onclick="refreshServiceStatus()" class="secondary">Refresh Status</button>
+            <button onclick="showServiceStatusModal()" class="secondary">Detailed Status</button>
           </div>
         </div>
 
@@ -445,9 +486,9 @@
           </div>
           
           <div class="form-group">
-            <label>Max Monitors per Team</label>
-            <input type="number" name="max_monitors_per_team" value="5" min="1" max="20">
-            <div class="help-text">Limit the number of monitors each team can create</div>
+            <label>Max Geographical Monitors</label>
+            <input type="number" name="max_monitors_per_team" value="10" min="1" max="50">
+            <div class="help-text">Maximum number of geographical monitors that can be active simultaneously</div>
           </div>
           
           <div class="form-group">
@@ -457,9 +498,9 @@
           </div>
           
           <div class="form-group">
-            <label>Max Posts per Hour</label>
-            <input type="number" name="max_posts_per_hour" value="1000" min="100" max="10000">
-            <div class="help-text">Rate limit for API calls to prevent excessive usage</div>
+            <label>Grok API Rate Limit (requests per hour)</label>
+            <input type="number" name="max_posts_per_hour" value="100" min="10" max="1000">
+            <div class="help-text">Maximum Grok API requests per hour to manage costs and rate limits</div>
           </div>
           
           <div class="form-actions">
@@ -469,12 +510,32 @@
       </div>
     </div>
 
+    <!-- Detailed Service Status Modal -->
+    <div id="service-status-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-header">
+          <h3>Detailed Service Status</h3>
+          <button class="close" onclick="closeModal()">&times;</button>
+        </div>
+        
+        <div id="detailed-service-status">
+          <!-- Detailed status will be loaded here -->
+        </div>
+        
+        <div class="form-actions">
+          <button onclick="refreshServiceStatus()" class="secondary">Refresh Status</button>
+          <button onclick="closeModal()" class="secondary">Close</button>
+        </div>
+      </div>
+    </div>
+
     <script>
       // Global state
       let geographicalMonitors = [];
       let aiConfig = null;
       let serviceStatus = null;
       let serviceConfig = null;
+      let statusRefreshInterval = null;
 
       // Check authentication
       function checkAuth() {
@@ -514,6 +575,9 @@
         document.getElementById('geographical-monitor-form').addEventListener('submit', handleGeographicalMonitorSubmit);
         document.getElementById('ai-config-form').addEventListener('submit', handleAIConfigSubmit);
         document.getElementById('service-config-form').addEventListener('submit', handleServiceConfigSubmit);
+        
+        // Start auto-refresh for service status
+        startStatusAutoRefresh();
       });
 
       // API functions
@@ -551,6 +615,17 @@
         } catch (error) {
           console.error('Failed to load service status:', error);
           showError('Failed to load service status: ' + error.message);
+        }
+      }
+
+      // Load detailed service status
+      async function loadDetailedServiceStatus() {
+        try {
+          const data = await apiCall('/api/admin/service-status');
+          return data;
+        } catch (error) {
+          console.error('Failed to load detailed service status:', error);
+          return null;
         }
       }
 
@@ -595,6 +670,48 @@
         document.getElementById('service-active-monitors').textContent = serviceStatus.active_monitors;
         document.getElementById('service-total-monitors').textContent = serviceStatus.total_monitors;
         document.getElementById('service-posts-today').textContent = serviceStatus.posts_processed_today;
+        
+        // Update health status
+        const healthStatus = serviceStatus.health_status || 'Unknown';
+        document.getElementById('service-health-status').textContent = healthStatus;
+        
+        // Update health monitoring indicators
+        updateHealthIndicators(serviceStatus);
+      }
+
+      // Update health monitoring indicators
+      function updateHealthIndicators(status) {
+        // Health monitoring status
+        const healthMonitoringIndicator = document.getElementById('health-monitoring-indicator');
+        if (status.health_monitoring) {
+          healthMonitoringIndicator.className = 'status-indicator active';
+        } else {
+          healthMonitoringIndicator.className = 'status-indicator inactive';
+        }
+
+        // Recovery monitoring status
+        const recoveryMonitoringIndicator = document.getElementById('recovery-monitoring-indicator');
+        if (status.recovery_monitoring) {
+          recoveryMonitoringIndicator.className = 'status-indicator active';
+        } else {
+          recoveryMonitoringIndicator.className = 'status-indicator inactive';
+        }
+
+        // Database status
+        const databaseStatusIndicator = document.getElementById('database-status-indicator');
+        if (status.database_connected) {
+          databaseStatusIndicator.className = 'status-indicator active';
+        } else {
+          databaseStatusIndicator.className = 'status-indicator inactive';
+        }
+
+        // AI service status
+        const aiServiceIndicator = document.getElementById('ai-service-indicator');
+        if (status.ai_service_available) {
+          aiServiceIndicator.className = 'status-indicator active';
+        } else {
+          aiServiceIndicator.className = 'status-indicator inactive';
+        }
       }
 
       // Legacy monitor functions removed - use geographical monitoring instead
@@ -920,9 +1037,105 @@
         form.querySelector('[name="auto_start_monitors"]').checked = serviceConfig.auto_start_monitors;
         form.querySelector('[name="max_monitors_per_team"]').value = serviceConfig.max_monitors_per_team;
         form.querySelector('[name="default_monitoring_interval"]').value = serviceConfig.default_monitoring_interval;
-        form.querySelector('[name="max_posts_per_hour"]').value = serviceConfig.service_settings.max_posts_per_hour;
+        form.querySelector('[name="max_posts_per_hour"]').value = serviceConfig.service_settings?.max_posts_per_hour || 100;
         
         document.getElementById('service-config-modal').classList.remove('hidden');
+      }
+
+      // Show detailed service status modal
+      async function showServiceStatusModal() {
+        try {
+          const detailedStatus = await loadDetailedServiceStatus();
+          if (!detailedStatus) {
+            showError('Failed to load detailed service status');
+            return;
+          }
+          
+          renderDetailedServiceStatus(detailedStatus);
+          document.getElementById('service-status-modal').classList.remove('hidden');
+        } catch (error) {
+          showError('Failed to load detailed service status: ' + error.message);
+        }
+      }
+
+      // Render detailed service status
+      function renderDetailedServiceStatus(status) {
+        const container = document.getElementById('detailed-service-status');
+        
+        container.innerHTML = `
+          <div class="grid" style="margin-bottom: 20px;">
+            <div class="card" style="padding: 16px;">
+              <h3 style="margin: 0 0 12px;">System Health</h3>
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <div class="status-indicator ${status.system.healthy ? 'active' : 'inactive'}"></div>
+                <span>Overall Health: ${status.system.healthy ? 'Healthy' : 'Unhealthy'}</span>
+              </div>
+              <div style="font-size: 12px; color: var(--muted);">
+                Uptime: ${status.system.uptime || 'Unknown'}
+              </div>
+            </div>
+            
+            <div class="card" style="padding: 16px;">
+              <h3 style="margin: 0 0 12px;">Database</h3>
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <div class="status-indicator ${status.database.connected ? 'active' : 'inactive'}"></div>
+                <span>Connection: ${status.database.connected ? 'Connected' : 'Disconnected'}</span>
+              </div>
+              <div style="font-size: 12px; color: var(--muted);">
+                Pool: ${status.database.pool?.active || 0}/${status.database.pool?.total || 0}
+              </div>
+            </div>
+          </div>
+          
+          <div class="card" style="padding: 16px; margin-bottom: 20px;">
+            <h3 style="margin: 0 0 12px;">Social Media Service</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="status-indicator ${status.socialMedia?.enabled ? 'active' : 'inactive'}"></div>
+                <span>Service: ${status.socialMedia?.enabled ? 'Enabled' : 'Disabled'}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="status-indicator ${status.socialMedia?.healthMonitoring ? 'active' : 'inactive'}"></div>
+                <span>Health Monitoring: ${status.socialMedia?.healthMonitoring ? 'Active' : 'Inactive'}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="status-indicator ${status.socialMedia?.recoveryMonitoring ? 'active' : 'inactive'}"></div>
+                <span>Recovery: ${status.socialMedia?.recoveryMonitoring ? 'Active' : 'Inactive'}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="status-indicator ${status.socialMedia?.aiService ? 'active' : 'inactive'}"></div>
+                <span>AI Service: ${status.socialMedia?.aiService ? 'Available' : 'Unavailable'}</span>
+              </div>
+            </div>
+            <div style="margin-top: 12px; font-size: 12px; color: var(--muted);">
+              Active Monitors: ${status.socialMedia?.activeMonitors || 0} | 
+              Total Monitors: ${status.socialMedia?.totalMonitors || 0} | 
+              Posts Today: ${status.socialMedia?.postsToday || 0}
+            </div>
+          </div>
+          
+          <div class="card" style="padding: 16px;">
+            <h3 style="margin: 0 0 12px;">Retention Service</h3>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <div class="status-indicator ${status.retention?.running ? 'active' : 'inactive'}"></div>
+              <span>Service: ${status.retention?.running ? 'Running' : 'Stopped'}</span>
+            </div>
+            <div style="font-size: 12px; color: var(--muted);">
+              Last Run: ${status.retention?.lastRun || 'Never'} | 
+              Next Run: ${status.retention?.nextRun || 'Unknown'}
+            </div>
+          </div>
+        `;
+      }
+
+      // Refresh service status
+      async function refreshServiceStatus() {
+        try {
+          await loadServiceStatus();
+          showSuccess('Service status refreshed');
+        } catch (error) {
+          showError('Failed to refresh service status: ' + error.message);
+        }
       }
 
       async function handleServiceConfigSubmit(e) {
@@ -951,6 +1164,30 @@
           showError('Failed to update service configuration: ' + error.message);
         }
       }
+
+      // Auto-refresh functionality
+      function startStatusAutoRefresh() {
+        // Refresh service status every 30 seconds
+        statusRefreshInterval = setInterval(async () => {
+          try {
+            await loadServiceStatus();
+          } catch (error) {
+            console.warn('Auto-refresh failed:', error);
+          }
+        }, 30000);
+      }
+
+      function stopStatusAutoRefresh() {
+        if (statusRefreshInterval) {
+          clearInterval(statusRefreshInterval);
+          statusRefreshInterval = null;
+        }
+      }
+
+      // Clean up on page unload
+      window.addEventListener('beforeunload', () => {
+        stopStatusAutoRefresh();
+      });
 
       // Close modals when clicking outside
       document.addEventListener('click', function(e) {

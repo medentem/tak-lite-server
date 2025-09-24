@@ -9,6 +9,8 @@ import { logger } from '../utils/logger';
 
 export class SocialMediaMonitoringService {
   private activeGeographicalSearches = new Map<string, NodeJS.Timeout>();
+  private healthCheckInterval: NodeJS.Timeout | null = null;
+  private recoveryInterval: NodeJS.Timeout | null = null;
   private grokService: GrokService;
   
   constructor(
@@ -428,8 +430,72 @@ export class SocialMediaMonitoringService {
     }
   }
 
+  // Health monitoring methods
+  startHealthMonitoring(): void {
+    this.healthCheckInterval = setInterval(async () => {
+      try {
+        // Check if monitors are still running
+        const expectedMonitors = await this.grokService.getGeographicalSearches();
+        const activeMonitors = expectedMonitors.filter(s => s.is_active);
+        
+        for (const monitor of activeMonitors) {
+          if (!this.activeGeographicalSearches.has(monitor.id)) {
+            logger.warn('Monitor not running, restarting', { monitorId: monitor.id });
+            await this.startGeographicalMonitoring(monitor.id);
+          }
+        }
+      } catch (error) {
+        logger.error('Health check failed', { error });
+      }
+    }, 60000); // Check every minute
+  }
+
+  stopHealthMonitoring(): void {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+    }
+  }
+
+  startRecoveryMonitoring(): void {
+    this.recoveryInterval = setInterval(async () => {
+      try {
+        await this.recoverFailedMonitors();
+      } catch (error) {
+        logger.error('Recovery monitoring failed', { error });
+      }
+    }, 300000); // Check every 5 minutes
+  }
+
+  stopRecoveryMonitoring(): void {
+    if (this.recoveryInterval) {
+      clearInterval(this.recoveryInterval);
+      this.recoveryInterval = null;
+    }
+  }
+
+  private async recoverFailedMonitors(): Promise<void> {
+    try {
+      const searches = await this.grokService.getGeographicalSearches();
+      const activeSearches = searches.filter(s => s.is_active);
+      
+      for (const search of activeSearches) {
+        if (!this.activeGeographicalSearches.has(search.id)) {
+          logger.info('Recovering failed monitor', { monitorId: search.id });
+          await this.startGeographicalMonitoring(search.id);
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to recover monitors', { error });
+    }
+  }
+
   // Cleanup method for graceful shutdown
   async shutdown(): Promise<void> {
+    // Stop health monitoring
+    this.stopHealthMonitoring();
+    this.stopRecoveryMonitoring();
+    
     // Stop geographical monitors
     for (const [monitorId, interval] of this.activeGeographicalSearches.entries()) {
       clearInterval(interval);

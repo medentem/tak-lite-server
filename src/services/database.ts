@@ -52,6 +52,16 @@ export class DatabaseService {
         connectionString: connection,
         ssl: sslConfig
       },
+      pool: {
+        min: 2,
+        max: 10,
+        acquireTimeoutMillis: 30000,
+        createTimeoutMillis: 30000,
+        destroyTimeoutMillis: 5000,
+        idleTimeoutMillis: 30000,
+        reapIntervalMillis: 1000,
+        createRetryIntervalMillis: 200
+      },
       migrations: {
         // Use the same path as knexfile.ts - migrations are in the root migrations folder
         directory: path.resolve(process.cwd(), 'migrations')
