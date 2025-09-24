@@ -1133,14 +1133,14 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         // For area annotations, use center and radius
         annotationData.center = {
           lng: primaryLocation.lng,
-          lat: primaryLocation.lat
+          lt: primaryLocation.lat  // Use 'lt' to match Android LatLngSerializable format
         };
         annotationData.radius = primaryLocation.radius_km || 1.0; // Default 1km radius if not specified
       } else {
         // For POI annotations, use position
         annotationData.position = {
           lng: primaryLocation.lng,
-          lat: primaryLocation.lat
+          lt: primaryLocation.lat  // Use 'lt' to match Android LatLngSerializable format
         };
       }
       
