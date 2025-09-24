@@ -1115,6 +1115,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         color: color,
         shape: 'exclamation', // Use exclamation for threats
         label: label,
+        description: threat.ai_summary, // Add AI summary as description for detailed information
         timestamp: Date.now(),
         threatInfo: {
           threatId: threat.id,
