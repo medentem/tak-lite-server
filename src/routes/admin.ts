@@ -1216,7 +1216,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id: annotationId,
             teamId,
             type: smartAnnotationType,
-            data: clientData,
+            data: JSON.stringify(clientData), // Fix: Stringify the data to match client expectations
             userId,
             userName: 'System (Threat Detection)',
             userEmail: 'system@threat-detection',
@@ -1229,7 +1229,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             id: annotationId,
             teamId,
             type: smartAnnotationType,
-            data: clientData,
+            data: JSON.stringify(clientData), // Fix: Stringify the data to match client expectations
             userId,
             userName: 'System (Threat Detection)',
             userEmail: 'system@threat-detection',
