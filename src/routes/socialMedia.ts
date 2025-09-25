@@ -164,7 +164,7 @@ export function createSocialMediaRouter(
       const { id } = req.params;
       
       await socialMediaService.deleteGeographicalMonitor(id);
-      res.status(204).send();
+      res.json({ message: 'Geographical monitor deleted successfully' });
     } catch (error) {
       next(error);
     }

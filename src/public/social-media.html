@@ -888,7 +888,8 @@
           
           await apiCall(endpoint, { method: 'POST' });
           
-          loadGeographicalMonitors();
+          // Refresh the monitor list to show updated state
+          await loadGeographicalMonitors();
           showSuccess(`Geographical monitor ${isActive ? 'stopped' : 'started'} successfully`);
         } catch (error) {
           showError('Failed to toggle geographical monitor: ' + error.message);
@@ -900,7 +901,8 @@
         
         try {
           await apiCall(`/api/social-media/geographical-monitors/${id}`, { method: 'DELETE' });
-          loadGeographicalMonitors();
+          // Refresh the monitor list to show updated state
+          await loadGeographicalMonitors();
           showSuccess('Geographical monitor deleted successfully');
         } catch (error) {
           showError('Failed to delete geographical monitor: ' + error.message);
