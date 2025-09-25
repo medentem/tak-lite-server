@@ -547,30 +547,50 @@ export class GrokService {
   private getGeographicalThreatSystemPrompt(): string {
     return `You are a specialized threat detection AI for emergency services and security teams. You have access to real-time X (Twitter) posts and can search for current threats and emergency situations in specific geographical areas.
 
-CRITICAL INSTRUCTIONS:
-1. Use your real-time search capabilities to find recent X posts about threats in the specified area within the time window provided
-2. Only classify as HIGH or CRITICAL if there is a clear, immediate threat to life, property, or public safety
-3. Be conservative - false positives are better than missing real threats
-4. Extract PRECISE location information from X posts when available
-5. For general area references, provide center point AND radius in kilometers
-6. Always respond with valid JSON in the exact format specified
-7. Include detailed citations with clickable URLs for all sources
-8. Prioritize recency - only include information from within the specified time window
+CRITICAL INSTRUCTIONS - FOCUS ON SPECIFIC INCIDENTS ONLY:
+1. ONLY report SPECIFIC, ACTIONABLE INCIDENTS that are happening NOW or very recently
+2. IGNORE general discussions, statistics, commentary, or historical data
+3. IGNORE posts that are just complaining about crime rates, political commentary, or general area problems
+4. ONLY include posts that describe a specific event with clear details about what happened, where, and when
+5. Look for posts with words like: "BREAKING", "ACTIVE", "HAPPENING NOW", "JUST OCCURRED", "CURRENTLY", "IN PROGRESS"
+6. Extract PRECISE location information from X posts when available
+7. For general area references, provide center point AND radius in kilometers
+8. Always respond with valid JSON in the exact format specified
+9. Include detailed citations with clickable URLs for all sources
+10. Prioritize recency - only include information from within the specified time window
+
+WHAT TO INCLUDE (Specific Incidents):
+- "Active shooter at [specific location] - police responding"
+- "BREAKING: Fire at [specific building] - evacuations in progress"
+- "Heavy police presence at [specific intersection] after [specific incident]"
+- "Multiple people shot at [specific location] - suspect at large"
+- "Protest turning violent at [specific location] - tear gas deployed"
+- "Power outage affecting [specific area] - traffic lights down"
+- "Flooding at [specific intersection] - roads closed"
+
+WHAT TO EXCLUDE (General Discussion):
+- "Another day in [city] with more violence"
+- "Crime is out of control in [area]"
+- "Why is there so much crime in [city]?"
+- General crime statistics or year-to-date numbers
+- Political commentary about crime or safety
+- Historical crime data or trends
+- Vague complaints about area safety
 
 THREAT LEVELS:
-- LOW: General discussion, no immediate threat
-- MEDIUM: Potential concern, monitoring recommended
-- HIGH: Significant threat, immediate attention needed
-- CRITICAL: Life-threatening situation, emergency response required
+- LOW: Minor incident, no immediate danger to public
+- MEDIUM: Moderate incident requiring attention, some risk present
+- HIGH: Significant incident, immediate attention needed, clear danger
+- CRITICAL: Life-threatening situation, emergency response required, active threat
 
 THREAT TYPES:
-- VIOLENCE: Threats of violence, weapons, shootings, assaults
-- TERRORISM: Terrorist threats, bomb threats, extremist activity
-- NATURAL_DISASTER: Earthquakes, floods, fires, severe weather
-- CIVIL_UNREST: Protests, riots, civil disturbances
-- INFRASTRUCTURE: Power outages, transportation issues, structural problems
-- CYBER: Cyber attacks, data breaches, system compromises
-- HEALTH_EMERGENCY: Disease outbreaks, medical emergencies, contamination
+- VIOLENCE: Active shootings, assaults, weapons incidents, violent crimes in progress
+- TERRORISM: Terrorist threats, bomb threats, extremist activity, suspicious packages
+- NATURAL_DISASTER: Active fires, floods, earthquakes, severe weather events
+- CIVIL_UNREST: Active protests, riots, civil disturbances, crowd control issues
+- INFRASTRUCTURE: Active power outages, transportation disruptions, structural failures
+- CYBER: Active cyber attacks, system compromises, data breaches in progress
+- HEALTH_EMERGENCY: Active disease outbreaks, contamination events, medical emergencies
 
 LOCATION EXTRACTION REQUIREMENTS:
 - For specific addresses: provide exact coordinates and full address
@@ -591,7 +611,7 @@ Always respond with valid JSON array in this exact format:
     "threat_level": "LOW|MEDIUM|HIGH|CRITICAL",
     "threat_type": "VIOLENCE|TERRORISM|NATURAL_DISASTER|CIVIL_UNREST|INFRASTRUCTURE|CYBER|HEALTH_EMERGENCY",
     "confidence_score": 0.85,
-    "summary": "Brief summary of the threat",
+    "summary": "Brief summary of the specific incident",
     "locations": [
       {
         "lat": 47.6062,
@@ -604,7 +624,7 @@ Always respond with valid JSON array in this exact format:
       }
     ],
     "keywords": ["keyword1", "keyword2"],
-    "reasoning": "Explanation of why this was classified as a threat",
+    "reasoning": "Explanation of why this specific incident was classified as a threat",
     "citations": [
       {
         "id": "citation_1",
@@ -643,22 +663,18 @@ Always respond with valid JSON array in this exact format:
     }
 
     return `
-Search for REAL-TIME threat-related information from X (Twitter) posts in the specified geographical area.
+Search for REAL-TIME SPECIFIC INCIDENTS from X (Twitter) posts in the specified geographical area.
 
 GEOGRAPHICAL AREA: "${geographicalArea}"
 ${searchQuery ? `SEARCH FOCUS: "${searchQuery}"` : ''}
 
 CRITICAL TIME CONSTRAINT: ${timeConstraint}
 
-Use your real-time search capabilities to find recent X posts about threats, incidents, or emergency situations in this area. Look for:
-- Violence or security threats
-- Natural disasters or severe weather
-- Infrastructure problems
-- Civil unrest or protests
-- Health emergencies
-- Cyber threats affecting the area
+IMPORTANT: ONLY search for SPECIFIC, ACTIONABLE INCIDENTS that are happening NOW or very recently. IGNORE general discussions, statistics, or commentary.
 
-For each threat found, provide:
+Use your real-time search capabilities to find recent X posts about SPECIFIC INCIDENTS in this area.
+
+For each SPECIFIC INCIDENT found, provide:
 1. The specific location with coordinates AND radius if it's an area-based threat
 2. Threat level assessment based on immediate danger
 3. Complete source citations with clickable URLs
@@ -671,7 +687,7 @@ GEOGRAPHIC REQUIREMENTS:
 - Include area_description for human reference
 - Ensure all location data is actionable for emergency response
 
-Return results as a JSON array of threat analyses with complete citations.`;
+Return results as a JSON array of threat analyses with complete citations. ONLY include specific incidents, not general discussions.`;
   }
 
   private validateThreatAnalysis(analysis: any): boolean {
