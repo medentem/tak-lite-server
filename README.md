@@ -6,7 +6,7 @@ Cloud-native backend for TAK Lite. Purpose-built to bridge disconnected meshes a
 
 > **✅ Recommended**: The "Deploy to DO" button provides the fastest setup with a Dev Database including SSL certificates. For production databases with monitoring alerts, use Option 3 below.
 
-## 🚀 Quick Start (Local Development)
+## Quick Start (Local Development)
 
 ### Run with Docker (Recommended)
 
@@ -39,7 +39,7 @@ npm run db:migrate
 npm run dev
 ```
 
-## 📱 Features
+## Features
 
 - **Admin Dashboard**: `http://localhost:3000/admin` - Complete admin interface
 - **Setup Wizard**: `http://localhost:3000/setup` - First-run configuration
@@ -47,7 +47,7 @@ npm run dev
 - **REST API**: Full API for authentication, sync, and admin operations
 - **Health Monitoring**: `GET /health` and `GET /metrics` endpoints
 
-## 🔌 API Reference
+## API Reference
 
 ### Authentication
 ```bash
@@ -130,7 +130,7 @@ socket.on('disconnect', async () => {
 });
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 ### Dual API Architecture
 
@@ -176,7 +176,7 @@ Both APIs use the same `SyncService` for core operations:
 - **Admin Interface**: Built-in dashboard and setup wizard
 - **Security**: Rate limiting, CORS, and admin-only routes
 
-## 🚀 Deployment
+## Deployment
 
 ### Option 1: One-Click Deploy (Recommended)
 
@@ -245,7 +245,7 @@ docker compose up -d
 
 **Cost**: $12/month | **Time**: 30 minutes | **Features**: Full control, manual SSL setup needed
 
-## 📚 Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -259,18 +259,18 @@ docker compose up -d
 | `LOG_LEVEL` | No | `info` | Logging level |
 | `PORT` | No | `3000` | Server port |
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
 4. Submit a pull request
 
-## 📄 License
+## License
 
 This project is licensed under the GPL‑3.0 License — see the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support
+## Support
 
 - **Issues**: [GitHub Issues](https://github.com/medentem/tak-lite-server/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/medentem/tak-lite-server/discussions)
