@@ -273,4 +273,3 @@ This project is licensed under the GPL‑3.0 License — see the [LICENSE](LICEN
 ## Support
 
 - **Issues**: [GitHub Issues](https://github.com/medentem/tak-lite-server/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/medentem/tak-lite-server/discussions)
