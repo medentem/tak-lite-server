@@ -101,9 +101,31 @@
       .pill.high { background:#f59e0b; color:#000; }
       .pill.medium { background:#3b82f6; color:#fff; }
       .pill.low { background:#6b7280; color:#fff; }
+      .pill.warning { background:var(--warning); color:#000; }
       .spacer { height:16px; }
       .right { text-align:right; }
       .hidden { display:none !important; }
+      
+      /* Tooltip styles */
+      button[title]:hover::after {
+        content: attr(title);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 6px 10px;
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: nowrap;
+        z-index: 1000;
+        margin-bottom: 5px;
+        pointer-events: none;
+      }
+      button[title] {
+        position: relative;
+      }
       .loading { 
         opacity:0.6; 
         pointer-events:none; 
@@ -297,12 +319,17 @@
         </div>
         
         <!-- Service Status Section -->
-        <div class="card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h2>Service Status</h2>
+        <div class="card" style="border: 2px solid var(--accent); background: linear-gradient(180deg, var(--panel), #0d1b34);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div>
+              <h2 style="margin:0 0 4px;">Service Status</h2>
+              <div style="font-size:13px; color:var(--muted); margin-top:4px;">
+                <strong>Master Control:</strong> The service must be enabled for monitors to run. When disabled, all monitors are stopped.
+              </div>
+            </div>
             <div style="display:flex; gap:12px; align-items:center;">
               <div id="service-status-indicator" class="status-indicator inactive"></div>
-              <span id="service-status-text">Service Disabled</span>
+              <span id="service-status-text" style="font-weight:500;">Service Disabled</span>
               <button id="service-toggle-btn" onclick="toggleService()" class="success">Enable Service</button>
             </div>
           </div>
@@ -310,7 +337,7 @@
           <div id="service-status-details" class="grid" style="margin-bottom:20px;">
             <div class="kpi">
               <div class="value" id="service-active-monitors">0</div>
-              <div class="label">Active Monitors</div>
+              <div class="label">Running Monitors</div>
             </div>
             <div class="kpi">
               <div class="value" id="service-total-monitors">0</div>
@@ -350,8 +377,8 @@
           </div>
           
           <div style="display:flex; gap:12px; flex-wrap:wrap;">
-            <button onclick="startAllMonitors()" class="secondary" id="start-all-btn" disabled>Start All Monitors</button>
-            <button onclick="stopAllMonitors()" class="danger" id="stop-all-btn" disabled>Stop All Monitors</button>
+            <button onclick="startAllMonitors()" class="secondary" id="start-all-btn" disabled title="Enable the service first to start monitors">Start All Monitors</button>
+            <button onclick="stopAllMonitors()" class="danger" id="stop-all-btn" disabled title="Enable the service first to manage monitors">Stop All Monitors</button>
             <button onclick="showServiceConfigModal()" class="secondary">Service Settings</button>
             <button onclick="refreshServiceStatus()" class="secondary">Refresh Status</button>
             <button onclick="showServiceStatusModal()" class="secondary">Detailed Status</button>
@@ -365,8 +392,13 @@
         <!-- Geographical Monitoring Section -->
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h2>Geographical Threat Monitoring</h2>
-            <button onclick="showGeographicalMonitorModal()" class="secondary">Add Geographical Monitor</button>
+            <div>
+              <h2>Geographical Threat Monitoring</h2>
+              <div style="font-size:13px; color:var(--muted); margin-top:4px;">
+                Individual monitors that search for threats in specific geographical areas. <strong>Requires service to be enabled.</strong>
+              </div>
+            </div>
+            <button onclick="showGeographicalMonitorModal()" class="secondary" id="add-monitor-btn">Add Geographical Monitor</button>
           </div>
           
           <div id="geographical-monitors-grid" class="grid">
@@ -658,14 +690,20 @@
           toggleBtn.textContent = 'Disable Service';
           toggleBtn.className = 'danger';
           startAllBtn.disabled = false;
+          startAllBtn.title = 'Start all configured monitors';
           stopAllBtn.disabled = false;
+          stopAllBtn.title = 'Stop all running monitors';
+          serviceEnabled = true;
         } else {
           statusIndicator.className = 'status-indicator inactive';
           statusText.textContent = 'Service Disabled';
           toggleBtn.textContent = 'Enable Service';
           toggleBtn.className = 'success';
           startAllBtn.disabled = true;
+          startAllBtn.title = 'Enable the service first to start monitors';
           stopAllBtn.disabled = true;
+          stopAllBtn.title = 'Enable the service first to manage monitors';
+          serviceEnabled = false;
         }
 
         // Update service metrics
@@ -679,6 +717,11 @@
         
         // Update health monitoring indicators
         updateHealthIndicators(serviceStatus);
+        
+        // Reload monitors to update their status based on service state
+        if (geographicalMonitors) {
+          loadGeographicalMonitors();
+        }
       }
 
       // Update health monitoring indicators
@@ -718,11 +761,15 @@
 
       // Legacy monitor functions removed - use geographical monitoring instead
 
+      // Global state for service enabled status
+      let serviceEnabled = false;
+
       // Load geographical monitors
       async function loadGeographicalMonitors() {
         try {
           const data = await apiCall('/api/social-media/geographical-monitors');
           geographicalMonitors = data.monitors;
+          serviceEnabled = data.service_enabled || false;
           renderGeographicalMonitors();
         } catch (error) {
           console.error('Failed to load geographical monitors:', error);
@@ -739,29 +786,77 @@
           return;
         }
 
-        grid.innerHTML = geographicalMonitors.map(monitor => `
-          <div class="card" style="padding:16px;">
+        grid.innerHTML = geographicalMonitors.map(monitor => {
+          // Determine status
+          let statusText, statusClass, statusColor;
+          let isBlocked = false;
+          
+          if (!serviceEnabled) {
+            statusText = 'Blocked';
+            statusClass = 'warning';
+            statusColor = 'var(--warning)';
+            isBlocked = true;
+          } else if (monitor.is_running) {
+            statusText = 'Running';
+            statusClass = 'active';
+            statusColor = 'var(--ok)';
+          } else if (monitor.is_active) {
+            statusText = 'Stopped';
+            statusClass = 'inactive';
+            statusColor = 'var(--muted)';
+          } else {
+            statusText = 'Stopped';
+            statusClass = 'inactive';
+            statusColor = 'var(--muted)';
+          }
+
+          // Determine button state and tooltip
+          const canStart = serviceEnabled && !monitor.is_running;
+          const canStop = serviceEnabled && monitor.is_running;
+          const buttonDisabled = !canStart && !canStop;
+          const buttonText = monitor.is_running ? 'Stop' : 'Start';
+          const buttonClass = monitor.is_running ? 'danger' : 'success';
+          const tooltip = isBlocked 
+            ? 'Service must be enabled to start this monitor'
+            : (monitor.is_running ? 'Stop this monitor' : 'Start this monitor');
+
+          return `
+          <div class="card" style="padding:16px; ${isBlocked ? 'opacity: 0.7;' : ''}">
             <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:12px;">
-              <div>
+              <div style="flex:1;">
                 <h4 style="margin:0 0 4px; color:#cbd5e1;">${monitor.geographical_area}</h4>
-                ${monitor.search_query ? `<div style="font-size:12px; color:var(--muted);">Query: ${monitor.search_query}</div>` : ''}
+                ${monitor.search_query ? `<div style="font-size:12px; color:var(--muted); margin-top:2px;">Query: ${monitor.search_query}</div>` : ''}
               </div>
-              <span class="pill ${monitor.is_active ? 'active' : 'inactive'}">${monitor.is_active ? 'Active' : 'Inactive'}</span>
+              <span class="pill ${statusClass}" style="background: ${statusColor}; color: ${statusClass === 'active' ? '#000' : '#fff'};">
+                ${statusText}
+              </span>
             </div>
             
+            ${isBlocked ? `
+              <div style="padding:8px; background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.3); border-radius:6px; margin-bottom:12px; font-size:12px; color:var(--warning);">
+                ⚠️ Service disabled - Monitor cannot run
+              </div>
+            ` : ''}
+            
             <div style="font-size:12px; color:var(--muted); margin-bottom:12px;">
-              Interval: ${monitor.monitoring_interval}s
-              ${monitor.last_searched_at ? `| Last: ${new Date(monitor.last_searched_at).toLocaleString()}` : ''}
+              ⏱️ Interval: ${monitor.monitoring_interval}s
+              ${monitor.last_searched_at ? `| Last: ${new Date(monitor.last_searched_at).toLocaleString()}` : '| Never searched'}
             </div>
             
             <div style="display:flex; gap:8px;">
-              <button onclick="toggleGeographicalMonitor('${monitor.id}', ${monitor.is_active})" class="secondary" style="flex:1;">
-                ${monitor.is_active ? 'Stop' : 'Start'}
+              <button 
+                onclick="toggleGeographicalMonitor('${monitor.id}', ${monitor.is_running})" 
+                class="${buttonClass}" 
+                style="flex:1;"
+                ${buttonDisabled ? 'disabled title="' + tooltip + '"' : `title="${tooltip}"`}
+                ${buttonDisabled ? 'opacity: 0.5; cursor: not-allowed;' : ''}>
+                ${buttonText}
               </button>
-              <button onclick="deleteGeographicalMonitor('${monitor.id}')" class="danger">Delete</button>
+              <button onclick="deleteGeographicalMonitor('${monitor.id}')" class="danger" title="Delete this monitor">Delete</button>
             </div>
           </div>
-        `).join('');
+        `;
+        }).join('');
       }
 
       // Legacy monitor rendering removed - use geographical monitoring instead
@@ -882,17 +977,26 @@
       }
 
       // Geographical monitor actions
-      async function toggleGeographicalMonitor(id, isActive) {
+      async function toggleGeographicalMonitor(id, isRunning) {
+        // Check if service is enabled
+        if (!serviceEnabled && !isRunning) {
+          showError('Service must be enabled to start monitors. Please enable the service first.');
+          return;
+        }
+        
         try {
-          const endpoint = isActive 
+          const endpoint = isRunning 
             ? `/api/social-media/geographical-monitors/${id}/stop`
             : `/api/social-media/geographical-monitors/${id}/start`;
           
           await apiCall(endpoint, { method: 'POST' });
           
-          // Refresh the monitor list to show updated state
-          await loadGeographicalMonitors();
-          showSuccess(`Geographical monitor ${isActive ? 'stopped' : 'started'} successfully`);
+          // Refresh both service status and monitor list to show updated state
+          await Promise.all([
+            loadServiceStatus(),
+            loadGeographicalMonitors()
+          ]);
+          showSuccess(`Geographical monitor ${isRunning ? 'stopped' : 'started'} successfully`);
         } catch (error) {
           showError('Failed to toggle geographical monitor: ' + error.message);
         }

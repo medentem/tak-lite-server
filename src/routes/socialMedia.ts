@@ -121,7 +121,11 @@ export function createSocialMediaRouter(
   router.get('/geographical-monitors', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const monitors = await socialMediaService.getGeographicalMonitors();
-      res.json({ monitors });
+      const serviceStatus = await socialMediaService.getServiceStatus();
+      res.json({ 
+        monitors,
+        service_enabled: serviceStatus.service_enabled
+      });
     } catch (error) {
       next(error);
     }

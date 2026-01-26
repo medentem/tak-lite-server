@@ -172,8 +172,15 @@ export class SocialMediaMonitoringService {
     return await this.grokService.createGeographicalSearch(monitorData, createdBy);
   }
 
-  async getGeographicalMonitors(): Promise<GeographicalSearch[]> {
-    return await this.grokService.getGeographicalSearches();
+  async getGeographicalMonitors(): Promise<(GeographicalSearch & { is_running: boolean })[]> {
+    const searches = await this.grokService.getGeographicalSearches();
+    const serviceEnabled = await this.configService.isServiceEnabled();
+    
+    // Add runtime status to each monitor
+    return searches.map(search => ({
+      ...search,
+      is_running: this.activeGeographicalSearches.has(search.id) && serviceEnabled
+    }));
   }
 
   async updateGeographicalMonitor(monitorId: string, updates: Partial<GeographicalSearch>): Promise<GeographicalSearch> {
@@ -194,12 +201,15 @@ export class SocialMediaMonitoringService {
     const searches = await this.grokService.getGeographicalSearches();
     const search = searches.find(s => s.id === monitorId);
     
-    if (!search || !search.is_active) {
-      throw new Error('Geographical search not found or inactive');
+    if (!search) {
+      throw new Error('Geographical search not found');
     }
 
-    // Clear existing interval if any
+    // Clear existing interval if any (this will also update DB flag to false)
     await this.stopGeographicalMonitoring(monitorId);
+
+    // Update database flag to active before starting
+    await this.grokService.updateGeographicalSearch(monitorId, { is_active: true });
 
     // Start new monitoring interval
     const interval = setInterval(async () => {
@@ -211,7 +221,12 @@ export class SocialMediaMonitoringService {
           return;
         }
 
-        await this.performGeographicalSearch(search);
+        // Refresh search data in case it was updated
+        const currentSearches = await this.grokService.getGeographicalSearches();
+        const currentSearch = currentSearches.find(s => s.id === monitorId);
+        if (currentSearch) {
+          await this.performGeographicalSearch(currentSearch);
+        }
       } catch (error) {
         logger.error('Error in geographical monitoring interval', { monitorId, error });
       }
@@ -227,6 +242,15 @@ export class SocialMediaMonitoringService {
       clearInterval(interval);
       this.activeGeographicalSearches.delete(monitorId);
       logger.info('Stopped geographical monitoring', { monitorId });
+    }
+    
+    // Always update database flag to inactive when stop is called
+    // This ensures DB state matches runtime state even if monitor wasn't running
+    try {
+      await this.grokService.updateGeographicalSearch(monitorId, { is_active: false });
+    } catch (error) {
+      // Log but don't throw - monitor is stopped in memory even if DB update fails
+      logger.warn('Failed to update monitor DB flag on stop', { monitorId, error });
     }
   }
 
