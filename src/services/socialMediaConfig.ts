@@ -131,10 +131,16 @@ export class SocialMediaConfigService {
       .whereRaw('DATE(created_at) = CURRENT_DATE')
       .first();
 
+    // When service is disabled, there can be no running monitors
+    // Even if DB flags say is_active=true, they should have been cleared by stopAllMonitors()
+    const activeMonitors = config.service_enabled 
+      ? (parseInt(monitorStats.active_monitors) || 0)
+      : 0;
+
     return {
       service_enabled: config.service_enabled,
       total_monitors: parseInt(monitorStats.total_monitors) || 0,
-      active_monitors: parseInt(monitorStats.active_monitors) || 0,
+      active_monitors: activeMonitors,
       posts_processed_today: parseInt(postsStats.posts_processed_today) || 0
     };
   }

@@ -418,6 +418,9 @@ export class SocialMediaMonitoringService {
   async stopAllMonitors(): Promise<{ stopped: number }> {
     let stopped = 0;
     
+    // Get all monitor IDs that are currently running
+    const runningMonitorIds = Array.from(this.activeGeographicalSearches.keys());
+    
     // Stop geographical monitors
     for (const [monitorId, interval] of this.activeGeographicalSearches.entries()) {
       clearInterval(interval);
@@ -425,6 +428,23 @@ export class SocialMediaMonitoringService {
       stopped++;
     }
     this.activeGeographicalSearches.clear();
+    
+    // Update all stopped monitors' DB flags to inactive
+    // This ensures DB state matches runtime state
+    if (runningMonitorIds.length > 0) {
+      try {
+        await this.db.client('geographical_searches')
+          .whereIn('id', runningMonitorIds)
+          .update({ 
+            is_active: false, 
+            updated_at: new Date() 
+          });
+        logger.info('Updated DB flags for stopped monitors', { count: runningMonitorIds.length });
+      } catch (error) {
+        logger.error('Failed to update DB flags for stopped monitors', { error });
+        // Don't throw - monitors are stopped in memory even if DB update fails
+      }
+    }
     
     logger.info('Stopped all geographical monitors', { stopped });
     return { stopped };
