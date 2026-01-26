@@ -147,7 +147,7 @@ export class GrokService {
       const config: GrokConfiguration = {
         id,
         api_key_encrypted: encryptedApiKey,
-        model: configData.model || 'grok-4-fast-reasoning-latest',
+        model: configData.model || 'grok-4-1-fast-reasoning',
         search_enabled: configData.search_enabled !== false,
         is_active: configData.is_active !== false,
         created_by: createdBy,
