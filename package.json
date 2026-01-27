@@ -1,6 +1,6 @@
 {
   "name": "tak-lite-server",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Cloud-native backend server for TAK Lite situational awareness platform",
   "main": "dist/src/index.js",
   "scripts": {
