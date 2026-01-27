@@ -52,7 +52,7 @@ export class MapInitializer {
     const darkStyle = this.createMapStyle();
     
     // Create map instance
-    this.map = this.createMapInstance(containerId, darkStyle);
+    this.map = this.createMapInstance(this.containerId, darkStyle);
     
     // Setup controls
     this.setupControls();
