@@ -530,13 +530,20 @@ class AdminMap {
       }
     }
     
-    // Clear existing segments but keep center hole
-    const centerHole = this.fanMenu.querySelector('.fan-menu-center');
-    const existingSegments = this.fanMenu.querySelector('.fan-menu-segments-container');
+    // Get the DOM element from the FanMenu instance
+    const fanMenuElement = this.fanMenu.getElement();
+    if (!fanMenuElement) {
+      logger.error('fanMenu DOM element not found!');
+      return;
+    }
     
-    this.fanMenu.innerHTML = '';
+    // Clear existing segments but keep center hole
+    const centerHole = fanMenuElement.querySelector('.fan-menu-center');
+    const existingSegments = fanMenuElement.querySelector('.fan-menu-segments-container');
+    
+    fanMenuElement.innerHTML = '';
     if (centerHole) {
-      this.fanMenu.appendChild(centerHole);
+      fanMenuElement.appendChild(centerHole);
     }
     if (existingSegments) {
       existingSegments.remove();
@@ -553,15 +560,15 @@ class AdminMap {
     const options = isEditMode ? this.getEditModeOptions() : this.getCreateModeOptions();
     
     // Position fan menu at click point relative to map container
-    this.fanMenu.style.left = (point.x - 100) + 'px'; // Center the donut ring (200px diameter)
-    this.fanMenu.style.top = (point.y - 100) + 'px';
-    this.fanMenu.style.position = 'absolute';
+    fanMenuElement.style.left = (point.x - 100) + 'px'; // Center the donut ring (200px diameter)
+    fanMenuElement.style.top = (point.y - 100) + 'px';
+    fanMenuElement.style.position = 'absolute';
     
     // Create donut ring segments
     this.createDonutRingSegments(options, point);
     
     // Show fan menu
-    this.fanMenu.classList.add('visible');
+    fanMenuElement.classList.add('visible');
     logger.debug('Fan menu made visible with', options.length, 'options');
   }
   
@@ -694,7 +701,13 @@ class AdminMap {
       svgContainer.appendChild(iconElement);
     });
     
-    this.fanMenu.appendChild(svgContainer);
+    // Get the DOM element from the FanMenu instance
+    const fanMenuElement = this.fanMenu.getElement();
+    if (fanMenuElement) {
+      fanMenuElement.appendChild(svgContainer);
+    } else {
+      logger.error('fanMenu DOM element not found in createDonutRingSegments!');
+    }
   }
   
   createDonutSegmentPath(centerX, centerY, innerRadius, outerRadius, startAngle, endAngle) {
@@ -726,17 +739,20 @@ class AdminMap {
   
   hideFanMenu() {
     if (this.fanMenu) {
-      this.fanMenu.classList.remove('visible');
-      // Clear segments but keep center hole structure
-      const centerHole = this.fanMenu.querySelector('.fan-menu-center');
-      const segmentsContainer = this.fanMenu.querySelector('.fan-menu-segments-container');
-      
-      this.fanMenu.innerHTML = '';
-      if (centerHole) {
-        this.fanMenu.appendChild(centerHole);
-      }
-      if (segmentsContainer) {
-        segmentsContainer.remove();
+      const fanMenuElement = this.fanMenu.getElement();
+      if (fanMenuElement) {
+        fanMenuElement.classList.remove('visible');
+        // Clear segments but keep center hole structure
+        const centerHole = fanMenuElement.querySelector('.fan-menu-center');
+        const segmentsContainer = fanMenuElement.querySelector('.fan-menu-segments-container');
+        
+        fanMenuElement.innerHTML = '';
+        if (centerHole) {
+          fanMenuElement.appendChild(centerHole);
+        }
+        if (segmentsContainer) {
+          segmentsContainer.remove();
+        }
       }
     }
     
@@ -761,7 +777,8 @@ class AdminMap {
       }
       
       // Check if click is outside the fan menu
-      if (this.fanMenu && !this.fanMenu.contains(e.target)) {
+      const fanMenuElement = this.fanMenu?.getElement();
+      if (fanMenuElement && !fanMenuElement.contains(e.target)) {
         logger.debug('Clicking outside fan menu, dismissing');
         this.hideFanMenu();
       } else {
@@ -1124,7 +1141,10 @@ class AdminMap {
     const centerBtn = q('#map_center');
     if (centerBtn) {
       centerBtn.addEventListener('click', () => {
-        this.centerMap();
+        this.boundsManager.autoCenter(
+          this.annotationManager.getAnnotations(),
+          this.locationManager.getLocations()
+        );
       });
     }
     
@@ -1276,7 +1296,10 @@ class AdminMap {
       }
       
       // Try to center map on user location or existing data after loading
-      this.autoCenterMap();
+      await this.boundsManager.autoCenter(
+        this.annotationManager.getAnnotations(),
+        this.locationManager.getLocations()
+      );
     } catch (error) {
       logger.error('Failed to load map data:', error);
     }
