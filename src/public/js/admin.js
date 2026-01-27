@@ -1133,12 +1133,33 @@ function showPage(pageName) {
 }
 
 function showDash(show) {
-  q('#loginCard').classList.toggle('hidden', show);
-  q('#logout').classList.toggle('hidden', !show);
-  q('#who').classList.toggle('hidden', !show);
-  q('#adminNav').classList.toggle('hidden', !show);
+  const loginCard = q('#loginCard');
+  const logoutBtn = q('#logout');
+  const whoSpan = q('#who');
+  const adminNav = q('#adminNav');
+  
+  // Hide/show login card
+  if (loginCard) {
+    loginCard.classList.toggle('hidden', show);
+  }
+  
+  // Hide/show logout button and user info
+  if (logoutBtn) {
+    logoutBtn.classList.toggle('hidden', !show);
+  }
+  if (whoSpan) {
+    whoSpan.classList.toggle('hidden', !show);
+  }
+  
+  // Show/hide navigation
+  if (adminNav) {
+    adminNav.classList.toggle('hidden', !show);
+  }
   
   if (show) {
+    // Setup navigation (ensure it's initialized after auth)
+    setupNavigation();
+    
     // Initialize message monitoring controls
     setupMessageControls();
     
@@ -1162,6 +1183,13 @@ function showDash(show) {
   } else {
     disconnectWebSocket();
     stopThreatAutoRefresh();
+    
+    // Hide all pages when logged out
+    const pages = ['dash', 'settingsPage', 'managementPage', 'threatsPage', 'messagesPage'];
+    pages.forEach(page => {
+      const el = q(`#${page}`);
+      if (el) el.classList.add('hidden');
+    });
   }
 }
 
@@ -1730,8 +1758,8 @@ async function checkExistingAuth() {
 }
 
 // Setup navigation links
-document.addEventListener('DOMContentLoaded', () => {
-  // Navigation link handlers
+function setupNavigation() {
+  // Navigation link handlers for SPA pages
   const navLinks = {
     'nav-dashboard': () => showPage('dashboard'),
     'nav-settings': () => showPage('settings'),
@@ -1743,12 +1771,36 @@ document.addEventListener('DOMContentLoaded', () => {
   Object.entries(navLinks).forEach(([id, handler]) => {
     const link = q(`#${id}`);
     if (link) {
-      link.addEventListener('click', (e) => {
+      // Remove any existing listeners by cloning
+      const newLink = link.cloneNode(true);
+      link.parentNode.replaceChild(newLink, link);
+      
+      newLink.addEventListener('click', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         handler();
       });
     }
   });
+  
+  // View All links
+  const viewAllThreats = q('#view-all-threats');
+  if (viewAllThreats) {
+    viewAllThreats.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showPage('threats');
+    });
+  }
+  
+  const viewAllMessages = q('#view-all-messages');
+  if (viewAllMessages) {
+    viewAllMessages.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showPage('messages');
+    });
+  }
   
   // Handle browser back/forward
   window.addEventListener('popstate', (e) => {
@@ -1761,7 +1813,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (hash && ['dashboard', 'settings', 'management', 'threats', 'messages'].includes(hash)) {
     showPage(hash);
   }
-});
+}
+
+// Setup navigation when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupNavigation);
+} else {
+  // DOM is already ready
+  setupNavigation();
+}
 
 // Initialize the interface
 checkExistingAuth();

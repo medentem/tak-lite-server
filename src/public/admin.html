@@ -614,11 +614,11 @@
       <nav id="adminNav" class="hidden" style="margin-bottom: 20px;">
         <div class="card" style="padding: 12px 16px;">
           <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-            <a href="/admin" id="nav-dashboard" style="color: var(--text); text-decoration: none; padding: 8px 12px; border-radius: 6px; background: var(--accent); font-weight: 500;">Dashboard</a>
-            <a href="/admin/threats" id="nav-threats" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Threat Review</a>
-            <a href="/admin/messages" id="nav-messages" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Messages</a>
-            <a href="/admin/settings" id="nav-settings" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Settings</a>
-            <a href="/admin/management" id="nav-management" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Management</a>
+            <a href="#" id="nav-dashboard" style="color: var(--text); text-decoration: none; padding: 8px 12px; border-radius: 6px; background: var(--accent); font-weight: 500; cursor: pointer;">Dashboard</a>
+            <a href="#" id="nav-threats" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; cursor: pointer;">Threat Review</a>
+            <a href="#" id="nav-messages" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; cursor: pointer;">Messages</a>
+            <a href="#" id="nav-settings" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; cursor: pointer;">Settings</a>
+            <a href="#" id="nav-management" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; cursor: pointer;">Management</a>
             <a href="/social-media" id="nav-social" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Social Media</a>
           </div>
         </div>
@@ -900,7 +900,7 @@
             <div class="card" style="margin-bottom: 16px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h2 style="margin: 0;">Active Threats</h2>
-                <a href="/admin/threats" style="color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 500;">View All →</a>
+                <a href="#" id="view-all-threats" style="color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 500; cursor: pointer;">View All →</a>
               </div>
               <div class="help-text" style="margin-bottom: 12px; font-size: 12px;">
                 <strong>Critical & High</strong> threats requiring immediate attention
@@ -915,7 +915,7 @@
             <div class="card">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h2 style="margin: 0;">Live Messages</h2>
-                <a href="/admin/messages" style="color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 500;">View All →</a>
+                <a href="#" id="view-all-messages" style="color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 500; cursor: pointer;">View All →</a>
               </div>
               <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center;">
                 <select id="message_team_filter_compact" style="flex: 1; font-size: 12px; padding: 6px;">
