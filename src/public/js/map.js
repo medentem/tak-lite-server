@@ -1246,7 +1246,9 @@ class AdminMap {
     
     // Update map immediately
     this.updateMapData();
-    this.eventBus.emit(MAP_EVENTS.ANNOTATION_BULK_DELETED, data);
+    // Note: Do not emit ANNOTATION_BULK_DELETED here - this is an event handler,
+    // not an event source. The event should only be emitted from the action source
+    // (e.g., clearAllAnnotations) to avoid infinite loops.
   }
   
   handleLocationUpdate(data) {
