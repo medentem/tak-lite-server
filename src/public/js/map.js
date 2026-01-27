@@ -157,7 +157,7 @@ class AdminMap {
     
     logger.info('Initializing admin map...');
     await this.initializeMap();
-    this.setupEventListeners();
+    this.setupDOMEventListeners();
     
     // Only load data if we have authentication
     if (this.isAuthenticated()) {
@@ -1118,7 +1118,7 @@ class AdminMap {
   }
   
   
-  setupEventListeners() {
+  setupDOMEventListeners() {
     // Team selection
     const teamSelect = q('#map_team_select');
     if (teamSelect) {
@@ -1370,7 +1370,9 @@ class AdminMap {
       this.updateMapData();
       
       // Close any open popups
-      this.closeAllPopups();
+      if (this.popupManager) {
+        this.popupManager.closeAllPopups();
+      }
       
       this.eventBus.emit(MAP_EVENTS.ANNOTATION_BULK_DELETED, result);
     } catch (error) {
@@ -1389,7 +1391,9 @@ class AdminMap {
     }
     
     // Close any open popups
-    this.closeAllPopups();
+    if (this.popupManager) {
+      this.popupManager.closeAllPopups();
+    }
     
     // Hide any open menus
     this.hideFanMenu();
