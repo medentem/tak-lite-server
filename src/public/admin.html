@@ -259,50 +259,83 @@
         opacity: 0.8;
       }
       
-      /* Full width overview section */
-      .overview-full-width {
-        width: 100%;
-        margin-bottom: 16px;
-        box-sizing: border-box;
+      /* Operational Status Bar */
+      .operational-status-bar {
+        display: flex;
+        gap: 24px;
+        align-items: center;
+        flex-wrap: wrap;
       }
       
-      .overview-full-width .overview-grid {
+      .status-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      
+      .status-label {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 500;
+      }
+      
+      .status-value {
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 600;
+        font-family: 'Courier New', monospace;
+      }
+      
+      /* Dashboard Main Layout */
+      .dashboard-main-layout {
         display: grid;
-        grid-template-columns: repeat(8, 1fr);
+        grid-template-columns: 60% 38%;
         gap: 16px;
-        margin-bottom: 20px;
+        align-items: start;
       }
       
-      .overview-full-width .overview-stats {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 16px;
+      .dashboard-map-section {
+        min-width: 0; /* Prevents grid overflow */
       }
       
-      /* Responsive adjustments for full width overview */
+      .dashboard-side-panels {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        min-width: 0; /* Prevents grid overflow */
+      }
+      
+      /* Responsive adjustments for dashboard layout */
       @media (max-width: 1200px) {
-        .overview-full-width .overview-grid {
-          grid-template-columns: repeat(4, 1fr);
+        .dashboard-main-layout {
+          grid-template-columns: 1fr;
         }
         
-        .overview-full-width .overview-stats {
-          grid-template-columns: repeat(2, 1fr);
+        .dashboard-side-panels {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
         }
       }
       
       @media (max-width: 768px) {
-        .overview-full-width .overview-grid {
-          grid-template-columns: repeat(2, 1fr);
+        .operational-status-bar {
+          gap: 16px;
         }
         
-        .overview-full-width .overview-stats {
+        .status-item {
+          flex: 1 1 calc(50% - 8px);
+          min-width: 120px;
+        }
+        
+        .dashboard-side-panels {
           grid-template-columns: 1fr;
         }
       }
       
       @media (max-width: 480px) {
-        .overview-full-width .overview-grid {
-          grid-template-columns: 1fr;
+        .status-item {
+          flex: 1 1 100%;
         }
       }
       
@@ -580,9 +613,13 @@
       <!-- Navigation -->
       <nav id="adminNav" class="hidden" style="margin-bottom: 20px;">
         <div class="card" style="padding: 12px 16px;">
-          <div style="display: flex; gap: 16px; align-items: center;">
-            <a href="/admin" style="color: var(--text); text-decoration: none; padding: 8px 12px; border-radius: 6px; background: var(--accent); font-weight: 500;">Dashboard</a>
-            <a href="/social-media" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Social Media</a>
+          <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+            <a href="/admin" id="nav-dashboard" style="color: var(--text); text-decoration: none; padding: 8px 12px; border-radius: 6px; background: var(--accent); font-weight: 500;">Dashboard</a>
+            <a href="/admin/threats" id="nav-threats" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Threat Review</a>
+            <a href="/admin/messages" id="nav-messages" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Messages</a>
+            <a href="/admin/settings" id="nav-settings" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Settings</a>
+            <a href="/admin/management" id="nav-management" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Management</a>
+            <a href="/social-media" id="nav-social" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Social Media</a>
           </div>
         </div>
       </nav>
@@ -597,198 +634,87 @@
         <div id="loginMsg" class="message message-error hidden"></div>
       </div>
 
-      <div id="dash" class="hidden">
-        <!-- Global message area -->
-        <div id="globalMessage" class="message hidden"></div>
-        
-        <!-- Full width Overview section -->
-        <div class="card overview-full-width">
-          <h2>Overview</h2>
-          <div class="overview-grid">
-            <div class="kpi">
-              <span class="value" id="k_users">-</span>
-              <span class="label">Users</span>
-            </div>
-            <div class="kpi">
-              <span class="value" id="k_teams">-</span>
-              <span class="label">Teams</span>
-            </div>
-            <div class="kpi">
-              <span class="value" id="k_sockets">-</span>
-              <span class="label">Sockets</span>
-            </div>
-            <div class="kpi">
-              <span class="value" id="k_auth">-</span>
-              <span class="label">Auth</span>
-            </div>
-            <div class="kpi">
-              <span class="value" id="k_annotations">-</span>
-              <span class="label">Annotations</span>
-            </div>
-            <div class="kpi">
-              <span class="value" id="k_messages">-</span>
-              <span class="label">Messages</span>
-            </div>
-            <div class="kpi">
-              <span class="value" id="k_locations">-</span>
-              <span class="label">Locations</span>
-            </div>
-            <div class="kpi">
-              <span class="value" id="k_sync_status">-</span>
-              <span class="label">Sync Status</span>
-            </div>
-          </div>
-          
-          <div class="overview-stats">
-            <div class="stat-row">
-              <span class="stat-label">Uptime</span>
-              <span class="stat-value" id="k_uptime">-</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Node</span>
-              <span class="stat-value" id="k_node">-</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Load / CPU</span>
-              <span class="stat-value" id="k_load">-</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Memory</span>
-              <span class="stat-value" id="k_mem">-</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Map section right under overview -->
-        <div class="section card">
-          <h2>Live Map View</h2>
+      <!-- Settings Page -->
+      <div id="settingsPage" class="hidden">
+        <div class="card">
+          <h2>Settings</h2>
           <div class="help-text">
-            <strong>Real-time map</strong> showing annotations and peer locations from all teams
+            <strong>Server configuration</strong> for organization settings, security, and data retention
           </div>
           
-          <div style="display: flex; gap: 12px; margin-bottom: 16px; align-items: center;">
-            <select id="map_team_select" style="flex: 1; min-width: 200px;">
-              <option value="">All Teams</option>
-            </select>
-            <button id="map_refresh" class="secondary">Refresh Data</button>
-            <button id="map_center" class="secondary">Center Map</button>
-            <button id="map_clear_all" class="secondary" style="background: #E91E63; color: white;">Clear All Annotations</button>
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <label style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
-                <input id="map_show_annotations" type="checkbox" checked />
-                Annotations
-              </label>
-              <label style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
-                <input id="map_show_locations" type="checkbox" checked />
-                Locations
-              </label>
-            </div>
-          </div>
-          
-          <div id="map_container" style="height: 500px; border-radius: 8px; overflow: hidden; background: #0c1527; border: 1px solid #1f2a44; position: relative;">
-            <!-- Fan Menu for Annotation Creation -->
-            <div id="fan_menu" class="fan-menu">
-              <!-- Center hole with dot and coordinate text -->
-              <div class="fan-menu-center">
-                <div class="fan-menu-center-dot"></div>
-                <div class="fan-menu-center-text fan-menu-center-coords" id="fan_menu_coords">0.00000, 0.00000</div>
-                <div class="fan-menu-center-text fan-menu-center-distance" id="fan_menu_distance">0.0 mi away</div>
-              </div>
-              <!-- Donut ring segments will be dynamically added here -->
-            </div>
-            
-            <!-- Color Menu for Annotation Creation -->
-            <div id="color_menu" class="color-menu">
-              <!-- Color options will be dynamically added here -->
-            </div>
-            
-            <!-- Map Interaction Feedback -->
-            <div id="map_feedback" class="map-interaction-feedback">
-              <!-- Feedback messages will be shown here -->
-            </div>
-          </div>
-          
-          <div style="margin-top: 16px; font-size: 13px;">
-            <strong>Map Controls:</strong>
-            <div style="margin-top: 8px; color: var(--muted);">
-              • Click and drag to pan<br>
-              • Scroll to zoom<br>
-              • Click annotations for details<br>
-              • <strong>Long press</strong> to create annotations<br>
-              • <strong>Right-click</strong> annotations to edit/delete<br>
-              • Use team filter to focus on specific teams
-            </div>
-          </div>
-        </div>
-
-        <!-- Real-time Activity and Configuration side by side -->
-        <div class="grid" style="margin-top: 16px;">
-          <div class="card">
-            <h2>Real-time Activity</h2>
+          <div class="field-group">
+            <label for="org">Organization Name</label>
+            <input id="org" />
             <div class="help-text">
-              <strong>Live updates</strong> of connected devices, sync activity, and system events
+              <strong>Display name</strong> for your organization that appears in the TAK Lite app
             </div>
-            
-            <div style="display: flex; justify-content: space-between; align-items: center; margin: 16px 0;">
-              <div>
-                <strong>WebSocket Status:</strong> 
-                <span id="ws_status" style="color: #ef4444;">Disconnected</span>
-              </div>
-              <button id="reconnect_ws" class="secondary small">Reconnect WebSocket</button>
+          </div>
+          
+          <div class="field-group">
+            <label for="cors">Allowed Websites (CORS)</label>
+            <input id="cors" placeholder="http://localhost:3000" />
+            <div class="help-text">
+              <strong>What is this?</strong> Controls which websites can connect to your server.<br>
+              <strong>Leave blank</strong> if you're only using the TAK Lite mobile app.<br>
+              <strong>Example:</strong> http://localhost:3000, https://myapp.com
             </div>
-            
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
-              <div>
-                <h3 style="margin: 0 0 8px; font-size: 14px; color: #cbd5e1;">Active Connections</h3>
-                <pre id="rooms" class="muted" style="white-space:pre-wrap; margin:0; background: #0c1527; padding: 12px; border-radius: 6px; max-height: 150px; overflow-y: auto; font-size: 12px;"></pre>
-              </div>
-              <div>
-                <h3 style="margin: 0 0 8px; font-size: 14px; color: #cbd5e1;">Recent Activity</h3>
-                <div id="activity_log" style="background: #0c1527; padding: 12px; border-radius: 6px; max-height: 150px; overflow-y: auto; font-size: 12px; font-family: 'Courier New', monospace;">
-                  <div class="muted">Waiting for activity...</div>
-                </div>
-              </div>
+          </div>
+          
+          <div class="field-group">
+            <label for="retention">Data Retention Period (days)</label>
+            <input id="retention" type="number" min="0" max="365" />
+            <div class="help-text">
+              <strong>How long to keep:</strong> Location history, messages, and annotations<br>
+              <strong>0 days:</strong> Keep everything forever (uses more storage)<br>
+              <strong>30 days:</strong> Good balance for most teams<br>
+              <strong>90+ days:</strong> For compliance or long-term projects
+            </div>
+          </div>
+          
+          <button id="save" class="secondary save-button">Save Changes</button>
+          <div id="saveMsg" class="message hidden"></div>
+        </div>
+      </div>
+
+      <!-- Management Page -->
+      <div id="managementPage" class="hidden">
+        <div class="grid">
+          <div class="card">
+            <h2>Users</h2>
+            <div class="row">
+              <input id="u_email" type="email" placeholder="user@example.com" />
+              <input id="u_name" type="text" placeholder="Name" />
+              <label class="row" style="gap:6px"><input id="u_admin" type="checkbox" /> Admin</label>
+              <button id="u_create">Create User</button>
+            </div>
+            <div id="u_msg" class="message hidden"></div>
+            <div class="users-table">
+              <table id="u_table"><thead><tr><th>Email</th><th>Name</th><th>Admin</th><th>Actions</th></tr></thead><tbody></tbody></table>
             </div>
           </div>
 
           <div class="card">
-            <h2>Configuration</h2>
-            <div class="field-group">
-              <label for="org">Organization Name</label>
-              <input id="org" />
-              <div class="help-text">
-                <strong>Display name</strong> for your organization that appears in the TAK Lite app
-              </div>
+            <h2>Teams</h2>
+            <div class="row">
+              <input id="t_name" type="text" placeholder="Team name" />
+              <button id="t_create">Create Team</button>
             </div>
-            
-            <div class="field-group">
-              <label for="cors">Allowed Websites (CORS)</label>
-              <input id="cors" placeholder="http://localhost:3000" />
-              <div class="help-text">
-                <strong>What is this?</strong> Controls which websites can connect to your server.<br>
-                <strong>Leave blank</strong> if you're only using the TAK Lite mobile app.<br>
-                <strong>Example:</strong> http://localhost:3000, https://myapp.com
-              </div>
+            <div class="row section">
+              <select id="t_select" style="flex:1"></select>
+              <select id="t_user_select" style="flex:1"></select>
+              <button id="t_add_member">Add Member</button>
             </div>
-            
-            <div class="field-group">
-              <label for="retention">Data Retention Period (days)</label>
-              <input id="retention" type="number" min="0" max="365" />
-              <div class="help-text">
-                <strong>How long to keep:</strong> Location history, messages, and annotations<br>
-                <strong>0 days:</strong> Keep everything forever (uses more storage)<br>
-                <strong>30 days:</strong> Good balance for most teams<br>
-                <strong>90+ days:</strong> For compliance or long-term projects
-              </div>
+            <div id="t_msg" class="message hidden"></div>
+            <div class="teams-table">
+              <table id="t_table"><thead><tr><th>User</th><th>Email</th><th>Actions</th></tr></thead><tbody></tbody></table>
             </div>
-            
-            <button id="save" class="secondary save-button">Save Changes</button>
-            <div id="saveMsg" class="message hidden"></div>
           </div>
         </div>
+      </div>
 
-        <!-- Threat Review Section -->
-        <div class="section card" style="margin-top: 16px;">
+      <!-- Threat Review Page -->
+      <div id="threatsPage" class="hidden">
+        <div class="card">
           <h2>AI Threat Review</h2>
           <div class="help-text">
             <strong>Review and manage AI-detected threats</strong> from geographical monitoring and social media analysis
@@ -818,7 +744,7 @@
             </div>
           </div>
           
-          <div id="threats_list" style="max-height: 400px; overflow-y: auto; border: 1px solid #1f2a44; border-radius: 8px; background: #0c1527;">
+          <div id="threats_list" style="max-height: 600px; overflow-y: auto; border: 1px solid #1f2a44; border-radius: 8px; background: #0c1527;">
             <div class="muted" style="text-align: center; padding: 20px;">Loading threats...</div>
           </div>
           
@@ -832,9 +758,11 @@
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Message Monitoring Section -->
-        <div class="section card" style="margin-top: 16px;">
+      <!-- Messages Page -->
+      <div id="messagesPage" class="hidden">
+        <div class="card">
           <h2>Live Message Monitoring</h2>
           <div class="help-text">
             <strong>Real-time message monitoring</strong> showing all team communications as they happen
@@ -857,7 +785,7 @@
             </div>
           </div>
           
-          <div id="message_monitor" style="height: 300px; border-radius: 8px; overflow: hidden; background: #0c1527; border: 1px solid #1f2a44; padding: 12px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 13px;">
+          <div id="message_monitor" style="height: 600px; border-radius: 8px; overflow: hidden; background: #0c1527; border: 1px solid #1f2a44; padding: 12px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 13px;">
             <div class="muted" style="text-align: center; padding: 20px;">Waiting for messages...</div>
           </div>
           
@@ -871,36 +799,134 @@
             </div>
           </div>
         </div>
+      </div>
 
-        <div class="section grid" style="margin-top: 16px;">
-          <div class="card">
-            <h2>Users</h2>
-            <div class="row">
-              <input id="u_email" type="email" placeholder="user@example.com" />
-              <input id="u_name" type="text" placeholder="Name" />
-              <label class="row" style="gap:6px"><input id="u_admin" type="checkbox" /> Admin</label>
-              <button id="u_create">Create User</button>
+      <!-- Dashboard Page -->
+      <div id="dash" class="hidden">
+        <!-- Global message area -->
+        <div id="globalMessage" class="message hidden"></div>
+        
+        <!-- Operational Status Bar (Field Operations Focus) -->
+        <div class="card" style="margin-bottom: 16px; padding: 12px 16px;">
+          <div class="operational-status-bar">
+            <div class="status-item">
+              <span class="status-label">Active Users:</span>
+              <span class="status-value" id="k_users">-</span>
             </div>
-            <div id="u_msg" class="message hidden"></div>
-            <div class="users-table">
-              <table id="u_table"><thead><tr><th>Email</th><th>Name</th><th>Admin</th><th>Actions</th></tr></thead><tbody></tbody></table>
+            <div class="status-item">
+              <span class="status-label">Active Teams:</span>
+              <span class="status-value" id="k_teams">-</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">Sync Status:</span>
+              <span class="status-value" id="k_sync_status" style="color: #8b97a7;">-</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">Connection:</span>
+              <span class="status-value" id="ws_status" style="color: #ef4444;">Disconnected</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">Active Threats:</span>
+              <span class="status-value" id="k_active_threats">0</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">Recent Messages:</span>
+              <span class="status-value" id="k_recent_messages">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Dashboard Layout: Map (60%) + Side Panels (40%) -->
+        <div class="dashboard-main-layout">
+          <!-- Left Side: Map (60%) -->
+          <div class="dashboard-map-section">
+            <div class="card">
+              <h2>Live Map View</h2>
+              <div class="help-text">
+                <strong>Real-time map</strong> showing annotations and peer locations from all teams
+              </div>
+              
+              <div style="display: flex; gap: 12px; margin-bottom: 16px; align-items: center; flex-wrap: wrap;">
+                <select id="map_team_select" style="flex: 1; min-width: 200px;">
+                  <option value="">All Teams</option>
+                </select>
+                <button id="map_refresh" class="secondary">Refresh Data</button>
+                <button id="map_center" class="secondary">Center Map</button>
+                <button id="map_clear_all" class="secondary" style="background: #E91E63; color: white;">Clear All</button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <label style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
+                    <input id="map_show_annotations" type="checkbox" checked />
+                    Annotations
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
+                    <input id="map_show_locations" type="checkbox" checked />
+                    Locations
+                  </label>
+                </div>
+              </div>
+              
+              <div id="map_container" style="height: 600px; border-radius: 8px; overflow: hidden; background: #0c1527; border: 1px solid #1f2a44; position: relative;">
+                <!-- Fan Menu for Annotation Creation -->
+                <div id="fan_menu" class="fan-menu">
+                  <!-- Center hole with dot and coordinate text -->
+                  <div class="fan-menu-center">
+                    <div class="fan-menu-center-dot"></div>
+                    <div class="fan-menu-center-text fan-menu-center-coords" id="fan_menu_coords">0.00000, 0.00000</div>
+                    <div class="fan-menu-center-text fan-menu-center-distance" id="fan_menu_distance">0.0 mi away</div>
+                  </div>
+                  <!-- Donut ring segments will be dynamically added here -->
+                </div>
+                
+                <!-- Color Menu for Annotation Creation -->
+                <div id="color_menu" class="color-menu">
+                  <!-- Color options will be dynamically added here -->
+                </div>
+                
+                <!-- Map Interaction Feedback -->
+                <div id="map_feedback" class="map-interaction-feedback">
+                  <!-- Feedback messages will be shown here -->
+                </div>
+              </div>
+              
+              <div style="margin-top: 12px; font-size: 12px; color: var(--muted);">
+                <strong>Controls:</strong> Click and drag to pan • Scroll to zoom • <strong>Long press</strong> to create annotations • <strong>Right-click</strong> to edit/delete
+              </div>
             </div>
           </div>
 
-          <div class="card">
-            <h2>Teams</h2>
-            <div class="row">
-              <input id="t_name" type="text" placeholder="Team name" />
-              <button id="t_create">Create Team</button>
+          <!-- Right Side: Side Panels (40%) -->
+          <div class="dashboard-side-panels">
+            <!-- Top Panel: Active Threats -->
+            <div class="card" style="margin-bottom: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h2 style="margin: 0;">Active Threats</h2>
+                <a href="/admin/threats" style="color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 500;">View All →</a>
+              </div>
+              <div class="help-text" style="margin-bottom: 12px; font-size: 12px;">
+                <strong>Critical & High</strong> threats requiring immediate attention
+              </div>
+              
+              <div id="active_threats_panel" style="max-height: 300px; overflow-y: auto;">
+                <div class="muted" style="text-align: center; padding: 20px; font-size: 13px;">Loading threats...</div>
+              </div>
             </div>
-            <div class="row section">
-              <select id="t_select" style="flex:1"></select>
-              <select id="t_user_select" style="flex:1"></select>
-              <button id="t_add_member">Add Member</button>
-            </div>
-            <div id="t_msg" class="message hidden"></div>
-            <div class="teams-table">
-              <table id="t_table"><thead><tr><th>User</th><th>Email</th><th>Actions</th></tr></thead><tbody></tbody></table>
+
+            <!-- Bottom Panel: Live Messages -->
+            <div class="card">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h2 style="margin: 0;">Live Messages</h2>
+                <a href="/admin/messages" style="color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 500;">View All →</a>
+              </div>
+              <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center;">
+                <select id="message_team_filter_compact" style="flex: 1; font-size: 12px; padding: 6px;">
+                  <option value="">All Teams</option>
+                </select>
+                <button id="clear_messages_compact" class="secondary" style="padding: 6px 12px; font-size: 12px;">Clear</button>
+              </div>
+              
+              <div id="message_monitor_compact" style="height: 300px; border-radius: 8px; overflow: hidden; background: #0c1527; border: 1px solid #1f2a44; padding: 12px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px;">
+                <div class="muted" style="text-align: center; padding: 20px;">Waiting for messages...</div>
+              </div>
             </div>
           </div>
         </div>

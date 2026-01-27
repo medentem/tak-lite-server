@@ -79,6 +79,66 @@ function handleMessageReceived(data) {
 
 function updateMessageDisplay() {
   const messageEl = q('#message_monitor');
+  const compactEl = q('#message_monitor_compact');
+  
+  // Update compact message monitor
+  if (compactEl) {
+    updateCompactMessageDisplay(compactEl);
+  }
+  
+  // Update full message monitor if it exists
+  if (messageEl) {
+    updateFullMessageDisplay(messageEl);
+  }
+  
+  // Update status bar count
+  const recentMessagesCount = q('#k_recent_messages');
+  if (recentMessagesCount) {
+    const filteredCount = messageTeamFilter 
+      ? messageLog.filter(msg => msg.teamId === messageTeamFilter).length
+      : messageLog.length;
+    recentMessagesCount.textContent = filteredCount;
+  }
+}
+
+function updateCompactMessageDisplay(messageEl) {
+  if (!messageEl) return;
+  
+  if (messageLog.length === 0) {
+    messageEl.innerHTML = '<div class="muted" style="text-align: center; padding: 20px; font-size: 12px;">Waiting for messages...</div>';
+    return;
+  }
+  
+  // Filter messages by team if filter is set
+  const teamFilter = q('#message_team_filter_compact')?.value || '';
+  const filteredMessages = teamFilter 
+    ? messageLog.filter(msg => msg.teamId === teamFilter)
+    : messageLog;
+  
+  if (filteredMessages.length === 0) {
+    messageEl.innerHTML = '<div class="muted" style="text-align: center; padding: 20px; font-size: 12px;">No messages for selected team...</div>';
+    return;
+  }
+  
+  // Show only last 10 messages in compact view
+  const recentMessages = filteredMessages.slice(0, 10);
+  
+  const html = recentMessages.map(msg => {
+    const timeStr = msg.timestamp.toLocaleTimeString();
+    
+    return `<div style="margin-bottom: 6px; line-height: 1.3; font-size: 11px;">
+      <span style="color: #3b82f6; font-weight: 500;">[${timeStr}] ${msg.userName}:</span>
+      <span style="color: #e6edf3;">${escapeHtml(msg.content)}</span>
+    </div>`;
+  }).join('');
+  
+  messageEl.innerHTML = html;
+  
+  // Auto-scroll to bottom
+  messageEl.scrollTop = messageEl.scrollHeight;
+}
+
+function updateFullMessageDisplay(messageEl) {
   if (!messageEl) return;
   
   if (messageLog.length === 0) {
@@ -128,7 +188,7 @@ function clearMessages() {
 }
 
 function setupMessageControls() {
-  // Team filter
+  // Team filter (full monitor)
   const teamFilter = q('#message_team_filter');
   if (teamFilter) {
     teamFilter.addEventListener('change', (e) => {
@@ -137,10 +197,24 @@ function setupMessageControls() {
     });
   }
   
-  // Clear messages button
+  // Team filter (compact monitor)
+  const teamFilterCompact = q('#message_team_filter_compact');
+  if (teamFilterCompact) {
+    teamFilterCompact.addEventListener('change', (e) => {
+      updateMessageDisplay();
+    });
+  }
+  
+  // Clear messages button (full)
   const clearBtn = q('#clear_messages');
   if (clearBtn) {
     clearBtn.addEventListener('click', clearMessages);
+  }
+  
+  // Clear messages button (compact)
+  const clearBtnCompact = q('#clear_messages_compact');
+  if (clearBtnCompact) {
+    clearBtnCompact.addEventListener('click', clearMessages);
   }
   
   // Auto-scroll toggle
@@ -186,12 +260,84 @@ async function loadThreats() {
   }
 }
 
+// Update active threats panel (compact view for dashboard)
+function updateActiveThreatsPanel() {
+  const panelEl = q('#active_threats_panel');
+  if (!panelEl) return;
+  
+  // Filter for CRITICAL and HIGH threats that are pending or reviewed
+  const activeThreats = threatsList.filter(t => 
+    (t.threat_level === 'CRITICAL' || t.threat_level === 'HIGH') &&
+    (t.admin_status === 'pending' || t.admin_status === 'reviewed')
+  );
+  
+  // Update status bar count
+  const activeThreatsCount = q('#k_active_threats');
+  if (activeThreatsCount) {
+    activeThreatsCount.textContent = activeThreats.length;
+    activeThreatsCount.style.color = activeThreats.length > 0 ? '#ef4444' : '#22c55e';
+  }
+  
+  if (activeThreats.length === 0) {
+    panelEl.innerHTML = '<div class="muted" style="text-align: center; padding: 20px; font-size: 13px;">No active threats</div>';
+    return;
+  }
+  
+  // Show only top 5 most critical
+  const topThreats = activeThreats.slice(0, 5);
+  
+  const html = topThreats.map(threat => {
+    const threatLevelColors = {
+      'LOW': '#22c55e',
+      'MEDIUM': '#f59e0b', 
+      'HIGH': '#ef4444',
+      'CRITICAL': '#dc2626'
+    };
+    
+    const color = threatLevelColors[threat.threat_level] || '#8b97a7';
+    const status = threat.admin_status || 'pending';
+    
+    return `
+      <div style="border-bottom: 1px solid #1f2a44; padding: 12px; margin-bottom: 8px; background: #0d1b34; border-radius: 6px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <span style="background: ${color}; color: white; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+            ${threat.threat_level}
+          </span>
+          <span style="color: var(--text); font-weight: 600; font-size: 12px; flex: 1;">
+            ${threat.threat_type || 'Unknown'}
+          </span>
+        </div>
+        <div style="color: var(--muted); font-size: 11px; line-height: 1.4; margin-bottom: 8px;">
+          ${(threat.ai_summary || 'No summary').substring(0, 100)}${threat.ai_summary && threat.ai_summary.length > 100 ? '...' : ''}
+        </div>
+        <div style="display: flex; gap: 6px;">
+          ${status === 'pending' ? `
+            <button onclick="reviewThreat('${threat.id}', 'approved')" style="background: #22c55e; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; flex: 1;">
+              Approve
+            </button>
+            <button onclick="reviewThreat('${threat.id}', 'dismissed')" style="background: #6b7280; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; flex: 1;">
+              Dismiss
+            </button>
+          ` : `
+            <button onclick="showThreatDetails('${threat.id}')" style="background: #3b82f6; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; width: 100%;">
+              View Details
+            </button>
+          `}
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  panelEl.innerHTML = html;
+}
+
 function updateThreatsDisplay() {
   const threatsEl = q('#threats_list');
   if (!threatsEl) return;
   
   if (threatsList.length === 0) {
     threatsEl.innerHTML = '<div class="muted" style="text-align: center; padding: 20px;">No threats found</div>';
+    updateActiveThreatsPanel();
     return;
   }
   
@@ -274,6 +420,9 @@ function updateThreatsDisplay() {
   }).join('');
   
   threatsEl.innerHTML = html;
+  
+  // Also update the compact panel if it exists
+  updateActiveThreatsPanel();
 }
 
 async function reviewThreat(threatId, status) {
@@ -919,9 +1068,72 @@ function setLoading(loading = true) {
   });
 }
 
+// Page navigation
+let currentPage = 'dashboard';
+
+function showPage(pageName) {
+  // Hide all pages
+  const pages = ['dash', 'settingsPage', 'managementPage', 'threatsPage', 'messagesPage'];
+  pages.forEach(page => {
+    const el = q(`#${page}`);
+    if (el) el.classList.add('hidden');
+  });
+  
+  // Show selected page
+  const pageMap = {
+    'dashboard': 'dash',
+    'settings': 'settingsPage',
+    'management': 'managementPage',
+    'threats': 'threatsPage',
+    'messages': 'messagesPage'
+  };
+  
+  const pageId = pageMap[pageName];
+  if (pageId) {
+    const el = q(`#${pageId}`);
+    if (el) el.classList.remove('hidden');
+  }
+  
+  // Update navigation highlighting
+  const navLinks = ['nav-dashboard', 'nav-settings', 'nav-management', 'nav-threats', 'nav-messages', 'nav-social'];
+  navLinks.forEach(linkId => {
+    const link = q(`#${linkId}`);
+    if (link) {
+      const isActive = (pageName === 'dashboard' && linkId === 'nav-dashboard') ||
+                       (pageName === 'settings' && linkId === 'nav-settings') ||
+                       (pageName === 'management' && linkId === 'nav-management') ||
+                       (pageName === 'threats' && linkId === 'nav-threats') ||
+                       (pageName === 'messages' && linkId === 'nav-messages');
+      
+      if (isActive) {
+        link.style.background = 'var(--accent)';
+        link.style.color = 'var(--text)';
+      } else {
+        link.style.background = 'transparent';
+        link.style.color = 'var(--muted)';
+      }
+    }
+  });
+  
+  currentPage = pageName;
+  
+  // Initialize page-specific features
+  if (pageName === 'dashboard' || pageName === 'threats') {
+    if (threatsList.length === 0) {
+      loadThreats();
+    }
+    if (threatAutoRefresh) {
+      startThreatAutoRefresh();
+    }
+  }
+  
+  if (pageName === 'dashboard' || pageName === 'messages') {
+    updateMessageDisplay();
+  }
+}
+
 function showDash(show) {
   q('#loginCard').classList.toggle('hidden', show);
-  q('#dash').classList.toggle('hidden', !show);
   q('#logout').classList.toggle('hidden', !show);
   q('#who').classList.toggle('hidden', !show);
   q('#adminNav').classList.toggle('hidden', !show);
@@ -933,13 +1145,8 @@ function showDash(show) {
     // Initialize threat review controls
     setupThreatControls();
     
-    // Load initial threats
-    loadThreats();
-    
-    // Start auto-refresh if enabled
-    if (threatAutoRefresh) {
-      startThreatAutoRefresh();
-    }
+    // Show dashboard by default
+    showPage('dashboard');
     
     // Wait for Socket.IO library if not available, then connect
     if (typeof io !== 'undefined') {
@@ -962,47 +1169,45 @@ function showDash(show) {
 function updateStatsDisplay(stats) {
   if (!stats) return;
   
-  // Update KPI values
+  // Update operational status bar (field operations focus)
   if (stats.db) {
-    q('#k_users').textContent = stats.db.users ?? '-';
-    q('#k_teams').textContent = stats.db.teams ?? '-';
-    q('#k_annotations').textContent = stats.db.annotations ?? '-';
-    q('#k_messages').textContent = stats.db.messages ?? '-';
-    q('#k_locations').textContent = stats.db.locations ?? '-';
-  }
-  
-  if (stats.sockets) {
-    q('#k_sockets').textContent = stats.sockets.totalConnections ?? 0;
-    q('#k_auth').textContent = stats.sockets.authenticatedConnections ?? 0;
-  }
-  
-  if (stats.server) {
-    q('#k_uptime').textContent = (stats.server.uptimeSec || 0) + 's';
-    q('#k_node').textContent = stats.server.node || '-';
-    
-    // Handle load display - show alternative metrics for containerized environments
-    if (stats.server.isContainerized && stats.server.alternativeMetrics) {
-      const alt = stats.server.alternativeMetrics;
-      const cpuUsage = alt.cpuUsage;
-      const cpuPercent = ((cpuUsage.user + cpuUsage.system) / 1000000).toFixed(1); // Convert to seconds
-      q('#k_load').textContent = `CPU: ${cpuPercent}s | Handles: ${alt.activeHandles}`;
-    } else {
-      q('#k_load').textContent = (stats.server.loadavg || []).map(n => n.toFixed(2)).join(' / ') || '-';
+    const usersEl = q('#k_users');
+    if (usersEl) {
+      usersEl.textContent = stats.db.users ?? '-';
     }
     
-    q('#k_mem').textContent = stats.server.memory?.heapUsed ? (stats.server.memory.heapUsed/1048576).toFixed(1)+' MB' : '-';
+    const teamsEl = q('#k_teams');
+    if (teamsEl) {
+      teamsEl.textContent = stats.db.teams ?? '-';
+    }
   }
   
   // Update sync status
   const totalConnections = stats.sockets?.totalConnections || 0;
   const authConnections = stats.sockets?.authenticatedConnections || 0;
-  if (totalConnections > 0) {
-    const syncStatus = authConnections > 0 ? 'Active' : 'Inactive';
-    q('#k_sync_status').textContent = syncStatus;
-    q('#k_sync_status').style.color = authConnections > 0 ? '#22c55e' : '#ef4444';
-  } else {
-    q('#k_sync_status').textContent = 'Offline';
-    q('#k_sync_status').style.color = '#8b97a7';
+  const syncStatusEl = q('#k_sync_status');
+  if (syncStatusEl) {
+    if (totalConnections > 0) {
+      const syncStatus = authConnections > 0 ? 'Active' : 'Inactive';
+      syncStatusEl.textContent = syncStatus;
+      syncStatusEl.style.color = authConnections > 0 ? '#22c55e' : '#ef4444';
+    } else {
+      syncStatusEl.textContent = 'Offline';
+      syncStatusEl.style.color = '#8b97a7';
+    }
+  }
+  
+  // Update active threats count (will be updated by updateActiveThreatsPanel)
+  updateActiveThreatsPanel();
+  
+  // Update recent messages count
+  const recentMessagesCount = q('#k_recent_messages');
+  if (recentMessagesCount) {
+    const teamFilter = q('#message_team_filter_compact')?.value || '';
+    const filteredCount = teamFilter 
+      ? messageLog.filter(msg => msg.teamId === teamFilter).length
+      : messageLog.length;
+    recentMessagesCount.textContent = filteredCount;
   }
 }
 
@@ -1091,7 +1296,7 @@ async function refresh() {
       tsel.appendChild(o); 
     });
     
-    // Populate message team filter
+    // Populate message team filter (full monitor)
     const messageTeamFilter = q('#message_team_filter');
     if (messageTeamFilter) {
       messageTeamFilter.innerHTML = '<option value="">All Teams</option>';
@@ -1100,6 +1305,18 @@ async function refresh() {
         o.value = t.id; 
         o.textContent = t.name; 
         messageTeamFilter.appendChild(o); 
+      });
+    }
+    
+    // Populate message team filter (compact monitor)
+    const messageTeamFilterCompact = q('#message_team_filter_compact');
+    if (messageTeamFilterCompact) {
+      messageTeamFilterCompact.innerHTML = '<option value="">All Teams</option>';
+      teams.forEach(t => { 
+        const o = document.createElement('option'); 
+        o.value = t.id; 
+        o.textContent = t.name; 
+        messageTeamFilterCompact.appendChild(o); 
       });
     }
     
@@ -1511,6 +1728,40 @@ async function checkExistingAuth() {
   showDash(false);
   return false;
 }
+
+// Setup navigation links
+document.addEventListener('DOMContentLoaded', () => {
+  // Navigation link handlers
+  const navLinks = {
+    'nav-dashboard': () => showPage('dashboard'),
+    'nav-settings': () => showPage('settings'),
+    'nav-management': () => showPage('management'),
+    'nav-threats': () => showPage('threats'),
+    'nav-messages': () => showPage('messages')
+  };
+  
+  Object.entries(navLinks).forEach(([id, handler]) => {
+    const link = q(`#${id}`);
+    if (link) {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        handler();
+      });
+    }
+  });
+  
+  // Handle browser back/forward
+  window.addEventListener('popstate', (e) => {
+    const page = e.state?.page || 'dashboard';
+    showPage(page);
+  });
+  
+  // Check URL hash for initial page
+  const hash = window.location.hash.substring(1);
+  if (hash && ['dashboard', 'settings', 'management', 'threats', 'messages'].includes(hash)) {
+    showPage(hash);
+  }
+});
 
 // Initialize the interface
 checkExistingAuth();
