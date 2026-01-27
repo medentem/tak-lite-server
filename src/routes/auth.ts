@@ -104,6 +104,8 @@ export function createAuthRouter(db: DatabaseService, config: ConfigService) {
   });
 
   // Who am I (validate token and return subject and admin flag)
+  // Note: This endpoint is intentionally left without middleware to support cookie-based auth
+  // for the web dashboard, but it performs full token validation
   router.get('/whoami', async (req: Request, res: Response) => {
     const auth = req.headers.authorization || '';
     const [, bearer] = auth.split(' ');
@@ -175,6 +177,8 @@ export function createAuthRouter(db: DatabaseService, config: ConfigService) {
   });
 
   // Get user's teams (requires authentication)
+  // Note: This endpoint is intentionally left without middleware to support cookie-based auth
+  // for the web dashboard, but it performs full token validation
   router.get('/user/teams', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const auth = req.headers.authorization || '';

@@ -305,26 +305,34 @@ app.use('/api/admin', auth.authenticate, auth.adminOnly, createAdminRouter(confi
 // Sync routes (auth required)
 app.use('/api/sync', auth.authenticate, createSyncRouter(syncService));
 
-// Serve admin UI
-app.get('/admin', (_req: Request, res: Response) => {
-  res.setHeader('Content-Type', 'text/html');
-  // CSP for admin: allow Socket.IO CDN, MapLibre CDN, map tiles, web workers, local scripts, and inline scripts
-  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.socket.io https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net; worker-src 'self' blob:; connect-src 'self' https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://fonts.openmaptiles.org");
-  const primary = path.resolve(__dirname, 'public', 'admin.html');
-  const fallback = path.resolve(__dirname, '..', 'public', 'admin.html');
-  const file = fs.existsSync(primary) ? primary : fallback;
-  res.sendFile(file);
+// Serve admin UI (requires authentication and admin role)
+app.get('/admin', auth.authenticate, auth.adminOnly, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.setHeader('Content-Type', 'text/html');
+    // CSP for admin: allow Socket.IO CDN, MapLibre CDN, map tiles, web workers, local scripts, and inline scripts
+    res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.socket.io https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net; worker-src 'self' blob:; connect-src 'self' https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://fonts.openmaptiles.org");
+    const primary = path.resolve(__dirname, 'public', 'admin.html');
+    const fallback = path.resolve(__dirname, '..', 'public', 'admin.html');
+    const file = fs.existsSync(primary) ? primary : fallback;
+    res.sendFile(file);
+  } catch (err) {
+    next(err);
+  }
 });
 
-// Serve social media monitoring UI
-app.get('/social-media', (_req: Request, res: Response) => {
-  res.setHeader('Content-Type', 'text/html');
-  // CSP for social media admin: allow external APIs and CDNs
-  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.twitterapi.io https://api.openai.com");
-  const primary = path.resolve(__dirname, 'public', 'social-media.html');
-  const fallback = path.resolve(__dirname, '..', 'public', 'social-media.html');
-  const file = fs.existsSync(primary) ? primary : fallback;
-  res.sendFile(file);
+// Serve social media monitoring UI (requires authentication)
+app.get('/social-media', auth.authenticate, auth.adminOnly, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.setHeader('Content-Type', 'text/html');
+    // CSP for social media admin: allow external APIs and CDNs
+    res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.twitterapi.io https://api.openai.com");
+    const primary = path.resolve(__dirname, 'public', 'social-media.html');
+    const fallback = path.resolve(__dirname, '..', 'public', 'social-media.html');
+    const file = fs.existsSync(primary) ? primary : fallback;
+    res.sendFile(file);
+  } catch (err) {
+    next(err);
+  }
 });
 
 // TODO: add sync/users/analytics/admin routes in subsequent phases
