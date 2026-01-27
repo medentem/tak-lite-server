@@ -4,8 +4,13 @@
  */
 
 import { logger } from '../../utils/logger.js';
-import { MAP_EVENTS } from '../../events/EventBus.js';
 import { TIMING } from '../../config/mapConfig.js';
+
+// Import MAP_EVENTS directly - using explicit relative path
+// File is at: /public/js/map/services/MapWebSocketManager.js
+// EventBus is at: /public/js/map/events/EventBus.js
+// So we need: ../events/EventBus.js (go up from services/ to map/, then into events/)
+import { MAP_EVENTS } from '../events/EventBus.js';
 
 export class MapWebSocketManager {
   /**
