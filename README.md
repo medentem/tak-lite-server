@@ -4,7 +4,7 @@ Cloud-native backend for TAK Lite. Purpose-built to bridge disconnected meshes a
 
 [![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/medentem/tak-lite-server/tree/main&refcode=6be1d132f60d)
 
-> **✅ Recommended**: The "Deploy to DO" button provides the fastest setup with a Dev Database including SSL certificates. For production databases with monitoring alerts, use Option 3 below.
+> **Recommended**: The "Deploy to DO" button provides the fastest setup with a Dev Database including SSL certificates. For production databases with monitoring alerts, use Option 3 below.
 
 ## Quick Start (Local Development)
 
@@ -173,7 +173,10 @@ Both APIs use the same `SyncService` for core operations:
 - **HTTP API**: Express.js with JWT authentication
 - **Real-time Sync**: Socket.IO for live location/annotation updates
 - **Database**: PostgreSQL with automatic migrations
-- **Admin Interface**: Built-in dashboard and setup wizard
+- **Admin Interface**: Modular ES6-based dashboard with component architecture
+  - Page modules: Dashboard, Settings, Management, Threats, Messages
+  - Shared utilities and services for code reuse
+  - Modular CSS structure for maintainability
 - **Security**: Rate limiting, CORS, and admin-only routes
 
 ## Deployment

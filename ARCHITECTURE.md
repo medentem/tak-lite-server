@@ -1,10 +1,10 @@
 # TAK Lite Server - Architecture & Design
 
-## 🎯 **Overview**
+## Overview
 
 TAK Lite Server provides an internet bridge for TAK Lite clients with a focus on extremely simple deployment and web-based configuration. The default deployment is a minimal two-service stack (Server + Postgres) with a first‑run Setup Wizard and an embedded Admin UI. Optional services (Redis, reverse proxy/TLS, monitoring) can be enabled later via Docker Compose profiles without changing the core.
 
-## 🏗️ **System Architecture**
+## System Architecture
 
 ### **High-Level Architecture (Simple-by-default)**
 
@@ -81,7 +81,7 @@ TAK Lite Server provides an internet bridge for TAK Lite clients with a focus on
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## 🔧 **Technology Stack**
+## Technology Stack
 
 ### **Backend Services**
 - **Runtime**: Node.js 18+ with TypeScript
@@ -98,10 +98,51 @@ TAK Lite Server provides an internet bridge for TAK Lite clients with a focus on
 - **Security**: JWT + rate limiting (OAuth2 later)
 
 ### **Admin UI**
-- **v1**: Minimal server-rendered setup page and basic admin endpoints
-- **v2**: Embedded SPA served by the server at `/admin`
+- **Frontend Architecture**: Modular ES6 module system with component-based structure
+- **File Structure**:
+  ```
+  src/public/
+  ├── admin.html          # Main admin interface
+  ├── css/
+  │   ├── variables.css   # CSS custom properties
+  │   ├── base.css        # Base styles and resets
+  │   ├── components.css  # Reusable component styles
+  │   └── pages/
+  │       └── admin.css   # Admin-specific styles
+  └── js/
+      ├── main.js         # Application entry point (ES6 module)
+      ├── auth.js         # Authentication module
+      ├── components/     # Reusable UI components
+      │   ├── Navigation.js
+      │   └── Modal.js
+      ├── pages/          # Page-specific modules
+      │   ├── dashboard.js
+      │   ├── settings.js
+      │   ├── management.js
+      │   ├── threats.js
+      │   └── messages.js
+      ├── services/       # Business logic services
+      │   └── websocket.js
+      └── utils/          # Shared utilities
+          ├── api.js      # API client
+          ├── dom.js      # DOM helpers
+          └── storage.js  # LocalStorage management
+  ```
+- **Module System**: Native ES6 modules with explicit `.js` extensions (required for browser module resolution)
+- **Code Organization**: 
+  - Page-based modules for maintainability
+  - Shared utilities eliminate code duplication
+  - Service layer for business logic separation
+  - Component library for reusable UI elements
+- **Styling**: Modular CSS architecture with separation of concerns
+  - CSS variables for theming
+  - Component-based styles for reusability
+  - Page-specific styles when needed
+- **Deployment**: Served as static files from `/public` directory, no build step required for ES6 modules
+- **Browser Support**: Modern browsers with native ES6 module support (Chrome 61+, Firefox 60+, Safari 10.1+, Edge 16+)
+- **Legacy Support**: Map functionality (`map.js`) still uses legacy structure and works alongside new modules
 
-## 📊 **Core Features**
+## Core Features
 
 ### **1. Real-time Data Synchronization**
 - **Location Bridging**: Sync GPS coordinates across internet-connected users
@@ -127,7 +168,7 @@ TAK Lite Server provides an internet bridge for TAK Lite clients with a focus on
 ### **4. Advanced Features (Later phases)**
 - Geofencing, coverage analysis, predictive analytics, integrations, backups
 
-## 🔒 **Security Architecture**
+## Security Architecture
 
 ### **Authentication & Authorization**
 ```
@@ -160,7 +201,7 @@ TAK Lite Server provides an internet bridge for TAK Lite clients with a focus on
 - **Data Retention**: Configurable retention policies
 - **Privacy Controls**: GDPR-compliant data handling
 
-## 📈 **Scalability Design**
+## Scalability Design
 
 ### **Horizontal Scaling**
 ```
@@ -193,7 +234,7 @@ TAK Lite Server provides an internet bridge for TAK Lite clients with a focus on
 - **CDN Integration**: Static asset delivery optimization
 - **Async Processing**: Background job processing with RabbitMQ
 
-## 🔍 **Monitoring & Observability**
+## Monitoring & Observability
 
 ### **Monitoring Stack (optional)**
 ```
@@ -222,7 +263,7 @@ TAK Lite Server provides an internet bridge for TAK Lite clients with a focus on
 - **Network Health**: Latency, packet loss, and connection quality
 - **Business Metrics**: User engagement, feature usage, and retention
 
-## 🚀 **Deployment Architecture**
+## Deployment Architecture
 
 ### **Container Orchestration**
 ```
@@ -253,7 +294,7 @@ TAK Lite Server provides an internet bridge for TAK Lite clients with a focus on
 2. **Compose Profiles**: Add Redis, reverse proxy, monitoring as needed
 3. **Kubernetes (later)**: For larger orgs
 
-## 🔄 **Integration Points**
+## Integration Points
 
 ### **TAK Lite Client Integration**
 - **REST API**: Standard HTTP endpoints for auth and data sync
@@ -268,7 +309,7 @@ TAK Lite Server provides an internet bridge for TAK Lite clients with a focus on
 - **Storage Services**: S3-compatible object storage
 - **CDN Services**: Content delivery network integration
 
-## 📋 **Development Workflow**
+## Development Workflow
 
 ### **Development Environment**
 1. **Local Setup**: Docker Compose for full stack development
@@ -284,7 +325,7 @@ TAK Lite Server provides an internet bridge for TAK Lite clients with a focus on
 4. **Deployment**: Automated deployment to staging and production
 5. **Monitoring**: Post-deployment health checks and monitoring
 
-## 🎯 **Success Metrics**
+## Success Metrics
 
 ### **Technical Metrics**
 - **Uptime**: 99.9% availability target
@@ -300,7 +341,7 @@ TAK Lite Server provides an internet bridge for TAK Lite clients with a focus on
 - **User Satisfaction**: 4.5+ star rating from users
 - **Cost Efficiency**: 50% reduction in deployment complexity
 
-## 🔮 **Future Roadmap**
+## Future Roadmap
 
 ### **Phase 1: Core Infrastructure (Q1)**
 - Basic server setup with authentication
