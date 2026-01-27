@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "nodemon src/index.ts",
     "build": "tsc",
+    "build:frontend": "vite build",
+    "dev:frontend": "vite",
     "start": "node dist/src/index.js",
     "test": "jest",
     "test:watch": "jest --watch",
