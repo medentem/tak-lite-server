@@ -58,49 +58,92 @@ import {
   ColorMenu,
   MenuManager,
   PopupManager,
-  FeedbackDisplay
+  FeedbackDisplay,
+  MapStateManager,
+  EventBus,
+  MAP_EVENTS,
+  LongPressHandler,
+  LocationManager,
+  TeamManager,
+  MapWebSocketManager,
+  MapDataLoader,
+  LayerManager,
+  IconManager,
+  MapBoundsManager
 } from './map/index.js';
 
 class AdminMap {
   constructor() {
     logger.debug('AdminMap constructor called');
     this.map = null;
-    this.locations = [];
-    this.teams = [];
-    this.currentTeamId = null;
-    this.showAnnotations = true;
-    this.showLocations = true;
+    
+    // Initialize state management and event system
+    this.state = new MapStateManager();
+    this.eventBus = new EventBus();
     
     // Initialize components (will be fully initialized after map is created)
     this.mapInitializer = new MapInitializer();
+    this.dataLoader = null; // Will be initialized after map is created
     this.annotationManager = null; // Will be initialized after map is created
+    this.locationManager = null; // Will be initialized after map is created
+    this.teamManager = null; // Will be initialized after map is created
+    this.webSocketManager = null; // Will be initialized after map is created
     this.menuManager = new MenuManager();
     this.feedbackDisplay = new FeedbackDisplay();
     this.popupManager = null; // Will be initialized after map is created
     this.fanMenu = null; // Will be initialized after map is created
     this.colorMenu = null; // Will be initialized after map is created
+    this.longPressHandler = null; // Will be initialized after map is created
     
     // Drawing tools
     this.poiDrawingTool = null;
     this.lineDrawingTool = null;
     this.areaDrawingTool = null;
-    this.currentDrawingTool = null;
     
-    // UI state
+    // UI elements
     this.editForm = null;
     this.modalOverlay = null;
-    this.pendingAnnotation = null;
-    this.currentEditingAnnotation = null;
-    this.currentColor = 'green';
-    this.currentShape = 'circle';
     
-    // Interaction state
-    this.longPressTimer = null;
-    this.longPressThreshold = INTERACTION_CONFIG.longPressThreshold;
-    this.isLongPressing = false;
+    // Setup event listeners
+    this.setupEventListeners();
     
     logger.debug('Calling init() method...');
     this.init();
+  }
+  
+  /**
+   * Setup event listeners for state changes and events
+   */
+  setupEventListeners() {
+    // Listen to state changes
+    this.state.subscribe('showAnnotations', (value) => {
+      this.updateLayerVisibility();
+    });
+    
+    this.state.subscribe('showLocations', (value) => {
+      this.updateLayerVisibility();
+    });
+    
+    this.state.subscribe('currentTeamId', (value) => {
+      this.loadMapData();
+    });
+    
+    // Listen to event bus events
+    this.eventBus.on(MAP_EVENTS.DRAWING_FINISHED, (data) => {
+      this.handleDrawingFinish(data);
+    });
+    
+    this.eventBus.on(MAP_EVENTS.DRAWING_CANCELLED, () => {
+      this.handleDrawingCancel();
+    });
+    
+    this.eventBus.on(MAP_EVENTS.FAN_MENU_OPENED, (data) => {
+      logger.debug('Fan menu opened via event bus');
+    });
+    
+    this.eventBus.on(MAP_EVENTS.COLOR_MENU_OPENED, (data) => {
+      logger.debug('Color menu opened via event bus');
+    });
   }
   
   async init() {
@@ -147,27 +190,9 @@ class AdminMap {
   }
   
   async loadTeams() {
-    try {
-      this.teams = await get(API_ENDPOINTS.teams);
-      this.populateTeamSelect();
-    } catch (error) {
-      logger.error('Failed to load teams:', error);
-    }
-  }
-  
-  populateTeamSelect() {
-    const select = q('#map_team_select');
-    if (!select) return;
-    
-    // Clear existing options except "All Teams"
-    select.innerHTML = '<option value="">All Teams</option>';
-    
-    this.teams.forEach(team => {
-      const option = document.createElement('option');
-      option.value = team.id;
-      option.textContent = team.name;
-      select.appendChild(option);
-    });
+    if (!this.teamManager) return;
+    await this.teamManager.loadTeams();
+    this.state.setTeams(this.teamManager.getTeams());
   }
   
   async initializeMap() {
@@ -175,22 +200,63 @@ class AdminMap {
       // Use MapInitializer to create map
       this.map = await this.mapInitializer.initialize();
       
-      // Initialize components that depend on map
-      this.annotationManager = new AnnotationManager(this.map);
+    // Initialize data loader (creates managers internally)
+    this.dataLoader = new MapDataLoader(this.map, this.eventBus, this.state);
+    this.annotationManager = this.dataLoader.getAnnotationManager();
+    this.locationManager = this.dataLoader.getLocationManager();
+    this.teamManager = this.dataLoader.getTeamManager();
+    
+    // Initialize layer and rendering managers
+    this.layerManager = new LayerManager(this.map);
+    this.iconManager = new IconManager(this.map);
+    this.boundsManager = new MapBoundsManager(this.map);
+    
+    // Initialize WebSocket manager
+    this.webSocketManager = new MapWebSocketManager(this.eventBus, () => {
+      this.loadMapData();
+    });
+    this.webSocketManager.setupGlobalListeners();
+      
+      // Initialize UI components
       this.popupManager = new PopupManager(this.map, this.annotationManager.getAnnotations());
       this.fanMenu = new FanMenu('fan_menu', this.map, this.menuManager);
       this.colorMenu = new ColorMenu('color_menu', this.menuManager);
       
+      // Initialize long press handler
+      this.longPressHandler = new LongPressHandler(this.map, {
+        onLongPress: (e) => {
+          this.state.setIsLongPressing(true);
+          this.showFanMenu(e.point);
+          this.showFeedback('Long press detected - choose annotation type');
+          this.eventBus.emit(MAP_EVENTS.LONG_PRESS_STARTED, { point: e.point });
+        },
+        onCancel: () => {
+          this.state.setIsLongPressing(false);
+          this.eventBus.emit(MAP_EVENTS.LONG_PRESS_CANCELLED);
+        }
+      });
+      
       // Initialize drawing tools
       this.poiDrawingTool = new PoiDrawingTool(this.map);
       this.lineDrawingTool = new LineDrawingTool(this.map, {
-        onFinish: (annotationData) => this.handleDrawingFinish(annotationData),
-        onCancel: () => this.handleDrawingCancel()
+        onFinish: (annotationData) => {
+          this.eventBus.emit(MAP_EVENTS.DRAWING_FINISHED, annotationData);
+        },
+        onCancel: () => {
+          this.eventBus.emit(MAP_EVENTS.DRAWING_CANCELLED);
+        }
       });
       this.areaDrawingTool = new AreaDrawingTool(this.map, {
-        onFinish: (annotationData) => this.handleDrawingFinish(annotationData),
-        onCancel: () => this.handleDrawingCancel()
+        onFinish: (annotationData) => {
+          this.eventBus.emit(MAP_EVENTS.DRAWING_FINISHED, annotationData);
+        },
+        onCancel: () => {
+          this.eventBus.emit(MAP_EVENTS.DRAWING_CANCELLED);
+        }
       });
+      
+      // Setup WebSocket event handlers
+      this.setupWebSocketEventHandlers();
       
       // Wait for map to load
       this.map.on('load', () => {
@@ -198,6 +264,7 @@ class AdminMap {
         this.initializeAnnotationUI();
         this.setupMapInteractionHandlers();
         this.setupMapMovementHandlers();
+        this.eventBus.emit(MAP_EVENTS.MAP_LOADED);
       });
       
     } catch (error) {
@@ -206,20 +273,46 @@ class AdminMap {
   }
   
   /**
+   * Setup WebSocket event handlers via EventBus
+   */
+  setupWebSocketEventHandlers() {
+    // Handle annotation updates
+    this.eventBus.on(MAP_EVENTS.ANNOTATION_UPDATED, (data) => {
+      this.handleAnnotationUpdate(data);
+    });
+    
+    // Handle annotation deletions
+    this.eventBus.on(MAP_EVENTS.ANNOTATION_DELETED, (data) => {
+      this.handleAnnotationDelete(data);
+    });
+    
+    // Handle bulk annotation deletions
+    this.eventBus.on(MAP_EVENTS.ANNOTATION_BULK_DELETED, (data) => {
+      this.handleBulkAnnotationDelete(data);
+    });
+    
+    // Handle location updates
+    this.eventBus.on(MAP_EVENTS.LOCATION_UPDATED, (data) => {
+      this.handleLocationUpdate(data);
+    });
+  }
+  
+  /**
    * Handle drawing tool finish
    */
   async handleDrawingFinish(annotationData) {
     if (!annotationData) return;
     
-    annotationData.teamId = this.currentTeamId;
+    annotationData.teamId = this.state.getCurrentTeamId();
     try {
       await this.annotationManager.createAnnotation(annotationData);
       this.feedbackDisplay.show('Annotation created successfully', 2000);
       this.updateMapData();
+      this.eventBus.emit(MAP_EVENTS.ANNOTATION_CREATED, annotationData);
     } catch (error) {
       this.feedbackDisplay.show(`Failed to create annotation: ${error.message || 'Unknown error'}`, 5000);
     }
-    this.currentDrawingTool = null;
+    this.state.setCurrentDrawingTool(null);
   }
   
   /**
@@ -227,7 +320,7 @@ class AdminMap {
    */
   handleDrawingCancel() {
     this.feedbackDisplay.show('Drawing cancelled', 2000);
-    this.currentDrawingTool = null;
+    this.state.setCurrentDrawingTool(null);
   }
   
   initializeAnnotationUI() {
@@ -296,312 +389,19 @@ class AdminMap {
       return;
     }
     
+    if (!this.layerManager || !this.iconManager) {
+      logger.error('LayerManager or IconManager not initialized');
+      return;
+    }
+    
     // Generate Canvas-based POI icons for all shape-color combinations
-    this.generateCanvasPoiIcons();
+    this.iconManager.generateAllIcons();
     
-    // Add annotation sources (only if they don't exist)
-    const sources = LAYER_CONFIG.sources;
-    const sourceIds = [
-      sources.annotationsPoi,
-      sources.annotationsLine,
-      sources.annotationsArea,
-      sources.annotationsPolygon,
-      sources.locations
-    ];
+    // Setup sources
+    this.layerManager.setupSources();
     
-    sourceIds.forEach(sourceId => {
-      if (!this.map.getSource(sourceId)) {
-        this.map.addSource(sourceId, {
-          type: 'geojson',
-          data: { type: 'FeatureCollection', features: [] }
-        });
-      }
-    });
-    
-    this.addMapLayers();
-  }
-  
-  // Generate Canvas-based POI icons (matching Android app exactly)
-  generateCanvasPoiIcons() {
-    const shapes = ['circle', 'square', 'triangle', 'exclamation'];
-    const colors = ['green', 'yellow', 'red', 'black', 'white'];
-    
-    shapes.forEach(shape => {
-      colors.forEach(color => {
-        const iconName = `poi-${shape}-${color}`;
-        try {
-          // Check if icon already exists to prevent duplicates
-          if (this.map.getImage(iconName)) {
-            logger.debug(`Icon ${iconName} already exists, skipping`);
-            return;
-          }
-          
-          const imageData = this.createCanvasPoiIcon(shape, color);
-          this.map.addImage(iconName, imageData);
-          logger.debug(`Generated Canvas POI icon: ${iconName}`);
-        } catch (error) {
-          logger.error(`Failed to create Canvas icon ${iconName}:`, error);
-        }
-      });
-    });
-  }
-  
-  // Create Canvas POI icon (matching Android app exactly)
-  createCanvasPoiIcon(shape, color) {
-    const size = POI_CONFIG.iconSize;
-    const centerX = size / 2;
-    const centerY = size / 2;
-    const radius = POI_CONFIG.iconRadius;
-    const colorHex = getColorHex(color);
-    
-    // Create canvas
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    
-    // Clear canvas
-    ctx.clearRect(0, 0, size, size);
-    
-    // Set up drawing styles
-    ctx.fillStyle = colorHex;
-    ctx.strokeStyle = POI_CONFIG.strokeColor;
-    ctx.lineWidth = POI_CONFIG.strokeWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    
-    switch (shape) {
-      case 'circle':
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.stroke();
-        break;
-        
-      case 'square':
-        const squareSize = radius * 2;
-        const squareOffset = (size - squareSize) / 2;
-        ctx.beginPath();
-        ctx.rect(squareOffset, squareOffset, squareSize, squareSize);
-        ctx.fill();
-        ctx.stroke();
-        break;
-        
-      case 'triangle':
-        const height = radius * 2;
-        const topY = centerY - height / 2;
-        const leftX = centerX - radius;
-        const leftY = centerY + height / 2;
-        const rightX = centerX + radius;
-        const rightY = centerY + height / 2;
-        
-        ctx.beginPath();
-        ctx.moveTo(centerX, topY);
-        ctx.lineTo(leftX, leftY);
-        ctx.lineTo(rightX, rightY);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        break;
-        
-      case 'exclamation':
-        // Triangle base
-        const exHeight = radius * 2;
-        const exTopY = centerY - exHeight / 2;
-        const exLeftX = centerX - radius;
-        const exLeftY = centerY + exHeight / 2;
-        const exRightX = centerX + radius;
-        const exRightY = centerY + exHeight / 2;
-        
-        // Draw triangle
-        ctx.beginPath();
-        ctx.moveTo(centerX, exTopY);
-        ctx.lineTo(exLeftX, exLeftY);
-        ctx.lineTo(exRightX, exRightY);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        
-        // Draw exclamation mark
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 4;
-        const exMarkTop = centerY - exHeight / 6;
-        const exMarkBottom = centerY + exHeight / 6;
-        
-        ctx.beginPath();
-        ctx.moveTo(centerX, exMarkTop);
-        ctx.lineTo(centerX, exMarkBottom);
-        ctx.stroke();
-        
-        // Draw dot
-        ctx.fillStyle = '#FFFFFF';
-        const dotRadius = 3;
-        const dotCenterY = exMarkBottom + dotRadius * 2;
-        ctx.beginPath();
-        ctx.arc(centerX, dotCenterY, dotRadius, 0, 2 * Math.PI);
-        ctx.fill();
-        break;
-    }
-    
-    // Convert canvas to ImageData format that MapLibre expects
-    return {
-      width: size,
-      height: size,
-      data: ctx.getImageData(0, 0, size, size).data
-    };
-  }
-  
-  
-  
-  addMapLayers() {
-    // IMPORTANT: Layer order matters for click handling!
-    // Areas and polygons should be at the bottom (rendered first)
-    // POIs, lines, and locations should be on top (rendered last)
-    
-    const layers = LAYER_CONFIG.annotationLayers;
-    
-    // 1. Areas (fill) - bottom layer
-    if (!this.map.getLayer(layers.area)) {
-      this.map.addLayer({
-        id: layers.area,
-        type: 'fill',
-        source: LAYER_CONFIG.sources.annotationsArea,
-        paint: {
-          'fill-color': ['get', 'color'],
-          'fill-opacity': ['get', 'fillOpacity']
-        }
-      });
-    }
-
-    // 2. Areas (stroke) - on top of area fill
-    if (!this.map.getLayer(layers.areaStroke)) {
-      this.map.addLayer({
-        id: layers.areaStroke,
-        type: 'line',
-        source: LAYER_CONFIG.sources.annotationsArea,
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
-        paint: {
-          'line-color': ['get', 'color'],
-          'line-width': ['get', 'strokeWidth'],
-          'line-opacity': 1.0
-        }
-      });
-    }
-    
-    // 3. Polygons (fill) - on top of areas
-    if (!this.map.getLayer(layers.polygon)) {
-      this.map.addLayer({
-        id: layers.polygon,
-        type: 'fill',
-        source: LAYER_CONFIG.sources.annotationsPolygon,
-        paint: {
-          'fill-color': ['get', 'color'],
-          'fill-opacity': 0.3
-        }
-      });
-    }
-    
-    // 4. Polygons (stroke) - on top of polygon fill
-    if (!this.map.getLayer(layers.polygonStroke)) {
-      this.map.addLayer({
-        id: layers.polygonStroke,
-        type: 'line',
-        source: LAYER_CONFIG.sources.annotationsPolygon,
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
-        paint: {
-          'line-color': ['get', 'color'],
-          'line-width': 2,
-          'line-opacity': 0.8
-        }
-      });
-    }
-    
-    // 5. Lines - on top of areas and polygons
-    if (!this.map.getLayer(layers.line)) {
-      this.map.addLayer({
-        id: layers.line,
-        type: 'line',
-        source: LAYER_CONFIG.sources.annotationsLine,
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
-        paint: {
-          'line-color': ['get', 'color'],
-          'line-width': 3,
-          'line-opacity': 0.8
-        }
-      });
-    }
-    
-    // 6. POI markers - on top of everything (most important for clicking)
-    if (!this.map.getLayer(layers.poi)) {
-      this.map.addLayer({
-        id: layers.poi,
-        type: 'symbol',
-        source: LAYER_CONFIG.sources.annotationsPoi,
-        layout: {
-          'icon-image': ['get', 'icon'],
-          'icon-size': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            8, 0.5,   // Very small when zoomed out
-            12, 0.8,  // Medium size at mid zoom
-            16, 1.2   // Larger when zoomed in
-          ],
-          'icon-allow-overlap': true,
-          'icon-ignore-placement': true
-          // Removed text-field configuration to avoid glyphs requirement
-          // Labels can still be viewed in popups when clicking on annotations
-        }
-      });
-    }
-    
-    // 7. Location markers - top layer (most important for clicking)
-    if (!this.map.getLayer(LAYER_CONFIG.locationLayer)) {
-      this.map.addLayer({
-        id: LAYER_CONFIG.locationLayer,
-        type: 'circle',
-        source: LAYER_CONFIG.sources.locations,
-        paint: {
-          'circle-radius': 5, // Match Android app size
-          'circle-color': [
-            'case',
-            ['get', 'isStale'], '#BDBDBD', // Gray for stale locations
-            ['==', ['get', 'user_status'], 'RED'], '#F44336',
-            ['==', ['get', 'user_status'], 'YELLOW'], '#FFC107',
-            ['==', ['get', 'user_status'], 'BLUE'], '#2196F3',
-            ['==', ['get', 'user_status'], 'ORANGE'], '#FF9800',
-            ['==', ['get', 'user_status'], 'VIOLET'], '#9C27B0',
-            ['==', ['get', 'user_status'], 'GREEN'], '#4CAF50',
-            '#4CAF50' // Default green
-          ],
-          'circle-stroke-width': 3, // Match Android app stroke width
-          'circle-stroke-color': [
-            'case',
-            ['get', 'isStale'], [
-              'case',
-              ['==', ['get', 'user_status'], 'RED'], '#F44336',
-              ['==', ['get', 'user_status'], 'YELLOW'], '#FFC107',
-              ['==', ['get', 'user_status'], 'BLUE'], '#2196F3',
-              ['==', ['get', 'user_status'], 'ORANGE'], '#FF9800',
-              ['==', ['get', 'user_status'], 'VIOLET'], '#9C27B0',
-              ['==', ['get', 'user_status'], 'GREEN'], '#4CAF50',
-              '#4CAF50' // Default green
-            ],
-            '#FFFFFF' // White for fresh locations
-          ]
-        },
-        filter: ['>=', ['zoom'], DISPLAY_CONFIG.minLocationZoomLevel] // Only show at zoom level 7+ (match Android app)
-      });
-    }
+    // Add all layers
+    this.layerManager.addAllLayers();
     
     // Add click handlers
     this.setupClickHandlers();
@@ -663,62 +463,13 @@ class AdminMap {
   setupMapInteractionHandlers() {
     logger.debug('Setting up map interaction handlers...');
     
-    if (!this.map) {
-      logger.error('Map not initialized, cannot setup interaction handlers');
+    if (!this.map || !this.longPressHandler) {
+      logger.error('Map or LongPressHandler not initialized, cannot setup interaction handlers');
       return;
     }
     
-    // Long press detection for annotation creation
-    let longPressTimer = null;
-    let longPressTriggered = false;
-    let longPressEvent = null;
-    
-    this.map.on('mousedown', (e) => {
-      // Only handle if not clicking on existing annotations or UI elements
-      if (e.originalEvent.target.closest('.maplibregl-popup') || 
-          e.originalEvent.target.closest('.fan-menu') ||
-          e.originalEvent.target.closest('.color-menu') ||
-          e.originalEvent.target.closest('.annotation-edit-form') ||
-          e.originalEvent.target.closest('.modal-overlay')) {
-        return;
-      }
-      
-      longPressTriggered = false;
-      
-      longPressTimer = setTimeout(() => {
-        logger.debug('Long press detected, showing fan menu');
-        longPressTriggered = true;
-        longPressEvent = e; // Store the event that triggered the long press
-        this.showFanMenu(e.point);
-        this.showFeedback('Long press detected - choose annotation type');
-      }, this.longPressThreshold);
-    });
-    
-    this.map.on('mouseup', (e) => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-      
-      // If long press was triggered, prevent the click event from dismissing the menu
-      if (longPressTriggered) {
-        logger.debug('Long press completed, preventing click dismissal');
-        // Mark this specific event as handled to prevent click-outside dismissal
-        e.originalEvent._longPressHandled = true;
-        e._longPressHandled = true; // Also mark the main event
-        longPressTriggered = false;
-        longPressEvent = null;
-      }
-    });
-    
-    this.map.on('mouseleave', (e) => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-      longPressTriggered = false;
-      longPressEvent = null;
-    });
+    // Start long press handler
+    this.longPressHandler.start();
     
     logger.debug('Map interaction handlers setup complete');
   }
@@ -760,48 +511,6 @@ class AdminMap {
     logger.debug('Map movement handlers setup complete');
   }
   
-  startLongPress(e) {
-    // Store the original event for later use
-    this.longPressStartEvent = e;
-    
-    logger.debug('Starting long press detection at:', e.point);
-    
-    this.longPressTimer = setTimeout(() => {
-      this.isLongPressing = true;
-      console.log('Long press detected, showing fan menu');
-      this.showFanMenu(e.point);
-      this.showFeedback('Long press detected - choose annotation type');
-    }, this.longPressThreshold);
-  }
-  
-  endLongPress(e) {
-    if (this.longPressTimer) {
-      clearTimeout(this.longPressTimer);
-      this.longPressTimer = null;
-      logger.debug('Long press cancelled');
-    }
-    
-    if (this.isLongPressing) {
-      this.isLongPressing = false;
-      logger.debug('Long press completed');
-      // Long press was handled by fan menu - prevent default click behavior
-      e.preventDefault();
-      return false;
-    }
-    
-    // Regular click - allow normal map behavior
-    logger.debug('Regular click detected');
-    return true;
-  }
-  
-  cancelLongPress() {
-    if (this.longPressTimer) {
-      clearTimeout(this.longPressTimer);
-      this.longPressTimer = null;
-    }
-    this.isLongPressing = false;
-    this.longPressStartEvent = null;
-  }
   
   showFeedback(message, duration = 3000) {
     this.feedbackDisplay.show(message, duration);
@@ -835,7 +544,7 @@ class AdminMap {
     
     // Get map coordinates for center text
     const lngLat = this.map.unproject(point);
-    this.pendingAnnotation = lngLat;
+    this.state.setPendingAnnotation(lngLat);
     
     // Update center text with coordinates
     this.updateFanMenuCenterText(lngLat);
@@ -1078,15 +787,15 @@ class AdminMap {
     
     if (['circle', 'square', 'triangle', 'exclamation'].includes(optionType)) {
       // Show color menu for POI shapes (two-step flow)
-      this.currentShape = optionType;
+      this.state.setCurrentShape(optionType);
       this.showColorMenu(point, 'poi');
     } else if (optionType === 'area') {
       // Show color menu for area (two-step flow)
-      this.currentShape = 'area';
+      this.state.setCurrentShape('area');
       this.showColorMenu(point, 'area');
     } else if (optionType === 'line') {
       // Show color menu for line (two-step flow)
-      this.currentShape = 'line';
+      this.state.setCurrentShape('line');
       this.showColorMenu(point, 'line');
     } else if (optionType === 'edit') {
       // Handle edit mode
@@ -1115,6 +824,8 @@ class AdminMap {
     this.colorMenu.show(point, annotationType, (color, annotationType) => {
       this.handleColorSelection(color, annotationType);
     });
+    
+    this.eventBus.emit(MAP_EVENTS.COLOR_MENU_OPENED, { point, annotationType });
   }
   
   hideColorMenu() {
@@ -1126,8 +837,9 @@ class AdminMap {
   handleColorSelection(color, annotationType) {
     if (this.colorMenu) {
       this.colorMenu.hide();
+      this.eventBus.emit(MAP_EVENTS.COLOR_MENU_CLOSED);
     }
-    this.currentColor = color;
+    this.state.setCurrentColor(color);
     
     if (annotationType === 'poi') {
       this.createPOI();
@@ -1139,7 +851,8 @@ class AdminMap {
   }
   
   createPOI() {
-    if (!this.pendingAnnotation) {
+    const pendingAnnotation = this.state.getPendingAnnotation();
+    if (!pendingAnnotation) {
       this.showFeedback('No location selected', 3000);
       return;
     }
@@ -1147,14 +860,14 @@ class AdminMap {
     if (!this.poiDrawingTool) return;
     
     const annotationData = this.poiDrawingTool.createPOI(
-      this.pendingAnnotation,
-      this.currentColor,
-      this.currentShape
+      pendingAnnotation,
+      this.state.getCurrentColor(),
+      this.state.getCurrentShape()
     );
     
-    annotationData.teamId = this.currentTeamId;
+    annotationData.teamId = this.state.getCurrentTeamId();
     this.createAnnotation(annotationData);
-    this.pendingAnnotation = null;
+    this.state.setPendingAnnotation(null);
   }
   
   showAnnotationContextMenu(feature, lngLat, point) {
@@ -1223,8 +936,9 @@ class AdminMap {
       return;
     }
     
-    this.currentEditingAnnotation = annotation;
+    this.state.setCurrentEditingAnnotation(annotation);
     this.showEditForm(annotation);
+    this.eventBus.emit(MAP_EVENTS.EDIT_FORM_OPENED, annotation);
   }
   
   showEditForm(annotation) {
@@ -1273,11 +987,13 @@ class AdminMap {
     if (this.modalOverlay) {
       this.modalOverlay.classList.remove('visible');
     }
-    this.currentEditingAnnotation = null;
+    this.state.setCurrentEditingAnnotation(null);
+    this.eventBus.emit(MAP_EVENTS.EDIT_FORM_CLOSED);
   }
   
   async saveAnnotationEdit() {
-    if (!this.currentEditingAnnotation) return;
+    const currentEditing = this.state.getCurrentEditingAnnotation();
+    if (!currentEditing) return;
     
     const editForm = q('#edit_annotation_form');
     if (!editForm) return;
@@ -1288,18 +1004,21 @@ class AdminMap {
     };
     
     // Add type-specific fields
-    if (this.currentEditingAnnotation.type === 'poi') {
+    if (currentEditing.type === 'poi') {
       updateData.shape = formData.get('shape') || 'circle';
-    } else if (this.currentEditingAnnotation.type === 'area') {
+    } else if (currentEditing.type === 'area') {
       updateData.radius = parseFloat(formData.get('radius')) || 100;
     }
     
     if (!this.annotationManager) return;
+    if (!currentEditing) return;
+    
     try {
-      await this.annotationManager.updateAnnotation(this.currentEditingAnnotation.id, updateData);
+      const result = await this.annotationManager.updateAnnotation(currentEditing.id, updateData);
       this.showFeedback('Annotation updated successfully', 2000);
       this.updateMapData();
       this.hideEditForm();
+      this.eventBus.emit(MAP_EVENTS.ANNOTATION_UPDATED, result);
     } catch (error) {
       logger.error('Failed to update annotation:', error);
       this.showFeedback(`Failed to update annotation: ${error.message || 'Unknown error'}`, 5000);
@@ -1307,10 +1026,11 @@ class AdminMap {
   }
   
   async deleteCurrentAnnotation() {
-    if (!this.currentEditingAnnotation) return;
+    const currentEditing = this.state.getCurrentEditingAnnotation();
+    if (!currentEditing) return;
     
     if (confirm('Are you sure you want to delete this annotation?')) {
-      await this.deleteAnnotationById(this.currentEditingAnnotation.id);
+      await this.deleteAnnotationById(currentEditing.id);
       this.hideEditForm();
     }
   }
@@ -1329,6 +1049,7 @@ class AdminMap {
       await this.annotationManager.deleteAnnotation(annotationId);
       this.showFeedback('Annotation deleted successfully', 2000);
       this.updateMapData();
+      this.eventBus.emit(MAP_EVENTS.ANNOTATION_DELETED, { annotationId });
     } catch (error) {
       logger.error('Failed to delete annotation:', error);
       this.showFeedback(`Failed to delete annotation: ${error.message || 'Unknown error'}`, 5000);
@@ -1337,14 +1058,16 @@ class AdminMap {
   
   
   startLineDrawing() {
-    if (!this.pendingAnnotation || !this.lineDrawingTool) {
+    const pendingAnnotation = this.state.getPendingAnnotation();
+    if (!pendingAnnotation || !this.lineDrawingTool) {
       this.showFeedback('No location selected', 3000);
       return;
     }
     
-    this.currentDrawingTool = this.lineDrawingTool;
-    this.lineDrawingTool.start(this.pendingAnnotation, this.currentColor);
-    this.pendingAnnotation = null;
+    this.state.setCurrentDrawingTool(this.lineDrawingTool);
+    this.lineDrawingTool.start(pendingAnnotation, this.state.getCurrentColor());
+    this.state.setPendingAnnotation(null);
+    this.eventBus.emit(MAP_EVENTS.DRAWING_STARTED, { type: 'line' });
     
     this.showFeedback('Click to add more points, use check mark to finish or X to cancel', 5000);
   }
@@ -1353,12 +1076,15 @@ class AdminMap {
   async createAnnotation(annotationData) {
     if (!this.annotationManager) return;
     try {
-      await this.annotationManager.createAnnotation(annotationData);
+      const result = await this.annotationManager.createAnnotation(annotationData);
       this.showFeedback('Annotation created successfully', 2000);
       this.updateMapData();
+      this.eventBus.emit(MAP_EVENTS.ANNOTATION_CREATED, result);
+      return result;
     } catch (error) {
       logger.error('Failed to create annotation:', error);
       this.showFeedback(`Failed to create annotation: ${error.message || 'Unknown error'}`, 5000);
+      throw error;
     }
   }
   
@@ -1377,11 +1103,12 @@ class AdminMap {
   
   setupEventListeners() {
     // Team selection
-    const teamSelect = document.getElementById('map_team_select');
+    const teamSelect = q('#map_team_select');
     if (teamSelect) {
       teamSelect.addEventListener('change', (e) => {
-        this.currentTeamId = e.target.value || null;
-        this.loadMapData();
+        const teamId = e.target.value || null;
+        this.state.setCurrentTeamId(teamId);
+        this.eventBus.emit(MAP_EVENTS.TEAM_SELECTED, { teamId });
       });
     }
     
@@ -1412,99 +1139,29 @@ class AdminMap {
     // Show/hide toggles
     const showAnnotations = q('#map_show_annotations');
     if (showAnnotations) {
+      showAnnotations.checked = this.state.getShowAnnotations();
       showAnnotations.addEventListener('change', (e) => {
-        this.showAnnotations = e.target.checked;
-        this.updateLayerVisibility();
+        this.state.setShowAnnotations(e.target.checked);
       });
     }
     
     const showLocations = q('#map_show_locations');
     if (showLocations) {
+      showLocations.checked = this.state.getShowLocations();
       showLocations.addEventListener('change', (e) => {
-        this.showLocations = e.target.checked;
-        this.updateLayerVisibility();
+        this.state.setShowLocations(e.target.checked);
       });
     }
     
-    // Setup WebSocket listeners for real-time updates
-    this.setupWebSocketListeners();
+    // WebSocket listeners are set up in initializeMap()
   }
   
-  setupWebSocketListeners() {
-    // Listen for global socket events
-    document.addEventListener('socketConnected', () => {
-      this.connectToWebSocket();
-    });
-    
-    document.addEventListener('socketDisconnected', () => {
-      this.disconnectFromWebSocket();
-    });
-    
-    // If socket is already connected, set up listeners immediately
-    if (window.socket && window.socket.connected) {
-      this.connectToWebSocket();
-    }
-  }
-  
-  connectToWebSocket() {
-    if (!window.socket) return;
-    
-    logger.debug('Setting up map WebSocket listeners...');
-    
-    // Listen for annotation updates
-    window.socket.on('admin:annotation_update', (data) => {
-      logger.debug('Received annotation update:', data);
-      this.handleAnnotationUpdate(data);
-    });
-    
-    // Listen for annotation deletions
-    window.socket.on('admin:annotation_delete', (data) => {
-      logger.debug('Received annotation deletion:', data);
-      this.handleAnnotationDelete(data);
-    });
-    
-    // Listen for bulk annotation deletions
-    window.socket.on('admin:annotation_bulk_delete', (data) => {
-      logger.debug('Received bulk annotation deletion:', data);
-      this.handleBulkAnnotationDelete(data);
-    });
-    
-    // Listen for location updates
-    window.socket.on('admin:location_update', (data) => {
-      logger.debug('Received location update:', data);
-      this.handleLocationUpdate(data);
-    });
-    
-    // Listen for sync activity that might affect map data
-    window.socket.on('admin:sync_activity', (data) => {
-      if (data.type === 'annotation_update' || data.type === 'annotation_delete' || data.type === 'annotation_bulk_delete' || data.type === 'location_update') {
-        logger.debug('Sync activity affecting map:', data);
-        // Refresh map data after a short delay to allow server to process
-        setTimeout(() => {
-          this.loadMapData();
-        }, TIMING.syncActivityRefreshDelay);
-      }
-    });
-  }
-  
-  disconnectFromWebSocket() {
-    if (!window.socket) return;
-    
-    logger.debug('Disconnecting map WebSocket listeners...');
-    
-    // Remove specific listeners
-    window.socket.off('admin:annotation_update');
-    window.socket.off('admin:annotation_delete');
-    window.socket.off('admin:annotation_bulk_delete');
-    window.socket.off('admin:location_update');
-    window.socket.off('admin:sync_activity');
-  }
   
   handleAnnotationUpdate(data) {
     if (!this.annotationManager) return;
     
     // Check if this annotation is relevant to current view
-    if (this.currentTeamId && data.teamId !== this.currentTeamId) {
+    if (this.state.getCurrentTeamId() && data.teamId !== this.state.getCurrentTeamId()) {
       return; // Not relevant to current team filter
     }
     
@@ -1518,6 +1175,7 @@ class AdminMap {
     
     // Update map immediately
     this.updateMapData();
+    this.eventBus.emit(MAP_EVENTS.ANNOTATION_UPDATED, data);
     
     logger.debug(`Updated annotation ${data.id} on map`);
   }
@@ -1526,7 +1184,7 @@ class AdminMap {
     if (!this.annotationManager) return;
     
     // Check if this annotation is relevant to current view
-    if (this.currentTeamId && data.teamId !== this.currentTeamId) {
+    if (this.state.getCurrentTeamId() && data.teamId !== this.state.getCurrentTeamId()) {
       return; // Not relevant to current team filter
     }
     
@@ -1542,13 +1200,14 @@ class AdminMap {
     
     // Update map immediately
     this.updateMapData();
+    this.eventBus.emit(MAP_EVENTS.ANNOTATION_DELETED, data);
   }
 
   handleBulkAnnotationDelete(data) {
     if (!this.annotationManager) return;
     
     // Check if this deletion is relevant to current view
-    if (this.currentTeamId && data.teamId !== this.currentTeamId) {
+    if (this.state.getCurrentTeamId() && data.teamId !== this.state.getCurrentTeamId()) {
       return; // Not relevant to current team filter
     }
     
@@ -1567,320 +1226,77 @@ class AdminMap {
     
     // Update map immediately
     this.updateMapData();
+    this.eventBus.emit(MAP_EVENTS.ANNOTATION_BULK_DELETED, data);
   }
   
   handleLocationUpdate(data) {
+    if (!this.locationManager) return;
+    
     // Check if this location is relevant to current view
-    if (this.currentTeamId && data.teamId !== this.currentTeamId) {
+    if (this.state.getCurrentTeamId() && data.teamId !== this.state.getCurrentTeamId()) {
       return; // Not relevant to current team filter
     }
     
-    // Add or update location in local data
-    const existingIndex = this.locations.findIndex(l => l.user_id === data.userId);
-    if (existingIndex >= 0) {
-      // Update existing location
-      this.locations[existingIndex] = {
-        ...this.locations[existingIndex],
-        latitude: data.latitude,
-        longitude: data.longitude,
-        altitude: data.altitude,
-        accuracy: data.accuracy,
-        timestamp: data.timestamp
-      };
-    } else {
-      // Add new location with user info from the event data
-      const newLocation = {
-        id: `temp-${data.userId}-${Date.now()}`, // Temporary ID for new locations
-        user_id: data.userId,
-        team_id: data.teamId,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        altitude: data.altitude,
-        accuracy: data.accuracy,
-        timestamp: data.timestamp,
-        created_at: new Date().toISOString(),
-        user_name: data.user_name || 'Unknown User',
-        user_email: data.user_email || 'unknown@example.com',
-        user_status: data.user_status || 'GREEN'
-      };
-      this.locations.unshift(newLocation); // Add to beginning of array
-    }
+    // Update location via location manager
+    this.locationManager.updateLocation(data);
     
     // Update map immediately
     this.updateMapData();
-    
-    logger.debug(`Updated location for user ${data.userId} on map`);
   }
   
   updateLayerVisibility() {
-    if (!this.map) return;
+    if (!this.layerManager) return;
     
-    const layers = LAYER_CONFIG.annotationLayers;
-    const visibility = this.showAnnotations ? 'visible' : 'none';
-    this.map.setLayoutProperty(layers.poi, 'visibility', visibility);
-    this.map.setLayoutProperty(layers.line, 'visibility', visibility);
-    this.map.setLayoutProperty(layers.area, 'visibility', visibility);
-    this.map.setLayoutProperty(layers.polygon, 'visibility', visibility);
-    this.map.setLayoutProperty(layers.polygonStroke, 'visibility', visibility);
-    
-    const locationVisibility = this.showLocations ? 'visible' : 'none';
-    this.map.setLayoutProperty(LAYER_CONFIG.locationLayer, 'visibility', locationVisibility);
+    this.layerManager.updateAnnotationVisibility(this.state.getShowAnnotations());
+    this.layerManager.updateLocationVisibility(this.state.getShowLocations());
   }
   
   async loadMapData() {
-    if (!this.map) return;
+    if (!this.map || !this.dataLoader) return;
     
     // Ensure map sources are set up
-    if (!this.map.getSource('annotations-poi')) {
-      console.log('Map sources not ready, setting up...');
+    if (!this.map.getSource(LAYER_CONFIG.sources.annotationsPoi)) {
+      logger.debug('Map sources not ready, setting up...');
       this.setupMapSources();
     }
     
-    console.log('Loading map data...');
-    await Promise.all([
-      this.loadAnnotations(),
-      this.loadLocations()
-    ]);
-    
-    this.updateMapData();
-    
-    // Try to center map on user location or existing data after loading
-    this.autoCenterMap();
-  }
-  
-  async loadAnnotations() {
-    if (!this.annotationManager) return;
-    await this.annotationManager.loadAnnotations(this.currentTeamId);
-    // Update popup manager with new annotations
-    if (this.popupManager) {
-      this.popupManager.setAnnotations(this.annotationManager.getAnnotations());
-    }
-  }
-  
-  async loadLocations() {
+    logger.debug('Loading map data...');
     try {
-      // If no team is selected, load locations from all teams by using the regular locations endpoint
-      if (!this.currentTeamId) {
-        const params = new URLSearchParams();
-        params.append('limit', DATA_LIMITS.maxLocations.toString());
-        
-        const url = `${API_ENDPOINTS.locations}?${params}`;
-        logger.debug(`Loading locations from: ${url}`);
-        
-        this.locations = await get(url);
-        logger.info(`Loaded ${this.locations.length} locations from all teams`);
-      } else {
-        // Use the latest endpoint for specific team
-        const params = new URLSearchParams();
-        params.append('teamId', this.currentTeamId);
-        
-        const url = `${API_ENDPOINTS.locationsLatest}?${params}`;
-        logger.debug(`Loading latest locations from: ${url}`);
-        
-        this.locations = await get(url);
-        logger.info(`Loaded ${this.locations.length} latest locations for team ${this.currentTeamId}`);
+      await this.dataLoader.loadAll({
+        loadTeams: false, // Teams are loaded separately
+        loadAnnotations: true,
+        loadLocations: true
+      });
+      
+      this.updateMapData();
+      
+      // Update popup manager with new annotations
+      if (this.popupManager) {
+        this.popupManager.setAnnotations(this.annotationManager.getAnnotations());
       }
+      
+      // Try to center map on user location or existing data after loading
+      this.autoCenterMap();
     } catch (error) {
-      logger.error('Failed to load locations:', error);
-      this.locations = [];
+      logger.error('Failed to load map data:', error);
     }
   }
   
   updateMapData() {
-    if (!this.map || !this.annotationManager) return;
+    if (!this.map || !this.dataLoader) return;
     
-    // Update annotations on map
-    this.annotationManager.updateMap();
-    
-    // Update locations on map
-    this.updateLocationsOnMap();
+    // Update all data on map via data loader
+    this.dataLoader.updateMap();
     
     // Update popup manager with current annotations
     if (this.popupManager) {
       this.popupManager.setAnnotations(this.annotationManager.getAnnotations());
     }
-  }
-  
-  /**
-   * Update locations on map
-   */
-  updateLocationsOnMap() {
-    if (!this.map) return;
     
-    const now = Date.now();
-    const stalenessThresholdMs = DISPLAY_CONFIG.stalenessThresholdMs;
-    
-    const locationFeatures = this.locations
-      .map(location => {
-        const locationCoords = extractCoordinates(location);
-        if (!locationCoords) {
-          logger.warn('Skipping location with invalid coordinates:', {
-            id: location.id,
-            user_id: location.user_id,
-            latitude: location.latitude,
-            longitude: location.longitude
-          });
-          return null;
-        }
-        
-        const locationAge = now - new Date(location.timestamp).getTime();
-        const isStale = locationAge > stalenessThresholdMs;
-        
-        return {
-          type: 'Feature',
-          geometry: {
-            type: 'Point',
-            coordinates: locationCoords
-          },
-          properties: {
-            id: location.id,
-            user_id: location.user_id,
-            user_name: location.user_name,
-            user_email: location.user_email,
-            latitude: location.latitude,
-            longitude: location.longitude,
-            altitude: location.altitude,
-            accuracy: location.accuracy,
-            timestamp: location.timestamp,
-            user_status: location.user_status || 'GREEN',
-            isStale: isStale,
-            ageMinutes: Math.round(locationAge / (60 * 1000))
-          }
-        };
-      })
-      .filter(feature => feature !== null);
-    
-    if (this.map.getSource(LAYER_CONFIG.sources.locations)) {
-      this.map.getSource(LAYER_CONFIG.sources.locations).setData({
-        type: 'FeatureCollection',
-        features: locationFeatures
-      });
-    }
-    
-    logger.debug(`Updated map with ${locationFeatures.length} locations`);
+    this.eventBus.emit(MAP_EVENTS.MAP_DATA_UPDATED);
   }
   
   
-  // Auto-center map based on user location or existing data
-  async autoCenterMap() {
-    if (!this.map) return;
-    
-    // First try to get user's current location
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          logger.debug('Centering map on user location:', latitude, longitude);
-          this.map.flyTo({
-            center: [longitude, latitude],
-            zoom: DISPLAY_CONFIG.userLocationZoom,
-            duration: 1000
-          });
-        },
-        (error) => {
-          // Only log non-permission errors to reduce noise
-          if (error.code !== error.PERMISSION_DENIED) {
-            logger.debug('Geolocation failed:', error.message);
-          }
-          // Fall back to centering on existing data
-          this.centerMapOnData();
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: TIMING.geolocationTimeout,
-          maximumAge: TIMING.geolocationMaxAge
-        }
-      );
-    } else {
-      logger.debug('Geolocation not supported');
-      // Fall back to centering on existing data
-      this.centerMapOnData();
-    }
-  }
-  
-
-  // Center map on existing annotations and locations
-  centerMapOnData() {
-    if (!this.map) return;
-    
-    if (!this.annotationManager) return;
-    
-    // Calculate bounds of all features
-    const allFeatures = [];
-    
-    // Add annotation features
-    this.annotationManager.getAnnotations().forEach(annotation => {
-      const data = annotation.data;
-      switch (annotation.type) {
-        case 'poi':
-          const poiCoords = extractCoordinates(data.position);
-          if (poiCoords) {
-            allFeatures.push(poiCoords);
-          }
-          break;
-        case 'line':
-          if (data.points && Array.isArray(data.points)) {
-            data.points.forEach(p => {
-              const lineCoords = extractCoordinates(p);
-              if (lineCoords) {
-                allFeatures.push(lineCoords);
-              }
-            });
-          }
-          break;
-        case 'area':
-          const areaCoords = extractCoordinates(data.center);
-          if (areaCoords) {
-            allFeatures.push(areaCoords);
-          }
-          break;
-        case 'polygon':
-          if (data.points && Array.isArray(data.points)) {
-            data.points.forEach(p => {
-              const polyCoords = extractCoordinates(p);
-              if (polyCoords) {
-                allFeatures.push(polyCoords);
-              }
-            });
-          }
-          break;
-      }
-    });
-    
-    // Add location features
-    this.locations.forEach(location => {
-      const locCoords = extractCoordinates(location);
-      if (locCoords) {
-        allFeatures.push(locCoords);
-      }
-    });
-    
-    if (allFeatures.length > 0) {
-      try {
-        const bounds = allFeatures.reduce((bounds, coord) => {
-          return bounds.extend(coord);
-        }, new maplibregl.LngLatBounds(allFeatures[0], allFeatures[0]));
-        
-        this.map.fitBounds(bounds, { padding: DISPLAY_CONFIG.fitBoundsPadding, duration: 1000 });
-        logger.debug(`Centered map on ${allFeatures.length} valid coordinates`);
-      } catch (error) {
-        logger.error('Error centering map on data:', error);
-        logger.debug('Problematic coordinates:', allFeatures.slice(0, 5)); // Log first 5 for debugging
-        // Fall back to default center
-        this.map.flyTo({ center: DISPLAY_CONFIG.defaultCenter, zoom: DISPLAY_CONFIG.defaultZoom, duration: 1000 });
-        logger.debug('Fell back to default US center due to bounds error');
-      }
-    } else {
-      // Default to US center if no data
-      this.map.flyTo({ center: DISPLAY_CONFIG.defaultCenter, zoom: DISPLAY_CONFIG.defaultZoom, duration: 1000 });
-      logger.debug('No valid coordinates found, using default US center');
-    }
-  }
-  
-  
-  centerMap() {
-    this.centerMapOnData();
-  }
   
   async clearAllAnnotations() {
     // Show confirmation dialog
@@ -1901,8 +1317,13 @@ class AdminMap {
       
       if (!this.annotationManager) return;
       
-      // Get all annotation IDs
-      const annotationIds = this.annotationManager.getAnnotations().map(annotation => annotation.id);
+      // Get all annotation IDs, optionally filtered by team
+      let annotations = this.annotationManager.getAnnotations();
+      const currentTeamId = this.state.getCurrentTeamId();
+      if (currentTeamId) {
+        annotations = annotations.filter(ann => ann.teamId === currentTeamId);
+      }
+      const annotationIds = annotations.map(annotation => annotation.id);
       
       if (annotationIds.length === 0) {
         this.showFeedback('No annotations to clear', 2000);
@@ -1927,6 +1348,8 @@ class AdminMap {
       
       // Close any open popups
       this.closeAllPopups();
+      
+      this.eventBus.emit(MAP_EVENTS.ANNOTATION_BULK_DELETED, result);
     } catch (error) {
       logger.error('Failed to clear annotations:', error);
       this.showFeedback(`Failed to clear annotations: ${error.message || 'Unknown error'}`, 5000);
@@ -1937,7 +1360,10 @@ class AdminMap {
   // Cleanup method to prevent memory leaks
   cleanup() {
     // Disconnect WebSocket listeners
-    this.disconnectFromWebSocket();
+    if (this.webSocketManager) {
+      this.webSocketManager.disconnect();
+      this.webSocketManager.cleanupGlobalListeners();
+    }
     
     // Close any open popups
     this.closeAllPopups();
@@ -1948,9 +1374,15 @@ class AdminMap {
     this.hideEditForm();
     
     // Clean up drawing tools
-    if (this.currentDrawingTool) {
-      this.currentDrawingTool.cancel();
-      this.currentDrawingTool = null;
+    const currentDrawingTool = this.state.getCurrentDrawingTool();
+    if (currentDrawingTool) {
+      currentDrawingTool.cancel();
+      this.state.setCurrentDrawingTool(null);
+    }
+    
+    // Clean up long press handler
+    if (this.longPressHandler) {
+      this.longPressHandler.stop();
     }
     
     // Clean up menu manager
@@ -1958,9 +1390,9 @@ class AdminMap {
       this.menuManager.cleanupAll();
     }
     
-    // Clear any timers
-    if (this.longPressTimer) {
-      clearTimeout(this.longPressTimer);
+    // Clear event bus
+    if (this.eventBus) {
+      this.eventBus.clear();
     }
     
     logger.debug('AdminMap cleaned up');
