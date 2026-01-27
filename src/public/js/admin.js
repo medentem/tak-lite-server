@@ -932,7 +932,7 @@ function connectWebSocket() {
 
 function disconnectWebSocket() {
   if (socket) {
-    console.log('Disconnecting WebSocket:', socket.id);
+    console.log('Disconnecting WebSocket:', socket.id || 'unknown');
     try {
       // Remove all event listeners to prevent memory leaks
       socket.removeAllListeners();
@@ -1243,6 +1243,10 @@ function updateStatsDisplay(stats) {
 function updateConnectionsDisplay(data) {
   if (!data) return;
   
+  // Check if the rooms element exists (it was removed from dashboard, may exist elsewhere)
+  const roomsEl = q('#rooms');
+  if (!roomsEl) return; // Element doesn't exist, skip update
+  
   const roomsData = data.rooms || {};
   const allRoomsData = data.allRooms || {};
   
@@ -1251,7 +1255,7 @@ function updateConnectionsDisplay(data) {
     const formattedRooms = Object.entries(roomsData)
       .map(([room, count]) => `${room}: ${count} connections`)
       .join('\n');
-    q('#rooms').textContent = formattedRooms;
+    roomsEl.textContent = formattedRooms;
   } else {
     // Show debugging info when no team rooms
     const totalConnections = data.totalConnections || 0;
@@ -1270,9 +1274,9 @@ function updateConnectionsDisplay(data) {
         debugInfo += 'No rooms found';
       }
       
-      q('#rooms').textContent = debugInfo;
+      roomsEl.textContent = debugInfo;
     } else {
-      q('#rooms').textContent = 'No active connections';
+      roomsEl.textContent = 'No active connections';
     }
   }
 }
@@ -1288,10 +1292,13 @@ async function refresh() {
       jget('/api/admin/version')
     ]);
     
-    // Update configuration fields
-    q('#org').value = cfg.orgName || '';
-    q('#cors').value = cfg.corsOrigin || '';
-    q('#retention').value = cfg.retentionDays || 0;
+    // Update configuration fields (only if Settings page is visible)
+    const orgEl = q('#org');
+    const corsEl = q('#cors');
+    const retentionEl = q('#retention');
+    if (orgEl) orgEl.value = cfg.orgName || '';
+    if (corsEl) corsEl.value = cfg.corsOrigin || '';
+    if (retentionEl) retentionEl.value = cfg.retentionDays || 0;
     
     // Update stats using real-time function
     updateStatsDisplay(stats);
@@ -1302,27 +1309,31 @@ async function refresh() {
       q('#header_version').textContent = version.version || '-';
     }
 
-    // Populate users table
+    // Populate users table (only if Management page elements exist)
     const utb = q('#u_table tbody'); 
-    utb.innerHTML = '';
-    users.forEach(u => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${u.email}</td><td>${u.name || ''}</td><td>${u.is_admin ? 'Yes' : 'No'}</td><td>
-        <button data-act="reset" data-id="${u.id}" class="secondary">Reset PW</button>
-        <button data-act="del" data-id="${u.id}" class="secondary">Delete</button>
-      </td>`;
-      utb.appendChild(tr);
-    });
+    if (utb) {
+      utb.innerHTML = '';
+      users.forEach(u => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${u.email}</td><td>${u.name || ''}</td><td>${u.is_admin ? 'Yes' : 'No'}</td><td>
+          <button data-act="reset" data-id="${u.id}" class="secondary">Reset PW</button>
+          <button data-act="del" data-id="${u.id}" class="secondary">Delete</button>
+        </td>`;
+        utb.appendChild(tr);
+      });
+    }
 
-    // Populate teams select and table
+    // Populate teams select and table (only if Management page elements exist)
     const tsel = q('#t_select'); 
-    tsel.innerHTML = '';
-    teams.forEach(t => { 
-      const o = document.createElement('option'); 
-      o.value = t.id; 
-      o.textContent = t.name; 
-      tsel.appendChild(o); 
-    });
+    if (tsel) {
+      tsel.innerHTML = '';
+      teams.forEach(t => { 
+        const o = document.createElement('option'); 
+        o.value = t.id; 
+        o.textContent = t.name; 
+        tsel.appendChild(o); 
+      });
+    }
     
     // Populate message team filter (full monitor)
     const messageTeamFilter = q('#message_team_filter');
@@ -1348,16 +1359,22 @@ async function refresh() {
       });
     }
     
+    // Populate user select (only if Management page elements exist)
     const usel = q('#t_user_select'); 
-    usel.innerHTML = '';
-    users.forEach(u => { 
-      const o = document.createElement('option'); 
-      o.value = u.id; 
-      o.textContent = `${u.name || ''} <${u.email}>`; 
-      usel.appendChild(o); 
-    });
-    
-    if (teams[0]) await loadTeamMembers(teams[0].id);
+    if (usel) {
+      usel.innerHTML = '';
+      users.forEach(u => { 
+        const o = document.createElement('option'); 
+        o.value = u.id; 
+        o.textContent = `${u.name || ''} <${u.email}>`; 
+        usel.appendChild(o); 
+      });
+      
+      // Load team members if teams exist and we're on management page
+      if (teams[0] && !q('#managementPage').classList.contains('hidden')) {
+        await loadTeamMembers(teams[0].id);
+      }
+    }
     
     showMessage('Dashboard refreshed successfully', 'success', 3000);
   } catch (e) { 
@@ -1373,6 +1390,10 @@ async function loadTeamMembers(teamId) {
   try {
     const members = await jget(`/api/admin/teams/${teamId}/members`);
     const tb = q('#t_table tbody'); 
+    
+    // Check if table exists (only on Management page)
+    if (!tb) return;
+    
     tb.innerHTML = '';
     
     if (members.length === 0) {
