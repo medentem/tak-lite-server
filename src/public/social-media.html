@@ -286,7 +286,7 @@
         <div class="brand">
           TAK Lite Admin
           <span class="version-separator">|</span>
-          <span class="version-text">Social Media</span>
+          <span id="header_version" class="version-text">Social Media</span>
         </div>
         <div class="row">
           <button onclick="logout()" class="secondary">Logout</button>
@@ -296,8 +296,12 @@
       <!-- Navigation -->
       <nav style="margin-bottom: 20px;">
         <div class="card" style="padding: 12px 16px;">
-          <div style="display: flex; gap: 16px; align-items: center;">
+          <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
             <a href="/admin" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Dashboard</a>
+            <a href="/admin#threats" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Threat Review</a>
+            <a href="/admin#messages" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Messages</a>
+            <a href="/admin#settings" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Settings</a>
+            <a href="/admin#management" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Management</a>
             <a href="/social-media" style="color: var(--text); text-decoration: none; padding: 8px 12px; border-radius: 6px; background: var(--accent); font-weight: 500;">Social Media</a>
           </div>
         </div>

@@ -27,6 +27,11 @@ class AdminApp {
 
   async init() {
     try {
+      // Load version immediately (works even when not authenticated)
+      if (this.pages.dashboard.updateVersion) {
+        this.pages.dashboard.updateVersion().catch(console.error);
+      }
+
       // Check authentication
       const isAuthenticated = await auth.checkExistingAuth();
       

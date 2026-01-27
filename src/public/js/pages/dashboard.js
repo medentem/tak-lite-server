@@ -39,13 +39,8 @@ export class DashboardPage {
       this.updateStatsDisplay(stats);
       this.updateConnectionsDisplay(stats.sockets);
       
-      // Update version
-      if (stats.version) {
-        const versionEl = q('#header_version');
-        if (versionEl) {
-          versionEl.textContent = stats.version.version || '-';
-        }
-      }
+      // Update version in header
+      this.updateVersion();
     } catch (error) {
       console.error('Failed to refresh dashboard:', error);
       showError(`Failed to refresh dashboard: ${error.message}`);
@@ -82,6 +77,26 @@ export class DashboardPage {
 
     // Update connection stats if elements exist
     // This would update any connection-related displays
+  }
+
+  async updateVersion() {
+    try {
+      const versionData = await get('/api/admin/version');
+      if (versionData?.version) {
+        const versionEl = q('#header_version');
+        if (versionEl) {
+          versionEl.textContent = `v${versionData.version}`;
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load version:', error);
+      // Set default if version endpoint fails
+      const versionEl = q('#header_version');
+      if (versionEl && versionEl.textContent === '-') {
+        versionEl.textContent = 'v1.0.2';
+      }
+    }
   }
 }
 

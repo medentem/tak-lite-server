@@ -71,6 +71,16 @@ export class MessagesPage {
         this.updateMessageDisplay();
       });
     }
+
+    // View All Messages link
+    const viewAllMessages = q('#view-all-messages');
+    if (viewAllMessages) {
+      viewAllMessages.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        document.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'messages' } }));
+      });
+    }
   }
 
   setupWebSocketListeners() {
