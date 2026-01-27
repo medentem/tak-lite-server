@@ -321,7 +321,8 @@ app.get('/admin', auth.authenticate, auth.adminOnly, async (req: Request, res: R
   try {
     res.setHeader('Content-Type', 'text/html');
     // CSP for admin: allow Socket.IO CDN, MapLibre CDN, map tiles, web workers, local scripts, and inline scripts
-    res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.socket.io https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net; worker-src 'self' blob:; connect-src 'self' https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://fonts.openmaptiles.org");
+    // Includes CDN domains in connect-src to allow source map requests (harmless, just for debugging)
+    res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.socket.io https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net; worker-src 'self' blob:; connect-src 'self' https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://fonts.openmaptiles.org https://cdn.socket.io https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net");
     const primary = path.resolve(__dirname, 'public', 'admin.html');
     const fallback = path.resolve(__dirname, '..', 'public', 'admin.html');
     const file = fs.existsSync(primary) ? primary : fallback;

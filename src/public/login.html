@@ -48,8 +48,9 @@
             window.location.href = '/admin';
             return;
           }
+          // 401 is expected when not authenticated - silently continue to show login form
         } catch (e) {
-          // Not authenticated, show login form
+          // Network error or other issue - silently continue to show login form
         }
       }
 
