@@ -85,6 +85,13 @@ export class Auth {
       this.setAuthenticated(true, email);
       
       showSuccess('Login successful!');
+      
+      // If we're on the login page, redirect to admin dashboard
+      if (window.location.pathname === '/login') {
+        window.location.href = '/admin';
+        return true;
+      }
+      
       return true;
     } catch (error) {
       showError(error.message || 'Login failed. Please check your credentials.');

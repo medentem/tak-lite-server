@@ -254,15 +254,15 @@ app.get('/favicon.ico', (_req: Request, res: Response) => {
   res.status(204).end(); // No content, but no error
 });
 
-// Root route - redirect to setup if not completed, otherwise redirect to admin
+// Root route - redirect to setup if not completed, otherwise redirect to login
 app.get('/', async (req: Request, res: Response) => {
   try {
     const completed = await configService.get<boolean>('setup.completed');
     if (!completed) {
       return res.redirect('/setup');
     }
-    // If setup is completed, redirect to admin dashboard
-    return res.redirect('/admin');
+    // If setup is completed, redirect to login page (users will be redirected to admin if already authenticated)
+    return res.redirect('/login');
   } catch (error) {
     logger.error('Error checking setup status', { error });
     // If there's an error checking setup status, redirect to setup to be safe
@@ -304,6 +304,17 @@ app.use('/api/admin', auth.authenticate, auth.adminOnly, createAdminRouter(confi
 
 // Sync routes (auth required)
 app.use('/api/sync', auth.authenticate, createSyncRouter(syncService));
+
+// Serve login page (public, no authentication required)
+app.get('/login', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/html');
+  // CSP for login page
+  res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'");
+  const primary = path.resolve(__dirname, 'public', 'login.html');
+  const fallback = path.resolve(__dirname, '..', 'public', 'login.html');
+  const file = fs.existsSync(primary) ? primary : fallback;
+  res.sendFile(file);
+});
 
 // Serve admin UI (requires authentication and admin role)
 app.get('/admin', auth.authenticate, auth.adminOnly, async (req: Request, res: Response, next: NextFunction) => {

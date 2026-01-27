@@ -32,16 +32,32 @@ export function createAuthMiddleware(config: ConfigService) {
         );
         const cookieToken = cookies['taklite_token'];
         const tok = token || cookieToken;
-        if (!tok) return res.status(401).json({ error: 'Missing token' });
+        if (!tok) {
+          // For HTML requests, redirect to login page; for API requests, return JSON error
+          if (req.headers.accept?.includes('text/html')) {
+            return res.redirect('/login');
+          }
+          return res.status(401).json({ error: 'Missing token' });
+        }
         const payload = await security.verifyJwt<{ sub: string; is_admin?: boolean }>(tok);
         req.user = payload;
         next();
       } catch (err) {
+        // For HTML requests, redirect to login page; for API requests, return JSON error
+        if (req.headers.accept?.includes('text/html')) {
+          return res.redirect('/login');
+        }
         return res.status(401).json({ error: 'Invalid token' });
       }
     },
     adminOnly: (req: Request, res: Response, next: NextFunction) => {
-      if (!req.user?.is_admin) return res.status(403).json({ error: 'Admin required' });
+      if (!req.user?.is_admin) {
+        // For HTML requests, redirect to login page; for API requests, return JSON error
+        if (req.headers.accept?.includes('text/html')) {
+          return res.redirect('/login');
+        }
+        return res.status(403).json({ error: 'Admin required' });
+      }
       next();
     }
   };

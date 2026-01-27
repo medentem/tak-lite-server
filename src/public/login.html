@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TAK Lite Admin - Login</title>
+    <link rel="stylesheet" href="/public/css/variables.css" />
+    <link rel="stylesheet" href="/public/css/base.css" />
+    <link rel="stylesheet" href="/public/css/components.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div class="brand">
+          TAK Lite Admin
+        </div>
+      </header>
+
+      <div id="loginCard" class="card" style="max-width: 400px; margin: 60px auto;">
+        <h2>Sign in</h2>
+        <div class="field-group">
+          <label for="email">Email</label>
+          <input id="email" type="email" placeholder="admin@example.com" />
+        </div>
+        <div class="field-group">
+          <label for="password">Password</label>
+          <input id="password" type="password" placeholder="password" />
+        </div>
+        <button id="login" class="primary" style="width: 100%; margin-top: 16px;">Login</button>
+        <div id="loginMsg" class="message message-error hidden" style="margin-top: 16px;"></div>
+      </div>
+    </div>
+
+    <script type="module">
+      import { q, showMessage, setLoading } from './js/utils/dom.js';
+      import { setToken } from './js/utils/storage.js';
+      import { post } from './js/utils/api.js';
+
+      // Check if already authenticated
+      async function checkAuth() {
+        try {
+          const res = await fetch('/api/auth/whoami', {
+            method: 'GET',
+            credentials: 'include'
+          });
+          if (res.ok) {
+            // Already authenticated, redirect to admin
+            window.location.href = '/admin';
+            return;
+          }
+        } catch (e) {
+          // Not authenticated, show login form
+        }
+      }
+
+      async function handleLogin() {
+        const email = q('#email')?.value.trim();
+        const password = q('#password')?.value;
+        const loginMsg = q('#loginMsg');
+        const loginBtn = q('#login');
+
+        if (!email || !password) {
+          showMessage('Please enter both email and password', 'error', loginMsg);
+          return;
+        }
+
+        try {
+          setLoading(loginBtn, true);
+          const data = await post('/api/auth/login?cookie=1', { email, password });
+          
+          setToken(data.token);
+          showMessage('Login successful! Redirecting...', 'success', loginMsg);
+          
+          // Redirect to admin dashboard after successful login
+          setTimeout(() => {
+            window.location.href = '/admin';
+          }, 500);
+        } catch (error) {
+          showMessage(error.message || 'Login failed. Please check your credentials.', 'error', loginMsg);
+        } finally {
+          setLoading(loginBtn, false);
+        }
+      }
+
+      // Setup login button
+      if (q('#login')) {
+        q('#login').addEventListener('click', handleLogin);
+      }
+
+      // Allow Enter key to submit
+      if (q('#password')) {
+        q('#password').addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            handleLogin();
+          }
+        });
+      }
+
+      // Check auth on load
+      checkAuth();
+    </script>
+  </body>
+</html>
