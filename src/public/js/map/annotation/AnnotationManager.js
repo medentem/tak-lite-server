@@ -230,7 +230,12 @@ export class AnnotationManager {
     const areaFeatures = [];
     const polygonFeatures = [];
     
-    this.annotations.forEach(annotation => {
+    logger.info(`[GEOJSON] Starting conversion with ${this.annotations.length} annotations`, {
+      annotationIds: this.annotations.map(a => ({ id: a.id, type: a.type, hasData: !!a.data }))
+    });
+    
+    this.annotations.forEach((annotation, index) => {
+      logger.debug(`[GEOJSON] Processing annotation ${index + 1}/${this.annotations.length}: ${annotation.id}`);
       // Ensure data exists and is an object
       if (!annotation || !annotation.data) {
         logger.warn('[GEOJSON] Skipping annotation with missing data:', {
@@ -299,9 +304,14 @@ export class AnnotationManager {
               }
             });
           } else {
-            logger.warn('Skipping POI annotation with invalid coordinates:', {
+            logger.error('[GEOJSON] CRITICAL: Skipping POI annotation with invalid coordinates:', {
               id: annotation.id,
-              position: data.position
+              type: annotation.type,
+              position: data.position,
+              positionType: typeof data.position,
+              dataKeys: Object.keys(data),
+              fullData: data,
+              fullAnnotation: annotation
             });
           }
           break;
@@ -405,6 +415,11 @@ export class AnnotationManager {
           }
           break;
       }
+    });
+    
+    logger.info(`[GEOJSON] Conversion complete: ${poiFeatures.length} POIs, ${lineFeatures.length} lines, ${areaFeatures.length} areas, ${polygonFeatures.length} polygons`, {
+      poiFeatureIds: poiFeatures.map(f => f.properties.id),
+      skippedCount: this.annotations.length - (poiFeatures.length + lineFeatures.length + areaFeatures.length + polygonFeatures.length)
     });
     
     return { poiFeatures, lineFeatures, areaFeatures, polygonFeatures };

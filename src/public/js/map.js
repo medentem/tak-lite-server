@@ -1333,10 +1333,31 @@ class AdminMap {
         resultDataKeys: result.data ? Object.keys(result.data) : []
       });
       
+      // Verify annotation still exists after update
+      const updatedAnnotation = this.annotationManager.findAnnotation(currentEditing.id);
+      logger.info('[EDIT] Verification after update', {
+        annotationExists: !!updatedAnnotation,
+        annotationType: updatedAnnotation?.type,
+        hasData: !!updatedAnnotation?.data,
+        dataKeys: updatedAnnotation?.data ? (typeof updatedAnnotation.data === 'string' ? 'string' : Object.keys(updatedAnnotation.data)) : [],
+        hasPosition: !!(updatedAnnotation?.data && (typeof updatedAnnotation.data === 'string' ? JSON.parse(updatedAnnotation.data) : updatedAnnotation.data).position),
+        totalAnnotations: this.annotationManager.getAnnotations().length
+      });
+      
+      if (!updatedAnnotation) {
+        logger.error('[EDIT] CRITICAL: Annotation disappeared after update!', {
+          annotationId: currentEditing.id,
+          totalAnnotations: this.annotationManager.getAnnotations().length
+        });
+        this.showFeedback('Error: Annotation disappeared after update', 5000);
+        return;
+      }
+      
       this.showFeedback('Annotation updated successfully', 2000);
       this.updateMapData();
       this.hideEditForm();
-      this.eventBus.emit(MAP_EVENTS.ANNOTATION_UPDATED, result);
+      // DO NOT emit ANNOTATION_UPDATED here - it triggers handleAnnotationUpdate which can corrupt the data
+      // The map is already updated via updateMapData()
     } catch (error) {
       logger.error('[EDIT] Failed to update annotation:', error);
       this.showFeedback(`Failed to update annotation: ${error.message || 'Unknown error'}`, 5000);
@@ -1496,19 +1517,62 @@ class AdminMap {
   handleAnnotationUpdate(data) {
     if (!this.annotationManager) return;
     
-    logger.debug('[WS-UPDATE] Received annotation update from WebSocket', {
+    logger.info('[WS-UPDATE] Received annotation update from WebSocket', {
       id: data.id,
       type: data.type,
       dataKeys: data.data ? Object.keys(data.data) : [],
       hasPosition: !!(data.data?.position),
       hasPoints: !!(data.data?.points),
-      hasCenter: !!(data.data?.center)
+      hasCenter: !!(data.data?.center),
+      incomingData: data.data
     });
     
     // Check if this annotation is relevant to current view
     if (this.state.getCurrentTeamId() && data.teamId !== this.state.getCurrentTeamId()) {
       logger.debug('[WS-UPDATE] Skipping update - not relevant to current team');
       return; // Not relevant to current team filter
+    }
+    
+    // CRITICAL: Check if this is a self-update (we just updated this locally)
+    // If we just updated it locally via updateAnnotation, the local version is already correct
+    // and we should NOT overwrite it with potentially incomplete WebSocket data
+    const existingAnnotation = this.annotationManager.findAnnotation(data.id);
+    if (existingAnnotation) {
+      // Check if existing annotation has complete data (has position/points/center)
+      let existingData = existingAnnotation.data || {};
+      if (typeof existingData === 'string') {
+        try {
+          existingData = JSON.parse(existingData);
+        } catch (e) {
+          existingData = {};
+        }
+      }
+      
+      const hasCompleteData = 
+        (existingAnnotation.type === 'poi' && existingData.position) ||
+        (existingAnnotation.type === 'line' && existingData.points && existingData.points.length > 0) ||
+        (existingAnnotation.type === 'area' && existingData.center && existingData.radius) ||
+        (existingAnnotation.type === 'polygon' && existingData.points && existingData.points.length > 0);
+      
+      // Check if incoming data is incomplete (missing critical fields)
+      const incomingData = data.data || {};
+      const incomingIsIncomplete = 
+        (data.type === 'poi' && !incomingData.position) ||
+        (data.type === 'line' && (!incomingData.points || incomingData.points.length === 0)) ||
+        (data.type === 'area' && (!incomingData.center || !incomingData.radius)) ||
+        (data.type === 'polygon' && (!incomingData.points || incomingData.points.length === 0));
+      
+      if (hasCompleteData && incomingIsIncomplete) {
+        logger.warn('[WS-UPDATE] CRITICAL: Ignoring incomplete WebSocket update that would corrupt existing annotation', {
+          annotationId: data.id,
+          existingHasCompleteData: true,
+          incomingIsIncomplete: true,
+          existingDataKeys: Object.keys(existingData),
+          incomingDataKeys: Object.keys(incomingData)
+        });
+        // Don't update - keep the existing complete annotation
+        return;
+      }
     }
     
     // Ensure data structure is correct
@@ -1552,29 +1616,57 @@ class AdminMap {
         }
       }
       
-      logger.debug('[WS-UPDATE] Merging with existing annotation', {
+      logger.info('[WS-UPDATE] Merging with existing annotation', {
         existingDataKeys: Object.keys(existingData),
         newDataKeys: Object.keys(annotation.data),
         existingHasPosition: !!existingData.position,
         existingHasPoints: !!existingData.points,
-        existingHasCenter: !!existingData.center
+        existingHasCenter: !!existingData.center,
+        existingData: existingData,
+        incomingData: annotation.data
       });
       
-      // Merge: existing data first (preserves position, etc.), then new data (updates color/shape)
-      const mergedData = { ...existingData, ...annotation.data };
+      // CRITICAL: Only merge fields that exist in incoming data
+      // Preserve ALL existing fields, only update fields that are in the incoming data
+      const mergedData = { ...existingData };
+      Object.keys(annotation.data).forEach(key => {
+        mergedData[key] = annotation.data[key];
+      });
       
-      logger.debug('[WS-UPDATE] Merged data', {
+      logger.info('[WS-UPDATE] Merged data result', {
         mergedDataKeys: Object.keys(mergedData),
         hasPosition: !!mergedData.position,
         hasPoints: !!mergedData.points,
-        hasCenter: !!mergedData.center
+        hasCenter: !!mergedData.center,
+        mergedData: mergedData
       });
+      
+      // Verify merged data has required fields
+      const hasRequiredFields = 
+        (annotation.type === 'poi' && mergedData.position) ||
+        (annotation.type === 'line' && mergedData.points && mergedData.points.length > 0) ||
+        (annotation.type === 'area' && mergedData.center && mergedData.radius) ||
+        (annotation.type === 'polygon' && mergedData.points && mergedData.points.length > 0);
+      
+      if (!hasRequiredFields) {
+        logger.error('[WS-UPDATE] CRITICAL: Merged data missing required fields! Not updating annotation.', {
+          type: annotation.type,
+          mergedDataKeys: Object.keys(mergedData),
+          mergedData: mergedData
+        });
+        return; // Don't corrupt the annotation
+      }
       
       this.annotationManager.getAnnotations()[existingIndex] = {
         ...existing,
         ...annotation,
         data: mergedData
       };
+      
+      logger.info('[WS-UPDATE] Successfully updated annotation in array', {
+        annotationId: annotation.id,
+        finalDataKeys: Object.keys(this.annotationManager.getAnnotations()[existingIndex].data || {})
+      });
     } else {
       logger.debug('[WS-UPDATE] Adding new annotation (not found locally)');
       this.annotationManager.getAnnotations().unshift(annotation); // Add to beginning
