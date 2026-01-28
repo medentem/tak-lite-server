@@ -1436,7 +1436,9 @@ class AdminMap {
     
     // Update map immediately
     this.updateMapData();
-    this.eventBus.emit(MAP_EVENTS.ANNOTATION_UPDATED, annotation);
+    // Don't emit ANNOTATION_UPDATED here - it would create an infinite loop
+    // The event is already emitted by updateAnnotationField or comes from WebSocket
+    // Other components that need to know about updates should listen to MAP_DATA_UPDATED
     
     logger.debug(`Updated annotation ${annotation.id} on map`);
   }
