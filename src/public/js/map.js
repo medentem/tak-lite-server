@@ -1642,15 +1642,20 @@ class AdminMap {
       });
       
       // Verify merged data has required fields
+      // Use existing.type instead of annotation.type since we're merging with existing data
+      // and the WebSocket event might have incomplete type information
+      const annotationType = existing.type || annotation.type;
       const hasRequiredFields = 
-        (annotation.type === 'poi' && mergedData.position) ||
-        (annotation.type === 'line' && mergedData.points && mergedData.points.length > 0) ||
-        (annotation.type === 'area' && mergedData.center && mergedData.radius) ||
-        (annotation.type === 'polygon' && mergedData.points && mergedData.points.length > 0);
+        (annotationType === 'poi' && mergedData.position) ||
+        (annotationType === 'line' && mergedData.points && mergedData.points.length > 0) ||
+        (annotationType === 'area' && mergedData.center && mergedData.radius) ||
+        (annotationType === 'polygon' && mergedData.points && mergedData.points.length > 0);
       
       if (!hasRequiredFields) {
         logger.error('[WS-UPDATE] CRITICAL: Merged data missing required fields! Not updating annotation.', {
-          type: annotation.type,
+          existingType: existing.type,
+          annotationType: annotation.type,
+          annotationTypeUsed: annotationType,
           mergedDataKeys: Object.keys(mergedData),
           mergedData: mergedData
         });
