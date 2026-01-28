@@ -994,7 +994,7 @@ class AdminMap {
     // Show color menu for editing
     if (!this.colorMenu) return;
     
-    this.colorMenu.show(point, currentEditing.type, (color) => {
+    this.colorMenu.show(point, currentEditing.type, (color, annotationType) => {
       this.colorMenu.hide();
       this.updateAnnotationField('color', color);
     });

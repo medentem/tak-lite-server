@@ -523,7 +523,13 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       }
       
       // Merge with existing data
-      const existingData = JSON.parse(existing.data);
+      // Handle both string and object formats (some DB drivers auto-parse JSONB)
+      let existingData;
+      if (typeof existing.data === 'string') {
+        existingData = JSON.parse(existing.data);
+      } else {
+        existingData = existing.data;
+      }
       const mergedData = { ...existingData, ...data };
       
       await db.client('annotations')
@@ -535,7 +541,13 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       
       // Fetch updated annotation
       const updated = await db.client('annotations').where({ id: annotationId }).first();
-      const updatedData = JSON.parse(updated.data);
+      // Handle both string and object formats
+      let updatedData;
+      if (typeof updated.data === 'string') {
+        updatedData = JSON.parse(updated.data);
+      } else {
+        updatedData = updated.data;
+      }
       
       if (audit) await audit.log({ 
         actorUserId: userId, 
