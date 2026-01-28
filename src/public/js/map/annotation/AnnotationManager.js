@@ -77,12 +77,34 @@ export class AnnotationManager {
       // Update local annotation - merge the data field properly
       const index = this.annotations.findIndex(a => a.id === annotationId);
       if (index >= 0) {
+        // Parse result.data if it's a string (some DB drivers return JSONB as string)
+        let resultData = result.data;
+        if (typeof resultData === 'string') {
+          try {
+            resultData = JSON.parse(resultData);
+          } catch (e) {
+            logger.warn('Failed to parse result.data as JSON:', e);
+            resultData = {};
+          }
+        }
+        
         // Ensure data is an object and merge it properly
-        const existingData = this.annotations[index].data || {};
-        const newData = result.data || {};
+        // Preserve existing data to ensure position and other fields aren't lost
+        let existingData = this.annotations[index].data || {};
+        if (typeof existingData === 'string') {
+          try {
+            existingData = JSON.parse(existingData);
+          } catch (e) {
+            logger.warn('Failed to parse existing data as JSON:', e);
+            existingData = {};
+          }
+        }
+        
+        const newData = resultData || {};
+        // Merge: existing data first (preserves position, etc.), then new data (updates color/shape)
         const mergedData = { ...existingData, ...newData };
         
-        // Update the annotation with merged data
+        // Update the annotation with merged data, preserving all fields
         this.annotations[index] = {
           ...this.annotations[index],
           ...result,
@@ -90,11 +112,25 @@ export class AnnotationManager {
         };
       } else {
         // If annotation not found locally, add it
+        // Parse data if it's a string
+        let resultData = result.data;
+        if (typeof resultData === 'string') {
+          try {
+            resultData = JSON.parse(resultData);
+          } catch (e) {
+            logger.warn('Failed to parse result.data as JSON:', e);
+            resultData = {};
+          }
+        }
+        
         // Ensure data is an object
-        if (result.data && typeof result.data === 'object') {
-          this.annotations.push(result);
+        if (resultData && typeof resultData === 'object') {
+          this.annotations.push({
+            ...result,
+            data: resultData
+          });
         } else {
-          logger.warn('Annotation result missing data field:', result);
+          logger.warn('Annotation result missing valid data field:', result);
           this.annotations.push(result);
         }
       }
@@ -161,7 +197,16 @@ export class AnnotationManager {
         return;
       }
       
-      const data = annotation.data;
+      // Parse data if it's a string (some DB drivers return JSONB as string)
+      let data = annotation.data;
+      if (typeof data === 'string') {
+        try {
+          data = JSON.parse(data);
+        } catch (e) {
+          logger.warn('Failed to parse annotation data as JSON:', e, annotation);
+          return; // Skip this annotation if data is invalid
+        }
+      }
       const properties = {
         id: annotation.id,
         type: annotation.type,

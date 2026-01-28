@@ -1311,6 +1311,21 @@ class AdminMap {
     this.showFeedback('Click to add more points, use check mark to finish or X to cancel', 5000);
   }
   
+  startAreaDrawing() {
+    const pendingAnnotation = this.state.getPendingAnnotation();
+    if (!pendingAnnotation || !this.areaDrawingTool) {
+      this.showFeedback('No location selected', 3000);
+      return;
+    }
+    
+    this.state.setCurrentDrawingTool(this.areaDrawingTool);
+    this.areaDrawingTool.start(pendingAnnotation, this.state.getCurrentColor());
+    this.state.setPendingAnnotation(null);
+    this.eventBus.emit(MAP_EVENTS.DRAWING_STARTED, { type: 'area' });
+    
+    this.showFeedback('Drag to adjust radius, click check mark to finish or X to cancel', 5000);
+  }
+  
   
   async createAnnotation(annotationData) {
     if (!this.annotationManager) return;
@@ -1552,6 +1567,41 @@ class AdminMap {
   
   updateMapData() {
     if (!this.map || !this.dataLoader) return;
+    
+    // Ensure POI icons exist before updating (in case new shape/color combinations were used)
+    // All icons should be generated upfront, but this ensures they exist
+    if (this.iconManager && this.annotationManager) {
+      const annotations = this.annotationManager.getAnnotations();
+      const poiAnnotations = annotations.filter(a => a.type === 'poi');
+      
+      if (poiAnnotations.length > 0) {
+        const iconNames = new Set();
+        poiAnnotations.forEach(annotation => {
+          if (annotation.data) {
+            const data = typeof annotation.data === 'string' 
+              ? JSON.parse(annotation.data) 
+              : annotation.data;
+            const color = (data.color || 'green').toLowerCase();
+            const shape = (data.shape || 'circle').toLowerCase();
+            const iconName = `poi-${shape}-${color}`;
+            iconNames.add(iconName);
+          }
+        });
+        
+        // Generate any missing icons
+        iconNames.forEach(iconName => {
+          // Parse icon name: poi-{shape}-{color}
+          const match = iconName.match(/^poi-(.+?)-(.+)$/);
+          if (match) {
+            const [, shape, color] = match;
+            if (!this.iconManager.hasIcon(shape, color)) {
+              logger.debug(`Generating missing POI icon: ${iconName}`);
+              this.iconManager.generateIcon(shape, color);
+            }
+          }
+        });
+      }
+    }
     
     // Update all data on map via data loader
     this.dataLoader.updateMap();
