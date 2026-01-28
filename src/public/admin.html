@@ -215,133 +215,138 @@
       </div>
 
       <!-- Dashboard Page -->
-      <div id="dash" class="hidden">
+      <div id="dash" class="hidden dashboard-fullscreen">
         <!-- Global message area -->
         <div id="globalMessage" class="message hidden"></div>
         
-        <!-- Operational Status Bar (Field Operations Focus) -->
-        <div class="card" style="margin-bottom: 16px; padding: 12px 16px;">
-          <div class="operational-status-bar">
+        <!-- Minimal Top Status Bar (Always Visible) -->
+        <div class="dashboard-status-bar">
+          <div class="status-bar-left">
             <div class="status-item">
-              <span class="status-label">Active Users:</span>
+              <span class="status-label">Users:</span>
               <span class="status-value" id="k_users">-</span>
             </div>
             <div class="status-item">
-              <span class="status-label">Active Teams:</span>
+              <span class="status-label">Teams:</span>
               <span class="status-value" id="k_teams">-</span>
             </div>
             <div class="status-item">
-              <span class="status-label">Sync Status:</span>
+              <span class="status-label">Sync:</span>
               <span class="status-value" id="k_sync_status" style="color: #8b97a7;">-</span>
             </div>
             <div class="status-item">
               <span class="status-label">Connection:</span>
               <span class="status-value" id="ws_status" style="color: #ef4444;">Disconnected</span>
             </div>
-            <div class="status-item">
-              <span class="status-label">Active Threats:</span>
-              <span class="status-value" id="k_active_threats">0</span>
+          </div>
+          <div class="status-bar-right">
+            <div class="status-item clickable" id="threats-badge">
+              <span class="status-label">Threats:</span>
+              <span class="status-value threat-badge" id="k_active_threats">0</span>
             </div>
-            <div class="status-item">
-              <span class="status-label">Recent Messages:</span>
-              <span class="status-value" id="k_recent_messages">0</span>
+            <div class="status-item clickable" id="messages-badge">
+              <span class="status-label">Messages:</span>
+              <span class="status-value message-badge" id="k_recent_messages">0</span>
+            </div>
+            <button id="command-palette-toggle" class="command-palette-btn" title="Command Palette (⌘K)">⌘K</button>
+          </div>
+        </div>
+
+        <!-- Full-Screen Map Container -->
+        <div class="dashboard-map-fullscreen">
+          <!-- Map Controls Overlay (Top Right) -->
+          <div class="map-controls-overlay">
+            <select id="map_team_select" class="map-control-select">
+              <option value="">All Teams</option>
+            </select>
+            <button id="map_refresh" class="map-control-btn" title="Refresh Data">↻</button>
+            <button id="map_center" class="map-control-btn" title="Center Map">⌂</button>
+            <button id="map_clear_all" class="map-control-btn danger" title="Clear All">✕</button>
+            <div class="map-control-toggle">
+              <label class="map-control-label">
+                <input id="map_show_annotations" type="checkbox" checked />
+                <span>Annotations</span>
+              </label>
+              <label class="map-control-label">
+                <input id="map_show_locations" type="checkbox" checked />
+                <span>Locations</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Full-Screen Map -->
+          <div id="map_container" class="map-container-fullscreen">
+            <!-- Fan Menu for Annotation Creation -->
+            <div id="fan_menu" class="fan-menu">
+              <!-- Center hole with dot and coordinate text -->
+              <div class="fan-menu-center">
+                <div class="fan-menu-center-dot"></div>
+                <div class="fan-menu-center-text fan-menu-center-coords" id="fan_menu_coords">0.00000, 0.00000</div>
+                <div class="fan-menu-center-text fan-menu-center-distance" id="fan_menu_distance">0.0 mi away</div>
+              </div>
+              <!-- Donut ring segments will be dynamically added here -->
+            </div>
+            
+            <!-- Color Menu for Annotation Creation -->
+            <div id="color_menu" class="color-menu">
+              <!-- Color options will be dynamically added here -->
+            </div>
+            
+            <!-- Map Interaction Feedback -->
+            <div id="map_feedback" class="map-interaction-feedback">
+              <!-- Feedback messages will be shown here -->
+            </div>
+          </div>
+
+          <!-- Floating HUD Panel: Threats (Left) -->
+          <div id="threats-hud-panel" class="hud-panel hud-panel-left">
+            <div class="hud-panel-header">
+              <div class="hud-panel-title">
+                <span class="hud-panel-icon">⚠️</span>
+                <span>Threat Intelligence</span>
+                <span class="hud-panel-badge" id="threats-hud-badge">0</span>
+              </div>
+              <div class="hud-panel-actions">
+                <button class="hud-panel-pin" id="threats-pin" title="Pin Panel">📌</button>
+                <a href="#" id="view-all-threats" class="hud-panel-link">View All →</a>
+              </div>
+            </div>
+            <div class="hud-panel-content" id="threats-hud-content">
+              <div class="muted" style="text-align: center; padding: 20px; font-size: 13px;">Loading threats...</div>
+            </div>
+          </div>
+
+          <!-- Floating HUD Panel: Messages (Right) -->
+          <div id="messages-hud-panel" class="hud-panel hud-panel-right">
+            <div class="hud-panel-header">
+              <div class="hud-panel-title">
+                <span class="hud-panel-icon">💬</span>
+                <span>Communication Hub</span>
+                <span class="hud-panel-badge" id="messages-hud-badge">0</span>
+              </div>
+              <div class="hud-panel-actions">
+                <button class="hud-panel-pin" id="messages-pin" title="Pin Panel">📌</button>
+                <a href="#" id="view-all-messages" class="hud-panel-link">View All →</a>
+              </div>
+            </div>
+            <div class="hud-panel-filters">
+              <select id="message_team_filter_compact" class="hud-panel-select">
+                <option value="">All Teams</option>
+              </select>
+              <button id="clear_messages_compact" class="hud-panel-btn">Clear</button>
+            </div>
+            <div class="hud-panel-content" id="messages-hud-content">
+              <div class="muted" style="text-align: center; padding: 20px;">Waiting for messages...</div>
             </div>
           </div>
         </div>
 
-        <!-- Main Dashboard Layout: Map (60%) + Side Panels (40%) -->
-        <div class="dashboard-main-layout">
-          <!-- Left Side: Map (60%) -->
-          <div class="dashboard-map-section">
-            <div class="card">
-              <h2>Live Map View</h2>
-              <div class="help-text">
-                <strong>Real-time map</strong> showing annotations and peer locations from all teams
-              </div>
-              
-              <div style="display: flex; gap: 12px; margin-bottom: 16px; align-items: center; flex-wrap: wrap;">
-                <select id="map_team_select" style="flex: 1; min-width: 200px;">
-                  <option value="">All Teams</option>
-                </select>
-                <button id="map_refresh" class="secondary">Refresh Data</button>
-                <button id="map_center" class="secondary">Center Map</button>
-                <button id="map_clear_all" class="secondary" style="background: #E91E63; color: white;">Clear All</button>
-                <div style="display: flex; gap: 8px; align-items: center;">
-                  <label style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
-                    <input id="map_show_annotations" type="checkbox" checked />
-                    Annotations
-                  </label>
-                  <label style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
-                    <input id="map_show_locations" type="checkbox" checked />
-                    Locations
-                  </label>
-                </div>
-              </div>
-              
-              <div id="map_container" style="height: 600px; border-radius: 8px; overflow: hidden; background: #0c1527; border: 1px solid #1f2a44; position: relative;">
-                <!-- Fan Menu for Annotation Creation -->
-                <div id="fan_menu" class="fan-menu">
-                  <!-- Center hole with dot and coordinate text -->
-                  <div class="fan-menu-center">
-                    <div class="fan-menu-center-dot"></div>
-                    <div class="fan-menu-center-text fan-menu-center-coords" id="fan_menu_coords">0.00000, 0.00000</div>
-                    <div class="fan-menu-center-text fan-menu-center-distance" id="fan_menu_distance">0.0 mi away</div>
-                  </div>
-                  <!-- Donut ring segments will be dynamically added here -->
-                </div>
-                
-                <!-- Color Menu for Annotation Creation -->
-                <div id="color_menu" class="color-menu">
-                  <!-- Color options will be dynamically added here -->
-                </div>
-                
-                <!-- Map Interaction Feedback -->
-                <div id="map_feedback" class="map-interaction-feedback">
-                  <!-- Feedback messages will be shown here -->
-                </div>
-              </div>
-              
-              <div style="margin-top: 12px; font-size: 12px; color: var(--muted);">
-                <strong>Controls:</strong> Click and drag to pan • Scroll to zoom • <strong>Long press</strong> to create annotations • <strong>Right-click</strong> to edit/delete
-              </div>
-            </div>
+        <!-- Command Palette -->
+        <div id="command-palette" class="command-palette hidden">
+          <div class="command-palette-input-wrapper">
+            <input type="text" id="command-palette-input" class="command-palette-input" placeholder="Type a command or search...">
           </div>
-
-          <!-- Right Side: Side Panels (40%) -->
-          <div class="dashboard-side-panels">
-            <!-- Top Panel: Active Threats -->
-            <div class="card" style="margin-bottom: 16px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h2 style="margin: 0;">Active Threats</h2>
-                <a href="#" id="view-all-threats" style="color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 500; cursor: pointer;">View All →</a>
-              </div>
-              <div class="help-text" style="margin-bottom: 12px; font-size: 12px;">
-                <strong>Critical & High</strong> threats requiring immediate attention
-              </div>
-              
-              <div id="active_threats_panel" style="max-height: 300px; overflow-y: auto;">
-                <div class="muted" style="text-align: center; padding: 20px; font-size: 13px;">Loading threats...</div>
-              </div>
-            </div>
-
-            <!-- Bottom Panel: Live Messages -->
-            <div class="card">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h2 style="margin: 0;">Live Messages</h2>
-                <a href="#" id="view-all-messages" style="color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 500; cursor: pointer;">View All →</a>
-              </div>
-              <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center;">
-                <select id="message_team_filter_compact" style="flex: 1; font-size: 12px; padding: 6px;">
-                  <option value="">All Teams</option>
-                </select>
-                <button id="clear_messages_compact" class="secondary" style="padding: 6px 12px; font-size: 12px;">Clear</button>
-              </div>
-              
-              <div id="message_monitor_compact" style="height: 300px; border-radius: 8px; overflow: hidden; background: #0c1527; border: 1px solid #1f2a44; padding: 12px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px;">
-                <div class="muted" style="text-align: center; padding: 20px;">Waiting for messages...</div>
-              </div>
-            </div>
-          </div>
+          <div id="command-palette-results" class="command-palette-results"></div>
         </div>
       </div>
     </div>

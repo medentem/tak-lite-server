@@ -5,18 +5,86 @@
 import { q, showMessage, showError } from '../utils/dom.js';
 import { get } from '../utils/api.js';
 import { websocketService } from '../services/websocket.js';
+import { HUDPanel } from '../components/HUDPanel.js';
+import { CommandPalette } from '../components/CommandPalette.js';
 
 export class DashboardPage {
   constructor() {
     this.initialized = false;
+    this.threatsPanel = null;
+    this.messagesPanel = null;
+    this.commandPalette = null;
   }
 
   init() {
     if (this.initialized) return;
     
+    // Initialize HUD panels
+    this.initHUDPanels();
+    
+    // Initialize command palette
+    this.initCommandPalette();
+    
+    // Setup WebSocket listeners
     this.setupWebSocketListeners();
+    
+    // Setup click handlers for status badges
+    this.setupStatusBadges();
+    
+    // Refresh data
     this.refresh();
     this.initialized = true;
+  }
+
+  initHUDPanels() {
+    // Initialize threats panel
+    this.threatsPanel = new HUDPanel('threats-hud-panel', {
+      onPin: () => console.log('Threats panel pinned'),
+      onUnpin: () => console.log('Threats panel unpinned')
+    });
+
+    // Initialize messages panel
+    this.messagesPanel = new HUDPanel('messages-hud-panel', {
+      onPin: () => console.log('Messages panel pinned'),
+      onUnpin: () => console.log('Messages panel unpinned')
+    });
+  }
+
+  initCommandPalette() {
+    this.commandPalette = new CommandPalette({
+      onCommandSelect: (command) => {
+        console.log('Command selected:', command.id);
+      }
+    });
+  }
+
+  setupStatusBadges() {
+    const threatsBadge = q('#threats-badge');
+    const messagesBadge = q('#messages-badge');
+    
+    if (threatsBadge) {
+      threatsBadge.addEventListener('click', () => {
+        // Toggle threats panel or navigate to threats page
+        if (this.threatsPanel) {
+          const panel = q('#threats-hud-panel');
+          if (panel) {
+            panel.style.opacity = panel.style.opacity === '0.85' ? '0.2' : '0.85';
+          }
+        }
+      });
+    }
+    
+    if (messagesBadge) {
+      messagesBadge.addEventListener('click', () => {
+        // Toggle messages panel or navigate to messages page
+        if (this.messagesPanel) {
+          const panel = q('#messages-hud-panel');
+          if (panel) {
+            panel.style.opacity = panel.style.opacity === '0.85' ? '0.2' : '0.85';
+          }
+        }
+      });
+    }
   }
 
   setupWebSocketListeners() {
@@ -66,6 +134,26 @@ export class DashboardPage {
       const syncStatus = stats.sync?.status || 'unknown';
       syncStatusEl.textContent = syncStatus;
       syncStatusEl.style.color = syncStatus === 'active' ? '#22c55e' : '#8b97a7';
+    }
+
+    // Update threat badge
+    const threatBadge = q('#k_active_threats');
+    if (threatBadge) {
+      const threatCount = stats.threats?.active || 0;
+      threatBadge.textContent = threatCount;
+      if (this.threatsPanel) {
+        this.threatsPanel.updateBadge(threatCount);
+      }
+    }
+
+    // Update message badge
+    const messageBadge = q('#k_recent_messages');
+    if (messageBadge) {
+      const messageCount = stats.messages?.recent || 0;
+      messageBadge.textContent = messageCount;
+      if (this.messagesPanel) {
+        this.messagesPanel.updateBadge(messageCount);
+      }
     }
   }
 

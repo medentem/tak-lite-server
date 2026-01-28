@@ -24,3 +24,5 @@ export { MapDataLoader } from './data/MapDataLoader.js';
 export { LayerManager } from './layers/LayerManager.js';
 export { IconManager } from './rendering/IconManager.js';
 export { MapBoundsManager } from './navigation/MapBoundsManager.js';
+export { ThreatManager } from './data/ThreatManager.js';
+export { MessageManager } from './data/MessageManager.js';

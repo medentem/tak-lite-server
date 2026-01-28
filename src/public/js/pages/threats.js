@@ -3,7 +3,7 @@
  */
 
 import { q, showMessage, showError, showSuccess } from '../utils/dom.js';
-import { get } from '../utils/api.js';
+import { get, post, put } from '../utils/api.js';
 import { websocketService } from '../services/websocket.js';
 
 let threatsList = [];
@@ -200,7 +200,8 @@ export class ThreatsPage {
 
   updateActiveThreatsPanel() {
     const panelEl = q('#active_threats_panel');
-    if (!panelEl) return;
+    const hudPanelEl = q('#threats-hud-content');
+    const hudBadgeEl = q('#threats-hud-badge');
 
     // Filter for CRITICAL and HIGH threats that are pending or reviewed
     const activeThreats = threatsList.filter(t =>
@@ -215,15 +216,26 @@ export class ThreatsPage {
       activeThreatsCount.style.color = activeThreats.length > 0 ? '#ef4444' : '#22c55e';
     }
 
+    // Update HUD badge
+    if (hudBadgeEl) {
+      hudBadgeEl.textContent = activeThreats.length;
+      hudBadgeEl.style.display = activeThreats.length > 0 ? 'inline-block' : 'none';
+    }
+
+    const emptyHtml = '<div class="muted" style="text-align: center; padding: 20px; font-size: 13px;">No active threats</div>';
+
     if (activeThreats.length === 0) {
-      panelEl.innerHTML = '<div class="muted" style="text-align: center; padding: 20px; font-size: 13px;">No active threats</div>';
+      if (panelEl) panelEl.innerHTML = emptyHtml;
+      if (hudPanelEl) hudPanelEl.innerHTML = emptyHtml;
       return;
     }
 
     // Show only top 5 most critical
     const topThreats = activeThreats.slice(0, 5);
     const html = topThreats.map(threat => this.renderThreatCompact(threat)).join('');
-    panelEl.innerHTML = html;
+    
+    if (panelEl) panelEl.innerHTML = html;
+    if (hudPanelEl) hudPanelEl.innerHTML = html;
   }
 
   renderThreatCompact(threat) {
@@ -236,9 +248,13 @@ export class ThreatsPage {
 
     const color = threatLevelColors[threat.threat_level] || '#8b97a7';
     const status = threat.admin_status || 'pending';
+    const hasLocation = threat.extracted_locations && threat.extracted_locations.length > 0;
 
     return `
-      <div style="border-bottom: 1px solid #1f2a44; padding: 12px; margin-bottom: 8px; background: #0d1b34; border-radius: 6px;">
+      <div class="threat-card-compact" data-threat-id="${threat.id}" style="border-bottom: 1px solid #1f2a44; padding: 12px; margin-bottom: 8px; background: #0d1b34; border-radius: 6px; cursor: pointer; transition: background-color 0.2s ease;" 
+           onmouseover="this.style.background='#0f1f3a'" 
+           onmouseout="this.style.background='#0d1b34'"
+           onclick="window.threatsPage?.panToThreatOnMap('${threat.id}')">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
           <span style="background: ${color}; color: white; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">
             ${threat.threat_level}
@@ -246,11 +262,12 @@ export class ThreatsPage {
           <span style="color: var(--text); font-weight: 600; font-size: 12px; flex: 1;">
             ${threat.threat_type || 'Unknown'}
           </span>
+          ${hasLocation ? '<span style="color: var(--muted); font-size: 10px;">📍</span>' : ''}
         </div>
         <div style="color: var(--muted); font-size: 11px; line-height: 1.4; margin-bottom: 8px;">
           ${(threat.ai_summary || 'No summary').substring(0, 100)}${threat.ai_summary && threat.ai_summary.length > 100 ? '...' : ''}
         </div>
-        <div style="display: flex; gap: 6px;">
+        <div style="display: flex; gap: 6px;" onclick="event.stopPropagation()">
           ${status === 'pending' ? `
             <button onclick="window.threatsPage.reviewThreat('${threat.id}', 'approved')" style="background: #22c55e; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; flex: 1;">
               Approve
@@ -268,13 +285,179 @@ export class ThreatsPage {
     `;
   }
 
+  panToThreatOnMap(threatId) {
+    // Pan map to threat location
+    if (window.adminMap && window.adminMap.panToThreat) {
+      window.adminMap.panToThreat(threatId);
+    }
+  }
+
   async reviewThreat(threatId, status) {
     try {
-      // Implementation will be added - needs team selection for approved threats
-      showMessage(`Threat ${status} functionality coming soon`, 'info');
+      const threat = threatsList.find(t => t.id === threatId);
+      if (!threat) {
+        showError('Threat not found');
+        return;
+      }
+
+      if (status === 'dismissed') {
+        // Simple dismissal - no team selection needed
+        await this.updateThreatStatus(threatId, 'dismissed');
+        showMessage('Threat dismissed', 'success');
+        this.loadThreats();
+        return;
+      }
+
+      if (status === 'approved') {
+        // Need team selection for approval
+        await this.showThreatApprovalModal(threat);
+        return;
+      }
+
+      // For 'reviewed' status, just update status
+      await this.updateThreatStatus(threatId, status);
+      showMessage(`Threat marked as ${status}`, 'success');
+      await this.loadThreats();
+      
+      // Refresh threat manager on map
+      if (window.adminMap && window.adminMap.threatManager) {
+        await window.adminMap.threatManager.refresh();
+      }
     } catch (error) {
       showError(`Failed to review threat: ${error.message}`);
     }
+  }
+
+  async showThreatApprovalModal(threat) {
+    // Get teams for selection
+    const teams = await get('/api/admin/teams');
+    
+    // Create modal HTML
+    const modalHtml = `
+      <div id="threat-approval-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+        <div style="background: var(--panel); border: 1px solid #1f2a44; border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);">
+          <h3 style="margin: 0 0 16px; color: var(--text);">Approve & Send Threat to Field</h3>
+          
+          <div style="margin-bottom: 16px; padding: 12px; background: #0d1b34; border-radius: 6px; border-left: 4px solid #ef4444;">
+            <div style="font-weight: 600; margin-bottom: 4px; color: var(--text);">
+              ${threat.threat_level} Threat: ${threat.threat_type || 'Unknown'}
+            </div>
+            <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">
+              Confidence: ${(threat.confidence_score * 100).toFixed(1)}%
+            </div>
+            <div style="font-size: 12px; color: var(--muted);">
+              ${threat.ai_summary || 'No summary available'}
+            </div>
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; color: var(--text); font-weight: 500;">
+              Select Team to Send Threat:
+            </label>
+            <select id="threat-approval-team" style="width: 100%; padding: 8px 12px; border: 1px solid #233153; border-radius: 6px; background: #0c1527; color: var(--text); font-size: 14px;">
+              <option value="">-- Select Team --</option>
+              ${teams.map(team => `<option value="${team.id}">${team.name}</option>`).join('')}
+            </select>
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; color: var(--text); font-weight: 500;">
+              Annotation Type:
+            </label>
+            <select id="threat-approval-type" style="width: 100%; padding: 8px 12px; border: 1px solid #233153; border-radius: 6px; background: #0c1527; color: var(--text); font-size: 14px;">
+              <option value="poi">Point of Interest (POI)</option>
+              <option value="area">Area/Zone</option>
+            </select>
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; color: var(--text); font-weight: 500;">
+              Custom Label (optional):
+            </label>
+            <input type="text" id="threat-approval-label" placeholder="Leave blank for default" 
+                   style="width: 100%; padding: 8px 12px; border: 1px solid #233153; border-radius: 6px; background: #0c1527; color: var(--text); font-size: 14px;">
+          </div>
+
+          <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+            <button id="threat-approval-cancel" 
+                    style="padding: 8px 16px; border-radius: 6px; border: 1px solid #223056; background: #0c1527; color: var(--text); cursor: pointer; font-weight: 500;">
+              Cancel
+            </button>
+            <button id="threat-approval-submit" 
+                    style="padding: 8px 16px; border-radius: 6px; border: none; background: linear-gradient(180deg, #22c55e, #16a34a); color: white; cursor: pointer; font-weight: 600;">
+              Approve & Send to Field
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Remove existing modal if any
+    const existingModal = document.getElementById('threat-approval-modal');
+    if (existingModal) existingModal.remove();
+
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Setup event handlers
+    const modal = document.getElementById('threat-approval-modal');
+    const cancelBtn = document.getElementById('threat-approval-cancel');
+    const submitBtn = document.getElementById('threat-approval-submit');
+
+    const closeModal = () => {
+      if (modal) modal.remove();
+    };
+
+    cancelBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    submitBtn.addEventListener('click', async () => {
+      const teamId = document.getElementById('threat-approval-team').value;
+      const annotationType = document.getElementById('threat-approval-type').value;
+      const customLabel = document.getElementById('threat-approval-label').value.trim();
+
+      if (!teamId) {
+        showError('Please select a team');
+        return;
+      }
+
+      try {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Sending...';
+
+        const response = await post(`/api/admin/threats/${threat.id}/create-annotation`, {
+          teamId,
+          annotationType,
+          customLabel: customLabel || undefined
+        });
+
+        if (response.success) {
+          showMessage('Threat approved and sent to field team!', 'success');
+          closeModal();
+          await this.loadThreats();
+          
+          // Refresh threat manager on map
+          if (window.adminMap && window.adminMap.threatManager) {
+            await window.adminMap.threatManager.refresh();
+          }
+          
+          // Pan map to threat location if map is available
+          if (window.adminMap && window.adminMap.panToThreat) {
+            window.adminMap.panToThreat(threat.id);
+          }
+        }
+      } catch (error) {
+        showError(`Failed to approve threat: ${error.message}`);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Approve & Send to Field';
+      }
+    });
+  }
+
+  async updateThreatStatus(threatId, status) {
+    await put(`/api/admin/threats/${threatId}/status`, { status });
   }
 
   async deleteThreat(threatId) {

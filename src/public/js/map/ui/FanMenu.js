@@ -130,12 +130,12 @@ export class FanMenu {
    */
   getCreateModeOptions() {
     return [
-      { type: 'circle', iconClass: 'shape-circle', label: 'Circle' },
-      { type: 'square', iconClass: 'shape-square', label: 'Square' },
-      { type: 'triangle', iconClass: 'shape-triangle', label: 'Triangle' },
-      { type: 'exclamation', iconClass: 'shape-exclamation', label: 'Exclamation' },
-      { type: 'area', iconClass: 'area', label: 'Area' },
-      { type: 'line', iconClass: 'line', label: 'Line' }
+      { type: 'circle', iconClass: 'shape-circle', label: 'POI', description: 'Point of Interest' },
+      { type: 'square', iconClass: 'shape-square', label: 'Waypoint', description: 'Navigation Point' },
+      { type: 'triangle', iconClass: 'shape-triangle', label: 'Alert', description: 'Warning Zone' },
+      { type: 'exclamation', iconClass: 'shape-exclamation', label: 'Danger', description: 'Critical Alert' },
+      { type: 'area', iconClass: 'area', label: 'Area', description: 'Zone/Region' },
+      { type: 'line', iconClass: 'line', label: 'Route', description: 'Path/Line' }
     ];
   }
 

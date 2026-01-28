@@ -111,26 +111,32 @@ export class MessagesPage {
   }
 
   updateMessageDisplay() {
-    const messageEl = q('#message_monitor');
+    // Update compact display (old side panel)
     const compactEl = q('#message_monitor_compact');
-
-    // Update compact message monitor
-    if (compactEl) {
-      this.updateCompactMessageDisplay(compactEl);
+    this.updateCompactMessageDisplay(compactEl);
+    
+    // Update HUD panel display
+    const hudEl = q('#messages-hud-content');
+    this.updateCompactMessageDisplay(hudEl);
+    
+    // Update full display (messages page)
+    const fullEl = q('#message_monitor');
+    if (fullEl) {
+      this.updateFullMessageDisplay(fullEl);
     }
-
-    // Update full message monitor if it exists
-    if (messageEl) {
-      this.updateFullMessageDisplay(messageEl);
+    
+    // Update badge
+    const badgeEl = q('#messages-hud-badge');
+    const badgeStatusEl = q('#k_recent_messages');
+    const messageCount = messageLog.length;
+    
+    if (badgeEl) {
+      badgeEl.textContent = messageCount;
+      badgeEl.style.display = messageCount > 0 ? 'inline-block' : 'none';
     }
-
-    // Update status bar count
-    const recentMessagesCount = q('#k_recent_messages');
-    if (recentMessagesCount) {
-      const filteredCount = messageTeamFilter
-        ? messageLog.filter(msg => msg.teamId === messageTeamFilter).length
-        : messageLog.length;
-      recentMessagesCount.textContent = filteredCount;
+    
+    if (badgeStatusEl) {
+      badgeStatusEl.textContent = messageCount;
     }
   }
 

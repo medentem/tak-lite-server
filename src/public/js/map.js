@@ -69,7 +69,9 @@ import {
   MapDataLoader,
   LayerManager,
   IconManager,
-  MapBoundsManager
+  MapBoundsManager,
+  ThreatManager,
+  MessageManager
 } from './map/index.js';
 
 class AdminMap {
@@ -87,6 +89,8 @@ class AdminMap {
     this.annotationManager = null; // Will be initialized after map is created
     this.locationManager = null; // Will be initialized after map is created
     this.teamManager = null; // Will be initialized after map is created
+    this.threatManager = null; // Will be initialized after map is created
+    this.messageManager = null; // Will be initialized after map is created
     this.webSocketManager = null; // Will be initialized after map is created
     this.menuManager = new MenuManager();
     this.feedbackDisplay = new FeedbackDisplay();
@@ -206,6 +210,10 @@ class AdminMap {
     this.locationManager = this.dataLoader.getLocationManager();
     this.teamManager = this.dataLoader.getTeamManager();
     
+    // Initialize threat and message managers
+    this.threatManager = new ThreatManager(this.map, this.eventBus);
+    this.messageManager = new MessageManager(this.map, this.eventBus);
+    
     // Initialize layer and rendering managers
     this.layerManager = new LayerManager(this.map);
     this.iconManager = new IconManager(this.map);
@@ -243,11 +251,9 @@ class AdminMap {
             // Show edit menu for existing annotation
             const feature = features[0];
             this.showEditFanMenu(feature, e.point);
-            this.showFeedback('Long press detected - edit annotation');
           } else {
             // Show create menu for new annotation
             this.showFanMenu(e.point);
-            this.showFeedback('Long press detected - choose annotation type');
           }
           
           this.eventBus.emit(MAP_EVENTS.LONG_PRESS_STARTED, { point: e.point });
@@ -281,11 +287,25 @@ class AdminMap {
       this.setupWebSocketEventHandlers();
       
       // Wait for map to load
-      this.map.on('load', () => {
+      this.map.on('load', async () => {
         this.setupMapSources();
         this.initializeAnnotationUI();
         this.setupMapInteractionHandlers();
         this.setupMapMovementHandlers();
+        
+        // Initialize threat and message visualization
+        if (this.threatManager) {
+          await this.threatManager.init();
+        }
+        if (this.messageManager) {
+          await this.messageManager.init();
+        }
+        
+        // Setup threat selection handler
+        this.eventBus.on('threat:selected', (data) => {
+          this.handleThreatSelection(data);
+        });
+        
         this.eventBus.emit(MAP_EVENTS.MAP_LOADED);
       });
       
@@ -1929,6 +1949,57 @@ class AdminMap {
   }
   
   
+  /**
+   * Handle threat selection from map or panel
+   */
+  handleThreatSelection(data) {
+    const { threat, lngLat } = data;
+    
+    // Show threat details in a popup or panel
+    if (threat && this.popupManager) {
+      const content = `
+        <div style="max-width: 300px;">
+          <div style="font-weight: 600; margin-bottom: 8px; color: #ef4444;">
+            ${threat.threat_level} Threat
+          </div>
+          <div style="font-size: 14px; margin-bottom: 4px; color: #e6edf3;">
+            <strong>Type:</strong> ${threat.threat_type || 'Unknown'}
+          </div>
+          <div style="font-size: 13px; margin-bottom: 4px; color: #8b97a7;">
+            <strong>Confidence:</strong> ${(threat.confidence_score * 100).toFixed(1)}%
+          </div>
+          <div style="font-size: 12px; color: #8b97a7; margin-top: 8px;">
+            ${threat.ai_summary || 'No summary available'}
+          </div>
+          <div style="margin-top: 12px;">
+            <button onclick="window.threatsPage?.reviewThreat('${threat.id}', 'approved')" 
+                    style="background: #22c55e; color: white; padding: 6px 12px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; margin-right: 8px;">
+              Approve & Send
+            </button>
+            <button onclick="window.threatsPage?.reviewThreat('${threat.id}', 'dismissed')" 
+                    style="background: #6b7280; color: white; padding: 6px 12px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
+              Dismiss
+            </button>
+          </div>
+        </div>
+      `;
+      
+      new maplibregl.Popup({ closeOnClick: true })
+        .setLngLat([lngLat.lng, lngLat.lat])
+        .setHTML(content)
+        .addTo(this.map);
+    }
+  }
+
+  /**
+   * Pan to threat location
+   */
+  panToThreat(threatId) {
+    if (this.threatManager) {
+      this.threatManager.panToThreat(threatId);
+    }
+  }
+
   // Cleanup method to prevent memory leaks
   cleanup() {
     // Disconnect WebSocket listeners
@@ -1978,6 +2049,9 @@ export { AdminMap };
 
 // Initialize map when page loads
 let adminMap = null;
+
+// Make adminMap globally accessible
+window.adminMap = null;
 
 window.addEventListener('load', function() {
   logger.debug('Page loaded, checking libraries...');
