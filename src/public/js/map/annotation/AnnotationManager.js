@@ -74,10 +74,18 @@ export class AnnotationManager {
       const result = await put(API_ENDPOINTS.annotationsById(annotationId), { data: updateData });
       logger.info('Annotation updated successfully:', annotationId);
       
-      // Update local annotation
+      // Update local annotation - merge the data field properly
       const index = this.annotations.findIndex(a => a.id === annotationId);
       if (index >= 0) {
-        this.annotations[index] = { ...this.annotations[index], ...result };
+        // Merge the entire result object, which includes the updated data field
+        this.annotations[index] = {
+          ...this.annotations[index],
+          ...result,
+          data: result.data || this.annotations[index].data
+        };
+      } else {
+        // If annotation not found locally, add it
+        this.annotations.push(result);
       }
       return result;
     } catch (error) {

@@ -533,6 +533,10 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           updated_at: db.client.fn.now()
         });
       
+      // Fetch updated annotation
+      const updated = await db.client('annotations').where({ id: annotationId }).first();
+      const updatedData = JSON.parse(updated.data);
+      
       if (audit) await audit.log({ 
         actorUserId: userId, 
         action: 'annotation.update', 
@@ -547,17 +551,17 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           id: annotationId,
           teamId: existing.team_id,
           type: existing.type,
-          data: mergedData,
+          data: updatedData,
           userId,
           userName: 'Admin',
           userEmail: 'admin@system',
-          timestamp: mergedData.timestamp || Date.now()
+          timestamp: updatedData.timestamp || Date.now()
         });
         
         // Broadcast to regular clients (Android clients listen for this)
         // Include all required fields for polymorphic deserialization
         const clientData = {
-          ...mergedData,
+          ...updatedData,
           type: existing.type, // Add discriminator field for Kotlinx Serialization
           id: annotationId, // Ensure ID is in the data object
           creatorId: userId, // Map userId to creatorId
@@ -575,7 +579,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
-            timestamp: mergedData.timestamp || Date.now()
+            timestamp: updatedData.timestamp || Date.now()
           });
         } else {
           // Broadcast to global room for null team_id data
@@ -587,12 +591,21 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
-            timestamp: mergedData.timestamp || Date.now()
+            timestamp: updatedData.timestamp || Date.now()
           });
         }
       }
       
-      res.json({ success: true });
+      // Return the updated annotation in the same format as create endpoint
+      res.json({ 
+        id: annotationId,
+        user_id: userId,
+        team_id: existing.team_id,
+        type: existing.type,
+        data: updatedData,
+        created_at: existing.created_at,
+        updated_at: updated.updated_at
+      });
     } catch (err) { next(err); }
   });
 
