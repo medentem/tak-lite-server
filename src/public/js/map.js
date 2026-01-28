@@ -1468,17 +1468,21 @@ class AdminMap {
     
     // Remove annotation from local data
     const annotations = this.annotationManager.getAnnotations();
-    const existingIndex = annotations.findIndex(a => a.id === data.annotationId);
+    // Handle both annotationId (from local delete) and id (from WebSocket)
+    const annotationId = data.annotationId || data.id;
+    const existingIndex = annotations.findIndex(a => a.id === annotationId);
     if (existingIndex >= 0) {
       annotations.splice(existingIndex, 1);
-      logger.debug(`Removed annotation ${data.annotationId} from map`);
+      logger.debug(`Removed annotation ${annotationId} from map`);
     } else {
-      logger.debug(`Annotation ${data.annotationId} not found in local data`);
+      logger.debug(`Annotation ${annotationId} not found in local data`);
     }
     
     // Update map immediately
     this.updateMapData();
-    this.eventBus.emit(MAP_EVENTS.ANNOTATION_DELETED, data);
+    // Don't emit ANNOTATION_DELETED here - it would create an infinite loop
+    // The event is already emitted by deleteAnnotationById or comes from WebSocket
+    // Other components that need to know about deletions should listen to MAP_DATA_UPDATED
   }
 
   handleBulkAnnotationDelete(data) {
