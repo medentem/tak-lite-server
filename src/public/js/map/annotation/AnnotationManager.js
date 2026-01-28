@@ -71,45 +71,85 @@ export class AnnotationManager {
    */
   async updateAnnotation(annotationId, updateData) {
     try {
+      logger.debug(`[UPDATE] Starting update for annotation ${annotationId}`, {
+        updateData,
+        currentAnnotations: this.annotations.length
+      });
+      
       const result = await put(API_ENDPOINTS.annotationsById(annotationId), { data: updateData });
       logger.info('Annotation updated successfully:', annotationId);
       
       // Update local annotation - merge the data field properly
       const index = this.annotations.findIndex(a => a.id === annotationId);
       if (index >= 0) {
+        const existingAnnotation = this.annotations[index];
+        logger.debug(`[UPDATE] Found existing annotation at index ${index}`, {
+          annotationId,
+          existingType: existingAnnotation.type,
+          existingDataKeys: Object.keys(existingAnnotation.data || {})
+        });
+        
         // Parse result.data if it's a string (some DB drivers return JSONB as string)
         let resultData = result.data;
         if (typeof resultData === 'string') {
           try {
             resultData = JSON.parse(resultData);
+            logger.debug(`[UPDATE] Parsed result.data from string`, { keys: Object.keys(resultData) });
           } catch (e) {
             logger.warn('Failed to parse result.data as JSON:', e);
             resultData = {};
           }
         }
         
+        logger.debug(`[UPDATE] Server response data`, {
+          resultDataType: typeof resultData,
+          resultDataKeys: resultData ? Object.keys(resultData) : [],
+          resultData: resultData
+        });
+        
         // Ensure data is an object and merge it properly
         // Preserve existing data to ensure position and other fields aren't lost
-        let existingData = this.annotations[index].data || {};
+        let existingData = existingAnnotation.data || {};
         if (typeof existingData === 'string') {
           try {
             existingData = JSON.parse(existingData);
+            logger.debug(`[UPDATE] Parsed existing data from string`, { keys: Object.keys(existingData) });
           } catch (e) {
             logger.warn('Failed to parse existing data as JSON:', e);
             existingData = {};
           }
         }
         
+        logger.debug(`[UPDATE] Existing data before merge`, {
+          existingDataType: typeof existingData,
+          existingDataKeys: existingData ? Object.keys(existingData) : [],
+          existingData: existingData
+        });
+        
         const newData = resultData || {};
         // Merge: existing data first (preserves position, etc.), then new data (updates color/shape)
         const mergedData = { ...existingData, ...newData };
         
+        logger.debug(`[UPDATE] Merged data`, {
+          mergedDataKeys: Object.keys(mergedData),
+          mergedData: mergedData,
+          hasPosition: !!mergedData.position,
+          hasPoints: !!mergedData.points,
+          hasCenter: !!mergedData.center
+        });
+        
         // Update the annotation with merged data, preserving all fields
         this.annotations[index] = {
-          ...this.annotations[index],
+          ...existingAnnotation,
           ...result,
           data: mergedData
         };
+        
+        logger.debug(`[UPDATE] Updated annotation in array`, {
+          annotationId,
+          finalDataKeys: Object.keys(this.annotations[index].data || {}),
+          finalType: this.annotations[index].type
+        });
       } else {
         // If annotation not found locally, add it
         // Parse data if it's a string
@@ -193,7 +233,11 @@ export class AnnotationManager {
     this.annotations.forEach(annotation => {
       // Ensure data exists and is an object
       if (!annotation || !annotation.data) {
-        logger.warn('Skipping annotation with missing data:', annotation);
+        logger.warn('[GEOJSON] Skipping annotation with missing data:', {
+          id: annotation?.id,
+          type: annotation?.type,
+          hasData: !!annotation?.data
+        });
         return;
       }
       
@@ -203,10 +247,24 @@ export class AnnotationManager {
         try {
           data = JSON.parse(data);
         } catch (e) {
-          logger.warn('Failed to parse annotation data as JSON:', e, annotation);
+          logger.warn('[GEOJSON] Failed to parse annotation data as JSON:', e, {
+            id: annotation.id,
+            type: annotation.type
+          });
           return; // Skip this annotation if data is invalid
         }
       }
+      
+      logger.debug(`[GEOJSON] Processing annotation ${annotation.id} (${annotation.type})`, {
+        dataKeys: Object.keys(data),
+        hasPosition: !!data.position,
+        hasPoints: !!data.points,
+        hasCenter: !!data.center,
+        position: data.position,
+        pointsLength: data.points?.length,
+        center: data.center
+      });
+      
       const properties = {
         id: annotation.id,
         type: annotation.type,
@@ -221,6 +279,10 @@ export class AnnotationManager {
       switch (annotation.type) {
         case 'poi':
           const poiCoords = extractCoordinates(data.position);
+          logger.debug(`[GEOJSON] POI ${annotation.id} coordinates:`, {
+            position: data.position,
+            extractedCoords: poiCoords
+          });
           if (poiCoords) {
             const color = data.color || 'green';
             const shape = data.shape || 'circle';
@@ -245,13 +307,26 @@ export class AnnotationManager {
           break;
           
         case 'line':
+          logger.debug(`[GEOJSON] Line ${annotation.id} points:`, {
+            points: data.points,
+            pointsType: typeof data.points,
+            isArray: Array.isArray(data.points),
+            pointsLength: data.points?.length
+          });
           if (!data.points || !Array.isArray(data.points)) {
-            logger.warn('Skipping line annotation with missing or invalid points:', {
-              id: annotation.id
+            logger.warn('[GEOJSON] Skipping line annotation with missing or invalid points:', {
+              id: annotation.id,
+              points: data.points,
+              pointsType: typeof data.points
             });
             break;
           }
           const linePoints = data.points.map(p => extractCoordinates(p)).filter(coord => coord !== null);
+          logger.debug(`[GEOJSON] Line ${annotation.id} extracted points:`, {
+            originalCount: data.points.length,
+            extractedCount: linePoints.length,
+            extractedPoints: linePoints
+          });
           if (linePoints.length >= 2) {
             lineFeatures.push({
               type: 'Feature',
@@ -271,7 +346,16 @@ export class AnnotationManager {
           break;
           
         case 'area':
+          logger.debug(`[GEOJSON] Area ${annotation.id} center and radius:`, {
+            center: data.center,
+            radius: data.radius,
+            radiusType: typeof data.radius
+          });
           const areaCoords = extractCoordinates(data.center);
+          logger.debug(`[GEOJSON] Area ${annotation.id} extracted center:`, {
+            center: data.center,
+            extractedCoords: areaCoords
+          });
           if (areaCoords && data.radius && data.radius > 0) {
             const areaPolygon = generateCirclePolygon(areaCoords[0], areaCoords[1], data.radius);
             areaFeatures.push({
@@ -331,9 +415,14 @@ export class AnnotationManager {
    */
   updateMap() {
     if (!this.map) {
-      logger.warn('Cannot update map: map not initialized');
+      logger.warn('[UPDATEMAP] Cannot update map: map not initialized');
       return;
     }
+    
+    logger.debug('[UPDATEMAP] Starting map update', {
+      totalAnnotations: this.annotations.length,
+      annotationIds: this.annotations.map(a => a.id)
+    });
     
     // Ensure all sources exist
     const requiredSources = [
@@ -345,13 +434,23 @@ export class AnnotationManager {
     
     for (const sourceId of requiredSources) {
       if (!this.map.getSource(sourceId)) {
-        logger.error(`Map source '${sourceId}' not found`);
+        logger.error(`[UPDATEMAP] Map source '${sourceId}' not found`);
         return;
       }
     }
     
     // Convert annotations to GeoJSON
     const { poiFeatures, lineFeatures, areaFeatures, polygonFeatures } = this.convertToGeoJSON();
+    
+    logger.debug('[UPDATEMAP] Converted to GeoJSON', {
+      poiCount: poiFeatures.length,
+      lineCount: lineFeatures.length,
+      areaCount: areaFeatures.length,
+      polygonCount: polygonFeatures.length,
+      poiFeatureIds: poiFeatures.map(f => f.properties.id),
+      lineFeatureIds: lineFeatures.map(f => f.properties.id),
+      areaFeatureIds: areaFeatures.map(f => f.properties.id)
+    });
     
     // Update map sources
     this.map.getSource(LAYER_CONFIG.sources.annotationsPoi).setData({
@@ -374,7 +473,7 @@ export class AnnotationManager {
       features: polygonFeatures
     });
     
-    logger.debug(`Updated map with ${poiFeatures.length} POIs, ${lineFeatures.length} lines, ${areaFeatures.length} areas, ${polygonFeatures.length} polygons`);
+    logger.info(`[UPDATEMAP] Updated map with ${poiFeatures.length} POIs, ${lineFeatures.length} lines, ${areaFeatures.length} areas, ${polygonFeatures.length} polygons`);
   }
 
   /**

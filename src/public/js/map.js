@@ -1232,10 +1232,22 @@ class AdminMap {
   
   async saveAnnotationEdit() {
     const currentEditing = this.state.getCurrentEditingAnnotation();
-    if (!currentEditing) return;
+    if (!currentEditing) {
+      logger.warn('[EDIT] No annotation currently being edited');
+      return;
+    }
+    
+    logger.debug('[EDIT] Starting annotation edit save', {
+      annotationId: currentEditing.id,
+      type: currentEditing.type,
+      currentData: currentEditing.data
+    });
     
     const editForm = q('#edit_annotation_form');
-    if (!editForm) return;
+    if (!editForm) {
+      logger.warn('[EDIT] Edit form not found');
+      return;
+    }
     const formData = new FormData(editForm);
     const updateData = {
       label: formData.get('label') || '',
@@ -1249,17 +1261,35 @@ class AdminMap {
       updateData.radius = parseFloat(formData.get('radius')) || 100;
     }
     
-    if (!this.annotationManager) return;
-    if (!currentEditing) return;
+    logger.debug('[EDIT] Update data to send', {
+      updateData,
+      originalDataKeys: Object.keys(currentEditing.data || {}),
+      originalData: currentEditing.data
+    });
+    
+    if (!this.annotationManager) {
+      logger.error('[EDIT] AnnotationManager not available');
+      return;
+    }
+    if (!currentEditing) {
+      logger.error('[EDIT] Current editing annotation is null');
+      return;
+    }
     
     try {
       const result = await this.annotationManager.updateAnnotation(currentEditing.id, updateData);
+      logger.debug('[EDIT] Update result received', {
+        result,
+        resultDataType: typeof result.data,
+        resultDataKeys: result.data ? Object.keys(result.data) : []
+      });
+      
       this.showFeedback('Annotation updated successfully', 2000);
       this.updateMapData();
       this.hideEditForm();
       this.eventBus.emit(MAP_EVENTS.ANNOTATION_UPDATED, result);
     } catch (error) {
-      logger.error('Failed to update annotation:', error);
+      logger.error('[EDIT] Failed to update annotation:', error);
       this.showFeedback(`Failed to update annotation: ${error.message || 'Unknown error'}`, 5000);
     }
   }
@@ -1417,8 +1447,18 @@ class AdminMap {
   handleAnnotationUpdate(data) {
     if (!this.annotationManager) return;
     
+    logger.debug('[WS-UPDATE] Received annotation update from WebSocket', {
+      id: data.id,
+      type: data.type,
+      dataKeys: data.data ? Object.keys(data.data) : [],
+      hasPosition: !!(data.data?.position),
+      hasPoints: !!(data.data?.points),
+      hasCenter: !!(data.data?.center)
+    });
+    
     // Check if this annotation is relevant to current view
     if (this.state.getCurrentTeamId() && data.teamId !== this.state.getCurrentTeamId()) {
+      logger.debug('[WS-UPDATE] Skipping update - not relevant to current team');
       return; // Not relevant to current team filter
     }
     
@@ -1435,17 +1475,59 @@ class AdminMap {
       updated_at: data.updated_at
     };
     
+    // Parse annotation.data if it's a string
+    if (typeof annotation.data === 'string') {
+      try {
+        annotation.data = JSON.parse(annotation.data);
+        logger.debug('[WS-UPDATE] Parsed annotation.data from string');
+      } catch (e) {
+        logger.warn('[WS-UPDATE] Failed to parse annotation.data as JSON:', e);
+        annotation.data = {};
+      }
+    }
+    
     // Add or update annotation in local data
     const existingIndex = this.annotationManager.getAnnotations().findIndex(a => a.id === annotation.id);
     if (existingIndex >= 0) {
       // Merge with existing annotation to preserve all fields
       const existing = this.annotationManager.getAnnotations()[existingIndex];
+      
+      // Parse existing.data if it's a string
+      let existingData = existing.data || {};
+      if (typeof existingData === 'string') {
+        try {
+          existingData = JSON.parse(existingData);
+        } catch (e) {
+          logger.warn('[WS-UPDATE] Failed to parse existing.data as JSON:', e);
+          existingData = {};
+        }
+      }
+      
+      logger.debug('[WS-UPDATE] Merging with existing annotation', {
+        existingDataKeys: Object.keys(existingData),
+        newDataKeys: Object.keys(annotation.data),
+        existingHasPosition: !!existingData.position,
+        existingHasPoints: !!existingData.points,
+        existingHasCenter: !!existingData.center
+      });
+      
+      // Merge: existing data first (preserves position, etc.), then new data (updates color/shape)
+      const mergedData = { ...existingData, ...annotation.data };
+      
+      logger.debug('[WS-UPDATE] Merged data', {
+        mergedDataKeys: Object.keys(mergedData),
+        hasPosition: !!mergedData.position,
+        hasPoints: !!mergedData.points,
+        hasCenter: !!mergedData.center
+      });
+      
       this.annotationManager.getAnnotations()[existingIndex] = {
         ...existing,
         ...annotation,
-        data: { ...existing.data, ...annotation.data }
+        data: mergedData
       };
     } else {
+      logger.debug('[WS-UPDATE] Adding new annotation (not found locally)');
       this.annotationManager.getAnnotations().unshift(annotation); // Add to beginning
     }
     
@@ -1455,7 +1537,7 @@ class AdminMap {
     // The event is already emitted by updateAnnotationField or comes from WebSocket
     // Other components that need to know about updates should listen to MAP_DATA_UPDATED
     
-    logger.debug(`Updated annotation ${annotation.id} on map`);
+    logger.debug(`[WS-UPDATE] Updated annotation ${annotation.id} on map`);
   }
 
   handleAnnotationDelete(data) {
