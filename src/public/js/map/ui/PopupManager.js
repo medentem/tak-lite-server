@@ -84,6 +84,11 @@ export class PopupManager {
     const title = properties.label || capitalizeFirst(type);
     lines.push(title);
     
+    // Add description/note if available
+    if (properties.description && properties.description.trim()) {
+      lines.push(properties.description);
+    }
+    
     switch (type) {
       case 'poi':
         this.addPoiInfo(lines, properties, lngLat);

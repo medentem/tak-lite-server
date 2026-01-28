@@ -226,8 +226,30 @@ class AdminMap {
       this.longPressHandler = new LongPressHandler(this.map, {
         onLongPress: (e) => {
           this.state.setIsLongPressing(true);
-          this.showFanMenu(e.point);
-          this.showFeedback('Long press detected - choose annotation type');
+          
+          // Check for existing annotation at long press location
+          const layers = [
+            LAYER_CONFIG.annotationLayers.poi,
+            LAYER_CONFIG.annotationLayers.line,
+            LAYER_CONFIG.annotationLayers.area,
+            LAYER_CONFIG.annotationLayers.polygon
+          ];
+          
+          const features = this.map.queryRenderedFeatures(e.point, {
+            layers: layers
+          });
+          
+          if (features.length > 0) {
+            // Show edit menu for existing annotation
+            const feature = features[0];
+            this.showEditFanMenu(feature, e.point);
+            this.showFeedback('Long press detected - edit annotation');
+          } else {
+            // Show create menu for new annotation
+            this.showFanMenu(e.point);
+            this.showFeedback('Long press detected - choose annotation type');
+          }
+          
           this.eventBus.emit(MAP_EVENTS.LONG_PRESS_STARTED, { point: e.point });
         },
         onCancel: () => {
@@ -583,11 +605,111 @@ class AdminMap {
     ];
   }
   
-  getEditModeOptions() {
-    return [
-      { type: 'edit', iconClass: 'edit', label: 'Edit' },
-      { type: 'delete', iconClass: 'delete', label: 'Delete' }
+  getEditModeOptions(annotationType) {
+    const options = [
+      { type: 'edit-label', iconClass: 'edit', label: 'Edit Label' },
+      { type: 'edit-note', iconClass: 'note', label: 'Add Note' }
     ];
+    
+    // Add color option for all annotation types
+    options.push({ type: 'change-color', iconClass: 'color', label: 'Color' });
+    
+    // Add shape option only for POIs
+    if (annotationType === 'poi') {
+      options.push({ type: 'change-shape', iconClass: 'shape', label: 'Shape' });
+    }
+    
+    // Add delete option
+    options.push({ type: 'delete', iconClass: 'delete', label: 'Delete' });
+    
+    return options;
+  }
+  
+  showEditFanMenu(feature, point) {
+    logger.debug('showEditFanMenu called with feature:', feature, 'point:', point);
+    
+    if (!this.fanMenu) {
+      logger.error('fanMenu element not found!');
+      return;
+    }
+    
+    const fanMenuElement = this.fanMenu.getElement();
+    if (!fanMenuElement) {
+      logger.error('fanMenu DOM element not found!');
+      return;
+    }
+    
+    // Get annotation from feature
+    const annotationId = feature.properties.id;
+    const annotation = this.annotationManager.findAnnotation(annotationId);
+    
+    if (!annotation) {
+      logger.error('Annotation not found:', annotationId);
+      return;
+    }
+    
+    // Store current editing annotation
+    this.state.setCurrentEditingAnnotation(annotation);
+    
+    // Clear existing segments
+    const centerHole = fanMenuElement.querySelector('.fan-menu-center');
+    const existingSegments = fanMenuElement.querySelector('.fan-menu-segments-container');
+    
+    fanMenuElement.innerHTML = '';
+    if (centerHole) {
+      fanMenuElement.appendChild(centerHole);
+    }
+    if (existingSegments) {
+      existingSegments.remove();
+    }
+    
+    // Get map coordinates for center text
+    const lngLat = this.map.unproject(point);
+    
+    // Update center text with annotation info
+    this.updateEditFanMenuCenterText(annotation);
+    
+    // Define options based on annotation type
+    const options = this.getEditModeOptions(annotation.type);
+    
+    // Position fan menu at click point relative to map container
+    fanMenuElement.style.left = (point.x - 100) + 'px';
+    fanMenuElement.style.top = (point.y - 100) + 'px';
+    fanMenuElement.style.position = 'absolute';
+    
+    // Create donut ring segments
+    this.createDonutRingSegments(options, point);
+    
+    // Show fan menu
+    fanMenuElement.classList.add('visible');
+    logger.debug('Edit fan menu made visible with', options.length, 'options');
+  }
+  
+  updateEditFanMenuCenterText(annotation) {
+    const coordsEl = document.getElementById('fan_menu_coords');
+    const distanceEl = document.getElementById('fan_menu_distance');
+    
+    if (coordsEl) {
+      const data = annotation.data;
+      let coords = '';
+      if (annotation.type === 'poi' && data.position) {
+        coords = `${data.position.lt.toFixed(5)}, ${data.position.lng.toFixed(5)}`;
+      } else if (annotation.type === 'line' && data.points && data.points.length > 0) {
+        const firstPoint = data.points[0];
+        coords = `${firstPoint.lt.toFixed(5)}, ${firstPoint.lng.toFixed(5)}`;
+      } else if (annotation.type === 'area' && data.center) {
+        coords = `${data.center.lt.toFixed(5)}, ${data.center.lng.toFixed(5)}`;
+      } else if (annotation.type === 'polygon' && data.points && data.points.length > 0) {
+        const firstPoint = data.points[0];
+        coords = `${firstPoint.lt.toFixed(5)}, ${firstPoint.lng.toFixed(5)}`;
+      }
+      coordsEl.textContent = coords || 'N/A';
+    }
+    
+    if (distanceEl) {
+      const label = annotation.data.label || annotation.type.toUpperCase();
+      distanceEl.textContent = label.length > 15 ? label.substring(0, 15) + '...' : label;
+    }
   }
   
   updateFanMenuCenterText(lngLat) {
@@ -814,25 +936,125 @@ class AdminMap {
       // Show color menu for line (two-step flow)
       this.state.setCurrentShape('line');
       this.showColorMenu(point, 'line');
-    } else if (optionType === 'edit') {
-      // Handle edit mode
-      this.handleEditAnnotation();
+    } else if (optionType === 'edit-label') {
+      // Handle edit label
+      this.handleEditLabel();
+    } else if (optionType === 'edit-note') {
+      // Handle edit note
+      this.handleEditNote();
+    } else if (optionType === 'change-color') {
+      // Handle change color
+      this.handleChangeColor(point);
+    } else if (optionType === 'change-shape') {
+      // Handle change shape (POIs only)
+      this.handleChangeShape(point);
     } else if (optionType === 'delete') {
       // Handle delete mode
       this.handleDeleteAnnotation();
     }
   }
   
-  handleEditAnnotation() {
-    // This would be called when editing an existing annotation
-    // For now, just show feedback
-    this.showFeedback('Edit functionality not yet implemented', 3000);
+  handleEditLabel() {
+    const currentEditing = this.state.getCurrentEditingAnnotation();
+    if (!currentEditing) {
+      this.showFeedback('No annotation selected', 3000);
+      return;
+    }
+    
+    const currentLabel = currentEditing.data.label || '';
+    const newLabel = prompt('Enter new label:', currentLabel);
+    
+    if (newLabel !== null) {
+      this.updateAnnotationField('label', newLabel);
+    }
+  }
+  
+  handleEditNote() {
+    const currentEditing = this.state.getCurrentEditingAnnotation();
+    if (!currentEditing) {
+      this.showFeedback('No annotation selected', 3000);
+      return;
+    }
+    
+    const currentNote = currentEditing.data.description || '';
+    const newNote = prompt('Enter note/description:', currentNote);
+    
+    if (newNote !== null) {
+      this.updateAnnotationField('description', newNote);
+    }
+  }
+  
+  handleChangeColor(point) {
+    const currentEditing = this.state.getCurrentEditingAnnotation();
+    if (!currentEditing) {
+      this.showFeedback('No annotation selected', 3000);
+      return;
+    }
+    
+    // Show color menu for editing
+    if (!this.colorMenu) return;
+    
+    this.colorMenu.show(point, currentEditing.type, (color) => {
+      this.colorMenu.hide();
+      this.updateAnnotationField('color', color);
+    });
+  }
+  
+  handleChangeShape(point) {
+    const currentEditing = this.state.getCurrentEditingAnnotation();
+    if (!currentEditing || currentEditing.type !== 'poi') {
+      this.showFeedback('Shape can only be changed for POIs', 3000);
+      return;
+    }
+    
+    // Show shape selection menu
+    const shapes = [
+      { type: 'circle', label: 'Circle' },
+      { type: 'square', label: 'Square' },
+      { type: 'triangle', label: 'Triangle' },
+      { type: 'exclamation', label: 'Exclamation' }
+    ];
+    
+    const shapeOptions = shapes.map(s => s.label).join('\n');
+    const choice = prompt(`Select shape:\n1. Circle\n2. Square\n3. Triangle\n4. Exclamation\n\nCurrent: ${currentEditing.data.shape || 'circle'}`, '1');
+    
+    if (choice !== null) {
+      const shapeIndex = parseInt(choice) - 1;
+      if (shapeIndex >= 0 && shapeIndex < shapes.length) {
+        this.updateAnnotationField('shape', shapes[shapeIndex].type);
+      }
+    }
+  }
+  
+  async updateAnnotationField(field, value) {
+    const currentEditing = this.state.getCurrentEditingAnnotation();
+    if (!currentEditing || !this.annotationManager) {
+      this.showFeedback('No annotation selected', 3000);
+      return;
+    }
+    
+    try {
+      const updateData = { [field]: value };
+      await this.annotationManager.updateAnnotation(currentEditing.id, updateData);
+      this.showFeedback(`Annotation ${field} updated successfully`, 2000);
+      this.updateMapData();
+      this.eventBus.emit(MAP_EVENTS.ANNOTATION_UPDATED, { id: currentEditing.id, ...updateData });
+    } catch (error) {
+      logger.error('Failed to update annotation:', error);
+      this.showFeedback(`Failed to update annotation: ${error.message || 'Unknown error'}`, 5000);
+    }
   }
   
   handleDeleteAnnotation() {
-    // This would be called when deleting an existing annotation
-    // For now, just show feedback
-    this.showFeedback('Delete functionality not yet implemented', 3000);
+    const currentEditing = this.state.getCurrentEditingAnnotation();
+    if (!currentEditing) {
+      this.showFeedback('No annotation selected', 3000);
+      return;
+    }
+    
+    if (confirm('Are you sure you want to delete this annotation?')) {
+      this.deleteAnnotationById(currentEditing.id);
+    }
   }
   
   showColorMenu(point, annotationType) {

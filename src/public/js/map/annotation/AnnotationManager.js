@@ -141,7 +141,8 @@ export class AnnotationManager {
         id: annotation.id,
         type: annotation.type,
         color: getColorHex(data.color),
-        label: data.label,
+        label: data.label || '',
+        description: data.description || '',
         timestamp: data.timestamp,
         creatorId: data.creatorId,
         source: data.source

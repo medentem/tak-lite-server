@@ -384,6 +384,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           color: Joi.string().valid('green', 'yellow', 'red', 'black', 'white').default('green'),
           shape: Joi.string().valid('circle', 'square', 'triangle', 'exclamation').default('circle'),
           label: Joi.string().max(100).allow('').optional(),
+          description: Joi.string().max(1000).allow('').optional(),
           timestamp: Joi.number().default(() => Date.now())
         }).required()
       });
@@ -506,6 +507,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           color: Joi.string().valid('green', 'yellow', 'red', 'black', 'white').optional(),
           shape: Joi.string().valid('circle', 'square', 'triangle', 'exclamation').optional(),
           label: Joi.string().max(100).allow('').optional(),
+          description: Joi.string().max(1000).allow('').optional(),
           timestamp: Joi.number().optional()
         }).required()
       });
