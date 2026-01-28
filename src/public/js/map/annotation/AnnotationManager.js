@@ -77,15 +77,26 @@ export class AnnotationManager {
       // Update local annotation - merge the data field properly
       const index = this.annotations.findIndex(a => a.id === annotationId);
       if (index >= 0) {
-        // Merge the entire result object, which includes the updated data field
+        // Ensure data is an object and merge it properly
+        const existingData = this.annotations[index].data || {};
+        const newData = result.data || {};
+        const mergedData = { ...existingData, ...newData };
+        
+        // Update the annotation with merged data
         this.annotations[index] = {
           ...this.annotations[index],
           ...result,
-          data: result.data || this.annotations[index].data
+          data: mergedData
         };
       } else {
         // If annotation not found locally, add it
-        this.annotations.push(result);
+        // Ensure data is an object
+        if (result.data && typeof result.data === 'object') {
+          this.annotations.push(result);
+        } else {
+          logger.warn('Annotation result missing data field:', result);
+          this.annotations.push(result);
+        }
       }
       return result;
     } catch (error) {
@@ -144,23 +155,31 @@ export class AnnotationManager {
     const polygonFeatures = [];
     
     this.annotations.forEach(annotation => {
+      // Ensure data exists and is an object
+      if (!annotation || !annotation.data) {
+        logger.warn('Skipping annotation with missing data:', annotation);
+        return;
+      }
+      
       const data = annotation.data;
       const properties = {
         id: annotation.id,
         type: annotation.type,
-        color: getColorHex(data.color),
+        color: getColorHex(data.color || 'green'),
         label: data.label || '',
         description: data.description || '',
-        timestamp: data.timestamp,
-        creatorId: data.creatorId,
-        source: data.source
+        timestamp: data.timestamp || Date.now(),
+        creatorId: data.creatorId || annotation.user_id,
+        source: data.source || 'server'
       };
       
       switch (annotation.type) {
         case 'poi':
           const poiCoords = extractCoordinates(data.position);
           if (poiCoords) {
-            const iconName = `poi-${(data.shape || 'circle').toLowerCase()}-${data.color.toLowerCase()}`;
+            const color = data.color || 'green';
+            const shape = data.shape || 'circle';
+            const iconName = `poi-${shape.toLowerCase()}-${color.toLowerCase()}`;
             poiFeatures.push({
               type: 'Feature',
               geometry: {
@@ -181,6 +200,12 @@ export class AnnotationManager {
           break;
           
         case 'line':
+          if (!data.points || !Array.isArray(data.points)) {
+            logger.warn('Skipping line annotation with missing or invalid points:', {
+              id: annotation.id
+            });
+            break;
+          }
           const linePoints = data.points.map(p => extractCoordinates(p)).filter(coord => coord !== null);
           if (linePoints.length >= 2) {
             lineFeatures.push({
@@ -226,6 +251,12 @@ export class AnnotationManager {
           break;
           
         case 'polygon':
+          if (!data.points || !Array.isArray(data.points)) {
+            logger.warn('Skipping polygon annotation with missing or invalid points:', {
+              id: annotation.id
+            });
+            break;
+          }
           const polygonPoints = data.points.map(p => extractCoordinates(p)).filter(coord => coord !== null);
           if (polygonPoints.length >= 3) {
             polygonFeatures.push({

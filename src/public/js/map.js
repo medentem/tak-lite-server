@@ -1407,19 +1407,38 @@ class AdminMap {
       return; // Not relevant to current team filter
     }
     
+    // Ensure data structure is correct
+    // WebSocket events have: { id, teamId, type, data: {...}, userId, ... }
+    // We need: { id, type, data: {...}, user_id, team_id, ... }
+    const annotation = {
+      id: data.id,
+      type: data.type,
+      user_id: data.userId || data.user_id,
+      team_id: data.teamId || data.team_id,
+      data: data.data || {},
+      created_at: data.created_at,
+      updated_at: data.updated_at
+    };
+    
     // Add or update annotation in local data
-    const existingIndex = this.annotationManager.getAnnotations().findIndex(a => a.id === data.id);
+    const existingIndex = this.annotationManager.getAnnotations().findIndex(a => a.id === annotation.id);
     if (existingIndex >= 0) {
-      this.annotationManager.getAnnotations()[existingIndex] = data;
+      // Merge with existing annotation to preserve all fields
+      const existing = this.annotationManager.getAnnotations()[existingIndex];
+      this.annotationManager.getAnnotations()[existingIndex] = {
+        ...existing,
+        ...annotation,
+        data: { ...existing.data, ...annotation.data }
+      };
     } else {
-      this.annotationManager.getAnnotations().unshift(data); // Add to beginning
+      this.annotationManager.getAnnotations().unshift(annotation); // Add to beginning
     }
     
     // Update map immediately
     this.updateMapData();
-    this.eventBus.emit(MAP_EVENTS.ANNOTATION_UPDATED, data);
+    this.eventBus.emit(MAP_EVENTS.ANNOTATION_UPDATED, annotation);
     
-    logger.debug(`Updated annotation ${data.id} on map`);
+    logger.debug(`Updated annotation ${annotation.id} on map`);
   }
 
   handleAnnotationDelete(data) {
