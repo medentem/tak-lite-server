@@ -1662,11 +1662,31 @@ class AdminMap {
         return; // Don't corrupt the annotation
       }
       
-      this.annotationManager.getAnnotations()[existingIndex] = {
+      // CRITICAL: Only update fields that are actually present in the annotation object
+      // Don't spread annotation if it has undefined/incomplete fields that would corrupt existing data
+      const updatedAnnotation = {
         ...existing,
-        ...annotation,
         data: mergedData
       };
+      
+      // Only update specific fields from annotation if they're actually defined
+      if (annotation.type) {
+        updatedAnnotation.type = annotation.type;
+      }
+      if (annotation.user_id !== undefined) {
+        updatedAnnotation.user_id = annotation.user_id;
+      }
+      if (annotation.team_id !== undefined) {
+        updatedAnnotation.team_id = annotation.team_id;
+      }
+      if (annotation.created_at) {
+        updatedAnnotation.created_at = annotation.created_at;
+      }
+      if (annotation.updated_at) {
+        updatedAnnotation.updated_at = annotation.updated_at;
+      }
+      
+      this.annotationManager.getAnnotations()[existingIndex] = updatedAnnotation;
       
       logger.info('[WS-UPDATE] Successfully updated annotation in array', {
         annotationId: annotation.id,
