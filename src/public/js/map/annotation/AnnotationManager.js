@@ -453,25 +453,44 @@ export class AnnotationManager {
     });
     
     // Update map sources
-    this.map.getSource(LAYER_CONFIG.sources.annotationsPoi).setData({
-      type: 'FeatureCollection',
-      features: poiFeatures
-    });
+    const poiSource = this.map.getSource(LAYER_CONFIG.sources.annotationsPoi);
+    if (poiSource) {
+      poiSource.setData({
+        type: 'FeatureCollection',
+        features: poiFeatures
+      });
+      logger.debug(`[UPDATEMAP] Updated POI source with ${poiFeatures.length} features`);
+    }
     
-    this.map.getSource(LAYER_CONFIG.sources.annotationsLine).setData({
-      type: 'FeatureCollection',
-      features: lineFeatures
-    });
+    const lineSource = this.map.getSource(LAYER_CONFIG.sources.annotationsLine);
+    if (lineSource) {
+      lineSource.setData({
+        type: 'FeatureCollection',
+        features: lineFeatures
+      });
+      logger.debug(`[UPDATEMAP] Updated line source with ${lineFeatures.length} features`);
+    }
     
-    this.map.getSource(LAYER_CONFIG.sources.annotationsArea).setData({
-      type: 'FeatureCollection',
-      features: areaFeatures
-    });
+    const areaSource = this.map.getSource(LAYER_CONFIG.sources.annotationsArea);
+    if (areaSource) {
+      areaSource.setData({
+        type: 'FeatureCollection',
+        features: areaFeatures
+      });
+      logger.debug(`[UPDATEMAP] Updated area source with ${areaFeatures.length} features`);
+    }
     
-    this.map.getSource(LAYER_CONFIG.sources.annotationsPolygon).setData({
-      type: 'FeatureCollection',
-      features: polygonFeatures
-    });
+    const polygonSource = this.map.getSource(LAYER_CONFIG.sources.annotationsPolygon);
+    if (polygonSource) {
+      polygonSource.setData({
+        type: 'FeatureCollection',
+        features: polygonFeatures
+      });
+      logger.debug(`[UPDATEMAP] Updated polygon source with ${polygonFeatures.length} features`);
+    }
+    
+    // Force map to repaint to ensure icon changes are visible
+    this.map.triggerRepaint();
     
     logger.info(`[UPDATEMAP] Updated map with ${poiFeatures.length} POIs, ${lineFeatures.length} lines, ${areaFeatures.length} areas, ${polygonFeatures.length} polygons`);
   }

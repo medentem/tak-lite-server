@@ -644,9 +644,18 @@ class AdminMap {
     const annotation = this.annotationManager.findAnnotation(annotationId);
     
     if (!annotation) {
-      logger.error('Annotation not found:', annotationId);
+      logger.error('[FANMENU] Annotation not found:', annotationId);
+      this.showFeedback('Annotation not found', 3000);
       return;
     }
+    
+    logger.debug('[FANMENU] Found annotation for edit menu', {
+      id: annotation.id,
+      type: annotation.type,
+      hasData: !!annotation.data,
+      dataType: typeof annotation.data,
+      dataKeys: annotation.data ? (typeof annotation.data === 'string' ? 'string' : Object.keys(annotation.data)) : []
+    });
     
     // Store current editing annotation
     this.state.setCurrentEditingAnnotation(annotation);
@@ -689,25 +698,65 @@ class AdminMap {
     const coordsEl = document.getElementById('fan_menu_coords');
     const distanceEl = document.getElementById('fan_menu_distance');
     
+    if (!annotation) {
+      logger.warn('[FANMENU] updateEditFanMenuCenterText called with null annotation');
+      if (coordsEl) coordsEl.textContent = 'N/A';
+      if (distanceEl) distanceEl.textContent = 'N/A';
+      return;
+    }
+    
+    // Parse data if it's a string
+    let data = annotation.data;
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch (e) {
+        logger.warn('[FANMENU] Failed to parse annotation.data as JSON:', e);
+        data = {};
+      }
+    }
+    
+    // Safely get annotation type
+    const annotationType = annotation.type || data?.type || 'annotation';
+    
     if (coordsEl) {
-      const data = annotation.data;
       let coords = '';
-      if (annotation.type === 'poi' && data.position) {
-        coords = `${data.position.lt.toFixed(5)}, ${data.position.lng.toFixed(5)}`;
-      } else if (annotation.type === 'line' && data.points && data.points.length > 0) {
-        const firstPoint = data.points[0];
-        coords = `${firstPoint.lt.toFixed(5)}, ${firstPoint.lng.toFixed(5)}`;
-      } else if (annotation.type === 'area' && data.center) {
-        coords = `${data.center.lt.toFixed(5)}, ${data.center.lng.toFixed(5)}`;
-      } else if (annotation.type === 'polygon' && data.points && data.points.length > 0) {
-        const firstPoint = data.points[0];
-        coords = `${firstPoint.lt.toFixed(5)}, ${firstPoint.lng.toFixed(5)}`;
+      try {
+        if (annotationType === 'poi' && data?.position) {
+          const lat = data.position.lt ?? data.position.lat ?? data.position.latitude;
+          const lng = data.position.lng ?? data.position.longitude;
+          if (typeof lat === 'number' && typeof lng === 'number') {
+            coords = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+          }
+        } else if (annotationType === 'line' && data?.points && Array.isArray(data.points) && data.points.length > 0) {
+          const firstPoint = data.points[0];
+          const lat = firstPoint.lt ?? firstPoint.lat ?? firstPoint.latitude;
+          const lng = firstPoint.lng ?? firstPoint.longitude;
+          if (typeof lat === 'number' && typeof lng === 'number') {
+            coords = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+          }
+        } else if (annotationType === 'area' && data?.center) {
+          const lat = data.center.lt ?? data.center.lat ?? data.center.latitude;
+          const lng = data.center.lng ?? data.center.longitude;
+          if (typeof lat === 'number' && typeof lng === 'number') {
+            coords = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+          }
+        } else if (annotationType === 'polygon' && data?.points && Array.isArray(data.points) && data.points.length > 0) {
+          const firstPoint = data.points[0];
+          const lat = firstPoint.lt ?? firstPoint.lat ?? firstPoint.latitude;
+          const lng = firstPoint.lng ?? firstPoint.longitude;
+          if (typeof lat === 'number' && typeof lng === 'number') {
+            coords = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+          }
+        }
+      } catch (e) {
+        logger.warn('[FANMENU] Error extracting coordinates:', e);
       }
       coordsEl.textContent = coords || 'N/A';
     }
     
     if (distanceEl) {
-      const label = annotation.data.label || annotation.type.toUpperCase();
+      const label = (data && data.label) ? data.label : annotationType.toUpperCase();
       distanceEl.textContent = label.length > 15 ? label.substring(0, 15) + '...' : label;
     }
   }
