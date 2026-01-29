@@ -71,7 +71,9 @@ export class Navigation {
       pageEl.classList.remove('hidden');
     }
 
-    // Toggle body class so nav stays visible and dashboard fills below it
+    // All admin pages use full-width container
+    document.body.classList.add('admin-page-visible');
+    // Dashboard also needs flex layout so map fills below nav
     if (page === 'dashboard') {
       document.body.classList.add('dashboard-visible');
     } else {

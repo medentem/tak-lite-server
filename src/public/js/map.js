@@ -1530,6 +1530,15 @@ class AdminMap {
       });
     }
     
+    // Resize map when dashboard page is shown (container may have been hidden with 0 size at init)
+    document.addEventListener('pageChanged', (e) => {
+      if (e.detail?.page === 'dashboard' && this.map) {
+        requestAnimationFrame(() => {
+          this.map.resize();
+        });
+      }
+    });
+    
     // WebSocket listeners are set up in initializeMap()
   }
   

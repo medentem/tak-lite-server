@@ -74,6 +74,13 @@
   overflow: hidden;
 }
 
+/* All admin pages (dashboard, settings, management, threats, messages) use full width */
+body.admin-page-visible .container {
+  max-width: none;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
 /* When dashboard is visible, container uses full height so dashboard fills below nav */
 body.dashboard-visible .container {
   display: flex;

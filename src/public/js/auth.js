@@ -130,6 +130,9 @@ export class Auth {
     toggleVisibility(logoutBtn, authenticated);
     toggleVisibility(whoSpan, authenticated);
     toggleVisibility(adminNav, authenticated);
+    if (!authenticated) {
+      document.body.classList.remove('admin-page-visible', 'dashboard-visible');
+    }
 
     if (whoSpan && email) {
       whoSpan.textContent = email;
