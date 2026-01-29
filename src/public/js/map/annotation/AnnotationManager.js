@@ -398,11 +398,13 @@ export class AnnotationManager {
           }
           const polygonPoints = data.points.map(p => extractCoordinates(p)).filter(coord => coord !== null);
           if (polygonPoints.length >= 3) {
+            // Close the ring (GeoJSON Polygon requires first and last point to be identical for the stroke to render the final segment)
+            const closedRing = [...polygonPoints, polygonPoints[0]];
             polygonFeatures.push({
               type: 'Feature',
               geometry: {
                 type: 'Polygon',
-                coordinates: [polygonPoints]
+                coordinates: [closedRing]
               },
               properties
             });

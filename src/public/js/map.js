@@ -248,12 +248,13 @@ class AdminMap {
         onLongPress: (e) => {
           this.state.setIsLongPressing(true);
           
-          // Check for existing annotation at long press location
+          // Check for existing annotation at long press location (include polygon fill and stroke so long-press inside or on edge shows edit menu)
           const layers = [
             LAYER_CONFIG.annotationLayers.poi,
             LAYER_CONFIG.annotationLayers.line,
             LAYER_CONFIG.annotationLayers.area,
-            LAYER_CONFIG.annotationLayers.polygon
+            LAYER_CONFIG.annotationLayers.polygon,
+            LAYER_CONFIG.annotationLayers.polygonStroke
           ];
           
           const features = this.map.queryRenderedFeatures(e.point, {
@@ -468,6 +469,13 @@ class AdminMap {
     
     const layers = LAYER_CONFIG.annotationLayers;
     
+    // Dismiss fan menu when user clicks anywhere on the map (canvas clicks may not bubble to document)
+    this.map.on('click', () => {
+      if (this.fanMenu?.getElement()?.classList.contains('visible')) {
+        this.hideFanMenu();
+      }
+    });
+    
     // POI click handler (symbol layer) - single click for popup
     this.map.on('click', layers.poi, (e) => {
       const feature = e.features[0];
@@ -626,6 +634,7 @@ class AdminMap {
     // Show fan menu
     fanMenuElement.classList.add('visible');
     logger.debug('Fan menu made visible with', options.length, 'options');
+    this.setupFanMenuDismiss();
   }
   
   getCreateModeOptions() {
@@ -732,6 +741,7 @@ class AdminMap {
     // Show fan menu
     fanMenuElement.classList.add('visible');
     logger.debug('Edit fan menu made visible with', options.length, 'options');
+    this.setupFanMenuDismiss();
   }
   
   updateEditFanMenuCenterText(annotation) {
