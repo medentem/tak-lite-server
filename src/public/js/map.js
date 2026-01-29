@@ -247,22 +247,6 @@ class AdminMap {
       this.longPressHandler = new LongPressHandler(this.map, {
         onLongPress: (e) => {
           this.state.setIsLongPressing(true);
-          // Remember the element that received the long-press so we can ignore the subsequent "release" click (same target) and not dismiss the menu
-          const longPressTarget = e.originalEvent?.target ?? null;
-          this.fanMenuLongPressTarget = longPressTarget;
-
-          // One-time capture-phase listener: swallow the release click so it never triggers dismiss (runs before bubble-phase handlers)
-          if (longPressTarget) {
-            const releaseClickHandler = (ev) => {
-              document.removeEventListener('click', releaseClickHandler, true);
-              if (ev.target === longPressTarget) {
-                ev.stopImmediatePropagation();
-                ev.preventDefault();
-                this.fanMenuLongPressTarget = null;
-              }
-            };
-            document.addEventListener('click', releaseClickHandler, true);
-          }
 
           // Check for existing annotation at long press location (include polygon fill and stroke so long-press inside or on edge shows edit menu)
           const layers = [
@@ -486,18 +470,10 @@ class AdminMap {
     const layers = LAYER_CONFIG.annotationLayers;
     
     // Dismiss fan menu when user clicks anywhere on the map (canvas clicks may not bubble to document)
-    this.map.on('click', (e) => {
+    this.map.on('click', () => {
       if (!this.fanMenu?.getElement()?.classList.contains('visible')) return;
-      // Ignore exactly the click that is the mouse release after long-press (same target as the long-press).
-      // Stop propagation so the document click handler never sees this click and dismisses the menu.
-      if (this.fanMenuLongPressTarget && e.originalEvent?.target === this.fanMenuLongPressTarget) {
-        if (e.originalEvent) {
-          e.originalEvent.stopImmediatePropagation();
-          e.originalEvent.preventDefault();
-        }
-        this.fanMenuLongPressTarget = null;
-        return;
-      }
+      // Don't dismiss on the click that is the mouse release after long-press
+      if (this.fanMenuOpenedAt && (Date.now() - this.fanMenuOpenedAt) < (TIMING.fanMenuOpenGraceMs ?? 400)) return;
       this.hideFanMenu();
     });
     
@@ -658,6 +634,7 @@ class AdminMap {
     
     // Show fan menu
     fanMenuElement.classList.add('visible');
+    this.fanMenuOpenedAt = Date.now();
     logger.debug('Fan menu made visible with', options.length, 'options');
     this.setupFanMenuDismiss();
   }
@@ -765,6 +742,7 @@ class AdminMap {
     
     // Show fan menu
     fanMenuElement.classList.add('visible');
+    this.fanMenuOpenedAt = Date.now();
     logger.debug('Edit fan menu made visible with', options.length, 'options');
     this.setupFanMenuDismiss();
   }
@@ -1013,7 +991,6 @@ class AdminMap {
         }
       }
     }
-    this.fanMenuLongPressTarget = null;
     // Clean up dismiss event listener
     this.cleanupFanMenuDismiss();
   }
@@ -1033,10 +1010,9 @@ class AdminMap {
         logger.debug('Ignoring click dismissal due to long press event');
         return;
       }
-      // Ignore exactly the click that is the mouse release after long-press (same target as the long-press)
-      if (this.fanMenuLongPressTarget && e.target === this.fanMenuLongPressTarget) {
-        logger.debug('Ignoring click dismissal: same target as long-press (release click)');
-        this.fanMenuLongPressTarget = null;
+      // Ignore the click that is the mouse release after long-press (browser fires click but it's a different event object)
+      if (this.fanMenuOpenedAt && (Date.now() - this.fanMenuOpenedAt) < (TIMING.fanMenuOpenGraceMs ?? 400)) {
+        logger.debug('Ignoring click dismissal: within grace period after fan menu opened');
         return;
       }
       

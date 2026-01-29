@@ -192,6 +192,9 @@ export const TIMING = {
   
   /** Menu dismiss setup delay */
   menuDismissDelay: 100,
+
+  /** Ignore outside-click dismiss for this long after fan menu opens (avoids dismissing on long-press release) */
+  fanMenuOpenGraceMs: 400,
   
   /** Color menu setup delay */
   colorMenuSetupDelay: 50,
