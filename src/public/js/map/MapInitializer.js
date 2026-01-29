@@ -202,19 +202,15 @@ export class MapInitializer {
   }
 
   /**
-   * Setup map controls (navigation, fullscreen, etc.)
+   * Setup map controls. Built-in MapLibre controls (zoom, compass, fullscreen) are not added;
+   * the dashboard uses custom controls in the map-controls-overlay instead.
    */
   setupControls() {
     if (!this.map) {
       logger.warn('Cannot setup controls: map not initialized');
       return;
     }
-    
-    // Add navigation controls
-    this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
-    
-    // Add fullscreen control
-    this.map.addControl(new maplibregl.FullscreenControl(), 'top-right');
+    // No built-in controls; custom overlay handles zoom/center/clear etc.
   }
 
   /**
