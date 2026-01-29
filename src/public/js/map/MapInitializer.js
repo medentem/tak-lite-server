@@ -67,6 +67,7 @@ export class MapInitializer {
   preserveUIElements(container) {
     const fanMenu = container.querySelector('#fan_menu');
     const colorMenu = container.querySelector('#color_menu');
+    const shapeMenu = container.querySelector('#shape_menu');
     const feedback = container.querySelector('#map_feedback');
     
     container.innerHTML = '';
@@ -74,6 +75,7 @@ export class MapInitializer {
     // Restore annotation UI elements
     if (fanMenu) container.appendChild(fanMenu);
     if (colorMenu) container.appendChild(colorMenu);
+    if (shapeMenu) container.appendChild(shapeMenu);
     if (feedback) container.appendChild(feedback);
   }
 

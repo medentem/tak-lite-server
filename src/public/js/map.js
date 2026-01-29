@@ -56,6 +56,7 @@ import {
   AreaDrawingTool,
   FanMenu,
   ColorMenu,
+  ShapeMenu,
   MenuManager,
   PopupManager,
   FeedbackDisplay,
@@ -97,6 +98,7 @@ class AdminMap {
     this.popupManager = null; // Will be initialized after map is created
     this.fanMenu = null; // Will be initialized after map is created
     this.colorMenu = null; // Will be initialized after map is created
+    this.shapeMenu = null; // Will be initialized after map is created
     this.longPressHandler = null; // Will be initialized after map is created
     
     // Drawing tools
@@ -239,6 +241,7 @@ class AdminMap {
       this.popupManager = new PopupManager(this.map, this.annotationManager.getAnnotations());
       this.fanMenu = new FanMenu('fan_menu', this.map, this.menuManager);
       this.colorMenu = new ColorMenu('color_menu', this.menuManager);
+      this.shapeMenu = new ShapeMenu('shape_menu', this.menuManager);
       
       // Initialize long press handler
       this.longPressHandler = new LongPressHandler(this.map, {
@@ -1104,23 +1107,12 @@ class AdminMap {
       return;
     }
     
-    // Show shape selection menu
-    const shapes = [
-      { type: 'circle', label: 'Circle' },
-      { type: 'square', label: 'Square' },
-      { type: 'triangle', label: 'Triangle' },
-      { type: 'exclamation', label: 'Exclamation' }
-    ];
+    if (!this.shapeMenu) return;
     
-    const shapeOptions = shapes.map(s => s.label).join('\n');
-    const choice = prompt(`Select shape:\n1. Circle\n2. Square\n3. Triangle\n4. Exclamation\n\nCurrent: ${currentEditing.data.shape || 'circle'}`, '1');
-    
-    if (choice !== null) {
-      const shapeIndex = parseInt(choice) - 1;
-      if (shapeIndex >= 0 && shapeIndex < shapes.length) {
-        this.updateAnnotationField('shape', shapes[shapeIndex].type);
-      }
-    }
+    this.shapeMenu.show(point, (shapeType) => {
+      this.shapeMenu.hide();
+      this.updateAnnotationField('shape', shapeType);
+    });
   }
   
   async updateAnnotationField(field, value) {
@@ -1167,6 +1159,12 @@ class AdminMap {
   hideColorMenu() {
     if (this.colorMenu) {
       this.colorMenu.hide();
+    }
+  }
+
+  hideShapeMenu() {
+    if (this.shapeMenu) {
+      this.shapeMenu.hide();
     }
   }
   
@@ -2053,6 +2051,7 @@ class AdminMap {
     // Hide any open menus
     this.hideFanMenu();
     this.hideColorMenu();
+    this.hideShapeMenu();
     this.hideEditForm();
     
     // Clean up drawing tools

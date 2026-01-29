@@ -11,6 +11,7 @@ export { LineDrawingTool } from './drawing/LineDrawingTool.js';
 export { AreaDrawingTool } from './drawing/AreaDrawingTool.js';
 export { FanMenu } from './ui/FanMenu.js';
 export { ColorMenu } from './ui/ColorMenu.js';
+export { ShapeMenu } from './ui/ShapeMenu.js';
 export { MenuManager } from './ui/MenuManager.js';
 export { PopupManager } from './ui/PopupManager.js';
 export { FeedbackDisplay } from './ui/FeedbackDisplay.js';
