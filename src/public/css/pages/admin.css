@@ -63,17 +63,34 @@
   font-family: 'Courier New', monospace;
 }
 
-/* Full-Screen Dashboard Layout */
+/* Full-Screen Dashboard Layout - fills space below nav so nav stays visible */
 .dashboard-fullscreen {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: #0a0e1a;
   overflow: hidden;
+}
+
+/* When dashboard is visible, container uses full height so dashboard fills below nav */
+body.dashboard-visible .container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 0 16px 0 16px;
+  max-width: none;
+}
+
+body.dashboard-visible .container > header,
+body.dashboard-visible .container #adminNav {
+  flex-shrink: 0;
+}
+
+body.dashboard-visible .container #dash {
+  flex: 1;
+  min-height: 0;
 }
 
 /* Minimal Top Status Bar */

@@ -71,6 +71,13 @@ export class Navigation {
       pageEl.classList.remove('hidden');
     }
 
+    // Toggle body class so nav stays visible and dashboard fills below it
+    if (page === 'dashboard') {
+      document.body.classList.add('dashboard-visible');
+    } else {
+      document.body.classList.remove('dashboard-visible');
+    }
+
     // Update navigation links
     this.pages.forEach(p => {
       const link = q(`#nav-${p}`);

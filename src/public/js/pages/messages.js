@@ -72,7 +72,7 @@ export class MessagesPage {
       });
     }
 
-    // View All Messages link
+    // View All Messages link – navigate to Messages page
     const viewAllMessages = q('#view-all-messages');
     if (viewAllMessages) {
       viewAllMessages.addEventListener('click', (e) => {

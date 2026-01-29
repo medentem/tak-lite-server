@@ -60,11 +60,12 @@ export class ThreatsPage {
       });
     }
 
-    // View all threats link
+    // View all threats link – navigate to Threat Review page
     const viewAllThreats = q('#view-all-threats');
     if (viewAllThreats) {
       viewAllThreats.addEventListener('click', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         document.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'threats' } }));
       });
     }
