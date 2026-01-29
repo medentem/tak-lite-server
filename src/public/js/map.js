@@ -357,11 +357,12 @@ class AdminMap {
    */
   async handleDrawingFinish(annotationData) {
     if (!annotationData) return;
-    
+
     annotationData.teamId = this.state.getCurrentTeamId();
     try {
       await this.annotationManager.createAnnotation(annotationData);
-      this.feedbackDisplay.show('Annotation created successfully', 2000);
+      const message = annotationData.type === 'polygon' ? 'Polygon created' : 'Annotation created successfully';
+      this.feedbackDisplay.show(message, 2000);
       this.updateMapData();
       this.eventBus.emit(MAP_EVENTS.ANNOTATION_CREATED, annotationData);
     } catch (error) {

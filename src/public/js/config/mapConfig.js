@@ -20,7 +20,10 @@ export const INTERACTION_CONFIG = {
   defaultAreaRadiusPixels: 50,
   
   /** Number of points to generate for circle polygons */
-  circlePolygonPoints: 32
+  circlePolygonPoints: 32,
+
+  /** When drawing a line, tap within this many pixels of the start point to close as polygon (matches Android) */
+  polygonClosureThresholdPixels: 30
 };
 
 /**

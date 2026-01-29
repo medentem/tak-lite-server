@@ -5,7 +5,7 @@
 
 import { DrawingTool } from './DrawingTool.js';
 import { logger } from '../../utils/logger.js';
-import { getColorHex, LAYER_CONFIG } from '../../config/mapConfig.js';
+import { getColorHex, LAYER_CONFIG, INTERACTION_CONFIG } from '../../config/mapConfig.js';
 import { q } from '../../utils/dom.js';
 
 export class LineDrawingTool extends DrawingTool {
@@ -45,27 +45,31 @@ export class LineDrawingTool extends DrawingTool {
 
   /**
    * Finish line drawing
-   * @returns {Object|null} Annotation data or null
+   * @param {boolean} [asPolygon=false] - If true and 3+ points, create polygon (line closed at start)
+   * @returns {Object|null} Annotation data (type 'line' or 'polygon') or null
    */
-  finish() {
+  finish(asPolygon = false) {
     if (!this.isActive || this.tempLinePoints.length < 2) {
       logger.warn('Line needs at least 2 points');
       return null;
     }
-    
+
+    const pointsData = this.tempLinePoints.map(point => ({
+      lng: point.lng,
+      lt: point.lat
+    }));
+
+    const type = (asPolygon && this.tempLinePoints.length >= 3) ? 'polygon' : 'line';
     const annotationData = {
-      type: 'line',
+      type,
       data: {
-        points: this.tempLinePoints.map(point => ({
-          lng: point.lng,
-          lt: point.lat
-        })),
+        points: pointsData,
         color: this.currentColor,
         label: '',
         timestamp: Date.now()
       }
     };
-    
+
     this.cleanup();
     return super.finish() || annotationData;
   }
@@ -175,18 +179,37 @@ export class LineDrawingTool extends DrawingTool {
    * Setup line drawing event handlers
    */
   setupLineDrawingHandlers() {
+    const thresholdPx = INTERACTION_CONFIG.polygonClosureThresholdPixels ?? 30;
+
     this.lineClickHandler = (e) => {
       if (!this.isActive) return;
-      
+
       if (e.originalEvent && e.originalEvent.target.closest('.line-control-icons')) {
         return;
       }
-      
+
       if (e.originalEvent) {
         e.originalEvent.preventDefault();
         e.originalEvent.stopPropagation();
       }
-      
+
+      // If we have 2+ points, check for close-as-polygon (tap near start point, same as Android)
+      if (this.tempLinePoints.length >= 2 && e.point) {
+        const first = this.tempLinePoints[0];
+        const screenFirst = this.map.project(first);
+        const dx = e.point.x - screenFirst.x;
+        const dy = e.point.y - screenFirst.y;
+        const distancePx = Math.sqrt(dx * dx + dy * dy);
+        if (distancePx <= thresholdPx) {
+          if (this.tempLinePoints.length >= 3 && this.options.onFinish) {
+            this.options.onFinish(this.finish(true));
+          } else if (this.options.onFinish) {
+            this.options.onFinish(this.finish(false));
+          }
+          return;
+        }
+      }
+
       this.addPoint(e.lngLat);
     };
     
