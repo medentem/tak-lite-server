@@ -298,26 +298,28 @@
             </div>
           </div>
 
-          <!-- Floating HUD Panel: Threats (Left) -->
-          <div id="threats-hud-panel" class="hud-panel hud-panel-left">
-            <div class="hud-panel-header">
-              <div class="hud-panel-title">
-                <span class="hud-panel-icon">⚠️</span>
-                <span>Threat Intelligence</span>
-                <span class="hud-panel-badge" id="threats-hud-badge">0</span>
+          <!-- Left HUD stack: threats on top, messages directly below; both expand and push each other -->
+          <div class="hud-panels-stack">
+            <!-- Floating HUD Panel: Threats -->
+            <div id="threats-hud-panel" class="hud-panel hud-panel-left">
+              <div class="hud-panel-header">
+                <div class="hud-panel-title">
+                  <span class="hud-panel-icon">⚠️</span>
+                  <span>Threat Intelligence</span>
+                  <span class="hud-panel-badge" id="threats-hud-badge">0</span>
+                </div>
+                <div class="hud-panel-actions">
+                  <button class="hud-panel-pin" id="threats-pin" title="Pin Panel">📌</button>
+                  <a href="#" id="view-all-threats" class="hud-panel-link">View All →</a>
+                </div>
               </div>
-              <div class="hud-panel-actions">
-                <button class="hud-panel-pin" id="threats-pin" title="Pin Panel">📌</button>
-                <a href="#" id="view-all-threats" class="hud-panel-link">View All →</a>
+              <div class="hud-panel-content" id="threats-hud-content">
+                <div class="muted" style="text-align: center; padding: 20px; font-size: 13px;">Loading threats...</div>
               </div>
             </div>
-            <div class="hud-panel-content" id="threats-hud-content">
-              <div class="muted" style="text-align: center; padding: 20px; font-size: 13px;">Loading threats...</div>
-            </div>
-          </div>
 
-          <!-- Floating HUD Panel: Messages (Right) -->
-          <div id="messages-hud-panel" class="hud-panel hud-panel-right">
+            <!-- Floating HUD Panel: Communication Hub (directly below threats) -->
+            <div id="messages-hud-panel" class="hud-panel hud-panel-left">
             <div class="hud-panel-header">
               <div class="hud-panel-title">
                 <span class="hud-panel-icon">💬</span>
@@ -338,6 +340,7 @@
             <div class="hud-panel-content" id="messages-hud-content">
               <div class="muted" style="text-align: center; padding: 20px;">Waiting for messages...</div>
             </div>
+          </div>
           </div>
         </div>
 

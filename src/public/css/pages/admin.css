@@ -245,39 +245,61 @@
   cursor: pointer;
 }
 
-/* Floating HUD Panels */
-.hud-panel {
+/* Left HUD stack: threats on top, messages directly below; both expand and push each other */
+.hud-panels-stack {
   position: absolute;
   top: 60px;
+  left: 16px;
   width: 320px;
   max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  z-index: 400;
+  pointer-events: none;
+}
+
+.hud-panels-stack > .hud-panel {
+  pointer-events: auto;
+}
+
+/* Floating HUD Panels */
+.hud-panel {
+  position: relative;
+  width: 100%;
+  min-height: 120px;
   background: rgba(17, 26, 43, 0.2);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   z-index: 400;
   opacity: 0.2;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
+}
+
+/* Threats panel: grows with content up to max, then scrolls; pushes messages down */
+#threats-hud-panel {
+  flex: 0 1 auto;
+  max-height: min(380px, 45vh);
+}
+
+/* Messages panel: sits right below threats, grows with content up to max */
+#messages-hud-panel {
+  flex: 1 1 auto;
+  max-height: min(420px, 55vh);
+  min-height: 140px;
 }
 
 .hud-panel-left {
-  left: 16px;
+  left: 0;
 }
 
-/* Threats panel: top-left */
 .hud-panel-right {
   right: 16px;
-}
-
-/* Messages panel: left side, lower half so it stacks below threats panel */
-#messages-hud-panel {
-  left: 16px;
-  right: auto;
-  top: 50vh;
-  max-height: calc(50vh - 24px);
 }
 
 /* Prevent our overlays from fighting MapLibre's default zoom controls */
@@ -399,6 +421,7 @@
 
 .hud-panel-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 12px;
   font-size: 13px;
@@ -852,7 +875,7 @@
 
 /* Responsive */
 @media (max-width: 1200px) {
-  .hud-panel {
+  .hud-panels-stack {
     width: 280px;
   }
   
@@ -892,12 +915,10 @@
     right: 16px;
   }
 
-  /* Keep messages panel on left when stacked */
-  #messages-hud-panel {
+  .hud-panels-stack {
+    width: calc(100% - 32px);
     left: 16px;
-    right: auto;
-    top: 60px;
-    bottom: auto;
+    max-height: calc(100vh - 120px);
   }
   
   .map-controls-overlay {
@@ -920,13 +941,12 @@
     font-size: 11px;
   }
   
-  .hud-panel {
+  .hud-panels-stack {
+    left: 8px;
     width: calc(100% - 16px);
   }
   
-  .hud-panel-left,
-  .hud-panel-right {
-    left: 8px;
-    right: 8px;
+  .hud-panel {
+    width: 100%;
   }
 }
