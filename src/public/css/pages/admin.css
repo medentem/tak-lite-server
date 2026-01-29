@@ -74,6 +74,11 @@
   overflow: hidden;
 }
 
+/* When dashboard is hidden (on other pages), .hidden must override .dashboard-fullscreen's display:flex */
+.dashboard-fullscreen.hidden {
+  display: none !important;
+}
+
 /* Nav and header full width when any admin page is visible */
 body.admin-page-visible .container {
   max-width: none;
