@@ -247,7 +247,9 @@ class AdminMap {
       this.longPressHandler = new LongPressHandler(this.map, {
         onLongPress: (e) => {
           this.state.setIsLongPressing(true);
-          
+          // Remember the element that received the long-press so we can ignore the subsequent "release" click (same target) and not dismiss the menu
+          this.fanMenuLongPressTarget = e.originalEvent?.target ?? null;
+
           // Check for existing annotation at long press location (include polygon fill and stroke so long-press inside or on edge shows edit menu)
           const layers = [
             LAYER_CONFIG.annotationLayers.poi,
@@ -470,10 +472,14 @@ class AdminMap {
     const layers = LAYER_CONFIG.annotationLayers;
     
     // Dismiss fan menu when user clicks anywhere on the map (canvas clicks may not bubble to document)
-    this.map.on('click', () => {
-      if (this.fanMenu?.getElement()?.classList.contains('visible')) {
-        this.hideFanMenu();
+    this.map.on('click', (e) => {
+      if (!this.fanMenu?.getElement()?.classList.contains('visible')) return;
+      // Ignore exactly the click that is the mouse release after long-press (same target as the long-press)
+      if (this.fanMenuLongPressTarget && e.originalEvent?.target === this.fanMenuLongPressTarget) {
+        this.fanMenuLongPressTarget = null;
+        return;
       }
+      this.hideFanMenu();
     });
     
     // POI click handler (symbol layer) - single click for popup
@@ -988,7 +994,7 @@ class AdminMap {
         }
       }
     }
-    
+    this.fanMenuLongPressTarget = null;
     // Clean up dismiss event listener
     this.cleanupFanMenuDismiss();
   }
@@ -1006,6 +1012,12 @@ class AdminMap {
       // Don't dismiss if this was a long press event
       if (e._longPressHandled) {
         logger.debug('Ignoring click dismissal due to long press event');
+        return;
+      }
+      // Ignore exactly the click that is the mouse release after long-press (same target as the long-press)
+      if (this.fanMenuLongPressTarget && e.target === this.fanMenuLongPressTarget) {
+        logger.debug('Ignoring click dismissal: same target as long-press (release click)');
+        this.fanMenuLongPressTarget = null;
         return;
       }
       
