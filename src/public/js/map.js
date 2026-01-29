@@ -635,18 +635,24 @@ class AdminMap {
     ];
   }
   
-  getEditModeOptions(annotationType) {
+  getEditModeOptions(annotationType, annotation = null) {
+    let data = null;
+    if (annotation?.data) {
+      data = typeof annotation.data === 'string' ? (() => { try { return JSON.parse(annotation.data); } catch { return {}; } })() : annotation.data;
+    }
     const options = [
       { type: 'edit-label', iconClass: 'edit', label: 'Edit Label' },
       { type: 'edit-note', iconClass: 'note', label: 'Add Note' }
     ];
     
-    // Add color option for all annotation types
-    options.push({ type: 'change-color', iconClass: 'color', label: 'Color' });
+    // Add color option: segment fill shows current annotation color
+    const currentColorHex = getColorHex(data?.color || 'green');
+    options.push({ type: 'change-color', iconClass: 'color', label: 'Color', segmentFillColor: currentColorHex });
     
-    // Add shape option only for POIs
+    // Add shape option only for POIs; icon shows current shape
     if (annotationType === 'poi') {
-      options.push({ type: 'change-shape', iconClass: 'shape', label: 'Shape' });
+      const currentShape = data?.shape || 'circle';
+      options.push({ type: 'change-shape', iconClass: `shape-${currentShape}`, label: 'Shape' });
     }
     
     // Add delete option
@@ -708,8 +714,8 @@ class AdminMap {
     // Update center text with annotation info
     this.updateEditFanMenuCenterText(annotation);
     
-    // Define options based on annotation type
-    const options = this.getEditModeOptions(annotation.type);
+    // Define options based on annotation type and current annotation (for color/shape icons)
+    const options = this.getEditModeOptions(annotation.type, annotation);
     
     // Position fan menu at click point relative to map container
     fanMenuElement.style.left = (point.x - 100) + 'px';
@@ -863,8 +869,9 @@ class AdminMap {
       pathElement.setAttribute('d', pathData);
       pathElement.setAttribute('data-option-type', option.type);
       pathElement.setAttribute('data-option-index', index.toString());
-      pathElement.style.fill = 'rgba(0, 0, 0, 0.8)';
-      pathElement.style.stroke = 'white';
+      const isColorSegment = option.segmentFillColor != null;
+      pathElement.style.fill = isColorSegment ? option.segmentFillColor : 'rgba(0, 0, 0, 0.8)';
+      pathElement.style.stroke = isColorSegment ? 'rgba(255, 255, 255, 0.9)' : 'white';
       pathElement.style.strokeWidth = '3';
       pathElement.style.transition = 'all 0.2s ease';
       pathElement.style.cursor = 'pointer';
@@ -879,27 +886,38 @@ class AdminMap {
       // Add hover handlers for proper hover effects
       pathElement.addEventListener('mouseenter', () => {
         logger.debug('Hovering over option:', option.type);
-        pathElement.style.fill = 'rgba(0, 0, 0, 0.9)';
-        pathElement.style.stroke = 'rgba(255, 255, 255, 0.9)';
+        if (isColorSegment) {
+          pathElement.style.filter = 'brightness(1.2)';
+          pathElement.style.stroke = 'white';
+        } else {
+          pathElement.style.fill = 'rgba(0, 0, 0, 0.9)';
+          pathElement.style.stroke = 'rgba(255, 255, 255, 0.9)';
+        }
       });
       
       pathElement.addEventListener('mouseleave', () => {
-        pathElement.style.fill = 'rgba(0, 0, 0, 0.8)';
-        pathElement.style.stroke = 'white';
+        if (isColorSegment) {
+          pathElement.style.filter = '';
+          pathElement.style.stroke = 'rgba(255, 255, 255, 0.9)';
+        } else {
+          pathElement.style.fill = 'rgba(0, 0, 0, 0.8)';
+          pathElement.style.stroke = 'white';
+        }
       });
       
       svgElement.appendChild(pathElement);
       
-      // Create icon element
-      const iconElement = document.createElement('div');
-      iconElement.className = `fan-menu-segment-icon ${option.iconClass}`;
-      iconElement.style.position = 'absolute';
-      iconElement.style.left = `${iconX}px`;
-      iconElement.style.top = `${iconY}px`;
-      iconElement.style.transform = 'translate(-50%, -50%)';
-      iconElement.style.pointerEvents = 'none';
-      
-      svgContainer.appendChild(iconElement);
+      // Create icon element (skip for color segment - the segment fill is the color indicator)
+      if (option.type !== 'change-color') {
+        const iconElement = document.createElement('div');
+        iconElement.className = `fan-menu-segment-icon ${option.iconClass}`;
+        iconElement.style.position = 'absolute';
+        iconElement.style.left = `${iconX}px`;
+        iconElement.style.top = `${iconY}px`;
+        iconElement.style.transform = 'translate(-50%, -50%)';
+        iconElement.style.pointerEvents = 'none';
+        svgContainer.appendChild(iconElement);
+      }
     });
     
     // Get the DOM element from the FanMenu instance
