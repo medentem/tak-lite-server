@@ -163,6 +163,16 @@ class AdminMap {
     await this.initializeMap();
     this.setupDOMEventListeners();
     
+    // Resize once after init: dashboard may have been hidden at creation (0x0), or pageChanged
+    // may have fired before this listener was attached; ensure map gets correct dimensions.
+    if (this.map) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          this.map.resize();
+        });
+      });
+    }
+    
     // Only load data if we have authentication
     if (this.isAuthenticated()) {
       logger.info('User is authenticated, loading data...');
