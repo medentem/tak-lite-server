@@ -162,12 +162,12 @@
 .map-controls-overlay {
   position: absolute;
   top: 16px;
-  right: 16px;
+  left: 16px;
   z-index: 500;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  align-items: flex-end;
+  align-items: flex-start;
 }
 
 .map-control-select,
@@ -268,6 +268,11 @@
 
 .hud-panel-right {
   right: 16px;
+}
+
+/* Prevent our overlays from fighting MapLibre's default zoom controls */
+.maplibregl-ctrl-top-right {
+  top: 56px; /* below our top status bar */
 }
 
 .hud-panel:hover,
@@ -660,6 +665,16 @@
   transition: all 0.2s ease;
 }
 
+/* Text bent along segment arc */
+.fan-menu-segment-text {
+  fill: white;
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  font-family: inherit;
+}
+
 .fan-menu-segment.selected path {
   fill: rgba(255, 255, 255, 0.2);
   stroke: rgba(255, 255, 255, 1);
@@ -675,28 +690,20 @@
   z-index: 10;
 }
 
-/* Enhanced Fan Menu Icons */
+/* Fan Menu Icons: match actual POI shapes */
 .fan-menu-segment-icon {
-  font-size: 24px;
-  font-weight: normal;
+  font-size: 22px;
+  font-weight: 800;
 }
 
-.fan-menu-segment-icon.shape-circle::before { content: '🎯'; }
-.fan-menu-segment-icon.shape-square::before { content: '📍'; }
-.fan-menu-segment-icon.shape-triangle::before { content: '⚠️'; }
-.fan-menu-segment-icon.shape-exclamation::before { content: '🚨'; }
-.fan-menu-segment-icon.area::before { content: '📐'; }
-.fan-menu-segment-icon.line::before { content: '➖'; }
-.fan-menu-segment-icon.edit::before { content: '✏️'; }
-.fan-menu-segment-icon.delete::before { content: '🗑️'; }
-.fan-menu-segment-icon.color::before { content: '🎨'; }
-.fan-menu-segment-icon.shape::before { content: '⬛'; }
-.fan-menu-segment-icon.note::before { content: '📄'; }
-.fan-menu-segment-icon.poi::before { content: '🎯'; }
-.fan-menu-segment-icon.waypoint::before { content: '📍'; }
-.fan-menu-segment-icon.alert::before { content: '⚠️'; }
-.fan-menu-segment-icon.restricted::before { content: '🚫'; }
-.fan-menu-segment-icon.route::before { content: '🗺️'; }
+.fan-menu-segment-icon.shape-circle::before { content: '●'; }
+.fan-menu-segment-icon.shape-square::before { content: '■'; }
+.fan-menu-segment-icon.shape-triangle::before { content: '▲'; }
+.fan-menu-segment-icon.shape-exclamation::before { content: '!'; }
+.fan-menu-segment-icon.area::before { content: '◯'; }
+.fan-menu-segment-icon.line::before { content: '━'; }
+.fan-menu-segment-icon.edit::before { content: '✏'; }
+.fan-menu-segment-icon.delete::before { content: '✕'; }
 
 /* Color Menu Styles */
 .color-menu {

@@ -130,12 +130,13 @@ export class FanMenu {
    */
   getCreateModeOptions() {
     return [
-      { type: 'circle', iconClass: 'shape-circle', label: 'POI', description: 'Point of Interest' },
-      { type: 'square', iconClass: 'shape-square', label: 'Waypoint', description: 'Navigation Point' },
-      { type: 'triangle', iconClass: 'shape-triangle', label: 'Alert', description: 'Warning Zone' },
-      { type: 'exclamation', iconClass: 'shape-exclamation', label: 'Danger', description: 'Critical Alert' },
-      { type: 'area', iconClass: 'area', label: 'Area', description: 'Zone/Region' },
-      { type: 'line', iconClass: 'line', label: 'Route', description: 'Path/Line' }
+      // Icons should match actual POI shapes on the map
+      { type: 'circle', iconClass: 'shape-circle', label: 'Circle' },
+      { type: 'square', iconClass: 'shape-square', label: 'Square' },
+      { type: 'triangle', iconClass: 'shape-triangle', label: 'Triangle' },
+      { type: 'exclamation', iconClass: 'shape-exclamation', label: 'Exclamation' },
+      { type: 'area', iconClass: 'area', label: 'Area' },
+      { type: 'line', iconClass: 'line', label: 'Line' }
     ];
   }
 
@@ -150,52 +151,58 @@ export class FanMenu {
   }
 
   /**
+   * Create arc path for text (middle of segment ring) - used by textPath
+   */
+  createSegmentArcPath(centerX, centerY, radius, startAngle, endAngle) {
+    const startAngleRad = (startAngle * Math.PI) / 180;
+    const endAngleRad = (endAngle * Math.PI) / 180;
+    const x1 = centerX + radius * Math.cos(startAngleRad);
+    const y1 = centerY + radius * Math.sin(startAngleRad);
+    const x2 = centerX + radius * Math.cos(endAngleRad);
+    const y2 = centerY + radius * Math.sin(endAngleRad);
+    const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`;
+  }
+
+  /**
    * Create donut ring segments
    */
   createDonutRingSegments(options, point) {
-    const centerX = 100; // Center of 200px menu
+    const centerX = 100;
     const centerY = 100;
     const innerRadius = 40;
     const outerRadius = 80;
+    const textRadius = (innerRadius + outerRadius) / 2;
     const gapAngle = 4;
 
     const totalAngle = 360 - (options.length * gapAngle);
     const segmentAngle = totalAngle / options.length;
 
-    // Create SVG container
+    const svgNS = 'http://www.w3.org/2000/svg';
     const svgContainer = document.createElement('div');
     svgContainer.className = 'fan-menu-segments-container';
     svgContainer.style.cssText = 'position: absolute; top: 0; left: 0; width: 200px; height: 200px;';
-    
-    const svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+
+    const svgElement = document.createElementNS(svgNS, 'svg');
     svgElement.setAttribute('width', '200');
     svgElement.setAttribute('height', '200');
     svgElement.setAttribute('viewBox', '0 0 200 200');
     svgElement.style.cssText = 'position: absolute; top: 0; left: 0;';
-    
-    svgContainer.appendChild(svgElement);
-    
-    // Create segments
+
+    const defs = document.createElementNS(svgNS, 'defs');
+    svgElement.appendChild(defs);
+
     options.forEach((option, index) => {
       const startAngle = (index * (segmentAngle + gapAngle)) - 90;
       const endAngle = startAngle + segmentAngle;
-      
+
       const pathData = this.createDonutSegmentPath(centerX, centerY, innerRadius, outerRadius, startAngle, endAngle);
-      
-      // Calculate icon position
-      const iconAngle = startAngle + (segmentAngle / 2);
-      const iconRadius = (innerRadius + outerRadius) / 2;
-      const iconAngleRad = (iconAngle * Math.PI) / 180;
-      const iconX = centerX + iconRadius * Math.cos(iconAngleRad);
-      const iconY = centerY + iconRadius * Math.sin(iconAngleRad);
-      
-      // Create path element
-      const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+
+      const pathElement = document.createElementNS(svgNS, 'path');
       pathElement.setAttribute('d', pathData);
       pathElement.setAttribute('data-option-type', option.type);
       pathElement.style.cssText = 'fill: rgba(0, 0, 0, 0.8); stroke: white; stroke-width: 3; transition: all 0.2s ease; cursor: pointer;';
-      
-      // Click handler
+
       pathElement.addEventListener('click', (e) => {
         e.stopPropagation();
         logger.debug('Clicked on option:', option.type);
@@ -204,28 +211,43 @@ export class FanMenu {
         }
         this.hide();
       });
-      
-      // Hover handlers
+
       pathElement.addEventListener('mouseenter', () => {
         pathElement.style.fill = 'rgba(0, 0, 0, 0.9)';
         pathElement.style.stroke = 'rgba(255, 255, 255, 0.9)';
       });
-      
+
       pathElement.addEventListener('mouseleave', () => {
         pathElement.style.fill = 'rgba(0, 0, 0, 0.8)';
         pathElement.style.stroke = 'white';
       });
-      
+
       svgElement.appendChild(pathElement);
-      
-      // Create icon element
-      const iconElement = document.createElement('div');
-      iconElement.className = `fan-menu-segment-icon ${option.iconClass}`;
-      iconElement.style.cssText = `position: absolute; left: ${iconX}px; top: ${iconY}px; transform: translate(-50%, -50%); pointer-events: none;`;
-      
-      svgContainer.appendChild(iconElement);
+
+      // Arc path for bent text (in defs so textPath can reference it)
+      const textPathId = `fan-menu-text-path-${index}`;
+      const arcPath = document.createElementNS(svgNS, 'path');
+      arcPath.setAttribute('id', textPathId);
+      arcPath.setAttribute('d', this.createSegmentArcPath(centerX, centerY, textRadius, startAngle, endAngle));
+      arcPath.setAttribute('fill', 'none');
+      defs.appendChild(arcPath);
+
+      // Text bent along the segment arc
+      const textEl = document.createElementNS(svgNS, 'text');
+      textEl.setAttribute('class', 'fan-menu-segment-text');
+      textEl.setAttribute('text-anchor', 'middle');
+      textEl.setAttribute('dominant-baseline', 'middle');
+      textEl.style.cssText = 'fill: white; font-size: 11px; font-weight: 600; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.8);';
+
+      const textPath = document.createElementNS(svgNS, 'textPath');
+      textPath.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#${textPathId}`);
+      textPath.setAttribute('startOffset', '50%');
+      textPath.textContent = option.label;
+      textEl.appendChild(textPath);
+      svgElement.appendChild(textEl);
     });
-    
+
+    svgContainer.appendChild(svgElement);
     this.fanMenu.appendChild(svgContainer);
   }
 
