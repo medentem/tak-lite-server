@@ -248,7 +248,21 @@ class AdminMap {
         onLongPress: (e) => {
           this.state.setIsLongPressing(true);
           // Remember the element that received the long-press so we can ignore the subsequent "release" click (same target) and not dismiss the menu
-          this.fanMenuLongPressTarget = e.originalEvent?.target ?? null;
+          const longPressTarget = e.originalEvent?.target ?? null;
+          this.fanMenuLongPressTarget = longPressTarget;
+
+          // One-time capture-phase listener: swallow the release click so it never triggers dismiss (runs before bubble-phase handlers)
+          if (longPressTarget) {
+            const releaseClickHandler = (ev) => {
+              document.removeEventListener('click', releaseClickHandler, true);
+              if (ev.target === longPressTarget) {
+                ev.stopImmediatePropagation();
+                ev.preventDefault();
+                this.fanMenuLongPressTarget = null;
+              }
+            };
+            document.addEventListener('click', releaseClickHandler, true);
+          }
 
           // Check for existing annotation at long press location (include polygon fill and stroke so long-press inside or on edge shows edit menu)
           const layers = [
@@ -474,8 +488,13 @@ class AdminMap {
     // Dismiss fan menu when user clicks anywhere on the map (canvas clicks may not bubble to document)
     this.map.on('click', (e) => {
       if (!this.fanMenu?.getElement()?.classList.contains('visible')) return;
-      // Ignore exactly the click that is the mouse release after long-press (same target as the long-press)
+      // Ignore exactly the click that is the mouse release after long-press (same target as the long-press).
+      // Stop propagation so the document click handler never sees this click and dismisses the menu.
       if (this.fanMenuLongPressTarget && e.originalEvent?.target === this.fanMenuLongPressTarget) {
+        if (e.originalEvent) {
+          e.originalEvent.stopImmediatePropagation();
+          e.originalEvent.preventDefault();
+        }
         this.fanMenuLongPressTarget = null;
         return;
       }
