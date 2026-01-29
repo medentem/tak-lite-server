@@ -158,16 +158,17 @@
   background: #0c1527;
 }
 
-/* Map Controls Overlay */
+/* Map Controls Overlay - right side so it doesn't overlap left HUD panels */
 .map-controls-overlay {
   position: absolute;
   top: 16px;
-  left: 16px;
+  right: 16px;
+  left: auto;
   z-index: 500;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  align-items: flex-start;
+  align-items: flex-end;
 }
 
 .map-control-select,
@@ -266,8 +267,17 @@
   left: 16px;
 }
 
+/* Threats panel: top-left */
 .hud-panel-right {
   right: 16px;
+}
+
+/* Messages panel: left side, lower half so it stacks below threats panel */
+#messages-hud-panel {
+  left: 16px;
+  right: auto;
+  top: 50vh;
+  max-height: calc(50vh - 24px);
 }
 
 /* Prevent our overlays from fighting MapLibre's default zoom controls */
@@ -880,6 +890,14 @@
     top: auto;
     bottom: calc(50vh + 16px);
     right: 16px;
+  }
+
+  /* Keep messages panel on left when stacked */
+  #messages-hud-panel {
+    left: 16px;
+    right: auto;
+    top: 60px;
+    bottom: auto;
   }
   
   .map-controls-overlay {
