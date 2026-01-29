@@ -27,6 +27,12 @@ export class ManagementPage {
       createUserBtn.addEventListener('click', () => this.createUser());
     }
 
+    // Copy password button
+    const copyPwBtn = q('#u_password_copy');
+    if (copyPwBtn) {
+      copyPwBtn.addEventListener('click', () => this.copyPassword());
+    }
+
     // Team creation
     const createTeamBtn = q('#t_create');
     if (createTeamBtn) {
@@ -95,10 +101,10 @@ export class ManagementPage {
         <td>${u.email}</td>
         <td>${u.name || ''}</td>
         <td>${u.is_admin ? 'Yes' : 'No'}</td>
-        <td>
+        <td><div class="row" style="flex-wrap:nowrap;gap:8px;">
           <button data-act="reset" data-id="${u.id}" class="secondary">Reset PW</button>
           <button data-act="del" data-id="${u.id}" class="secondary">Delete</button>
-        </td>
+        </div></td>
       `;
       tbody.appendChild(tr);
     });
@@ -139,6 +145,26 @@ export class ManagementPage {
     }
   }
 
+  showPasswordReveal(label, password) {
+    const reveal = q('#u_password_reveal');
+    const labelEl = q('#u_password_label');
+    const displayEl = q('#u_password_display');
+    if (!reveal || !labelEl || !displayEl) return;
+    labelEl.textContent = label;
+    displayEl.textContent = password;
+    reveal.classList.remove('hidden');
+  }
+
+  copyPassword() {
+    const displayEl = q('#u_password_display');
+    if (!displayEl || !displayEl.textContent) return;
+    navigator.clipboard.writeText(displayEl.textContent).then(() => {
+      showSuccess('Password copied to clipboard');
+    }).catch(() => {
+      showError('Could not copy to clipboard');
+    });
+  }
+
   async createUser() {
     try {
       const email = q('#u_email')?.value.trim();
@@ -150,12 +176,15 @@ export class ManagementPage {
         return;
       }
 
-      await post('/api/admin/users', { email, name, is_admin: isAdmin });
+      const result = await post('/api/admin/users', { email, name, is_admin: isAdmin });
       showSuccess('User created successfully');
-      
+      if (result?.password) {
+        this.showPasswordReveal('Send this password to the user through a secure channel (it will not be shown again):', result.password);
+      }
+
       // Reload data
       await this.loadData();
-      
+
       // Clear form
       if (q('#u_email')) q('#u_email').value = '';
       if (q('#u_name')) q('#u_name').value = '';
@@ -239,11 +268,14 @@ export class ManagementPage {
   }
 
   async resetUserPassword(userId) {
-    if (!confirm('Reset password for this user?')) return;
-    
+    if (!confirm('Reset password for this user? A new password will be shown so you can send it to them.')) return;
+
     try {
-      await post(`/api/admin/users/${userId}/reset-password`);
-      showSuccess('Password reset email sent');
+      const result = await post(`/api/admin/users/${userId}/reset-password`);
+      showSuccess('Password reset. Copy the new password and send it to the user.');
+      if (result?.password) {
+        this.showPasswordReveal('New password (send to user through a secure channel):', result.password);
+      }
     } catch (error) {
       showError(`Failed to reset password: ${error.message}`);
     }
