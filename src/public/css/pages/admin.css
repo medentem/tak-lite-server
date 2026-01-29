@@ -162,24 +162,24 @@ body.dashboard-visible .container #dash {
   border-color: rgba(59, 130, 246, 0.5);
 }
 
-/* Full-Screen Map Container */
+/* Full-Screen Map Container - map must be in-flow so it gets height; overlays stay absolute on top */
 .dashboard-map-fullscreen {
   position: relative;
   flex: 1;
+  min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
+/* In-flow flex child so the map area always gets space (absolute children don't contribute to parent height) */
 .map-container-fullscreen {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  flex: 1;
+  min-height: 0;
+  position: relative;
   width: 100%;
-  height: 100%;
   background: #0c1527;
+  z-index: 1;
 }
 
 /* Map Controls Overlay - right side so it doesn't overlap left HUD panels */
