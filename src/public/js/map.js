@@ -256,7 +256,7 @@ class AdminMap {
     
     // Initialize WebSocket manager
     this.webSocketManager = new MapWebSocketManager(this.eventBus, () => {
-      this.loadMapData();
+      this.loadMapData({ skipAutoCenter: true });
     });
     this.webSocketManager.setupGlobalListeners();
       
@@ -2006,16 +2006,22 @@ class AdminMap {
 
   handleAnnotationDelete(data) {
     if (!this.annotationManager) return;
-    
-    // Check if this annotation is relevant to current view
-    if (this.state.getCurrentTeamId() && data.teamId !== this.state.getCurrentTeamId()) {
-      return; // Not relevant to current team filter
+
+    // Handle both annotationId (from socket/admin) and id (from some payloads)
+    const annotationId = data.annotationId || data.id;
+    if (!annotationId) {
+      logger.warn('[WS-DELETE] No annotationId in delete payload', data);
+      return;
     }
-    
+
+    // Only skip if we have a team filter AND payload has teamId AND they differ (don't skip when teamId missing)
+    if (this.state.getCurrentTeamId() && data.teamId != null && data.teamId !== this.state.getCurrentTeamId()) {
+      logger.debug('[WS-DELETE] Skipping delete - not relevant to current team');
+      return;
+    }
+
     // Remove annotation from local data
     const annotations = this.annotationManager.getAnnotations();
-    // Handle both annotationId (from local delete) and id (from WebSocket)
-    const annotationId = data.annotationId || data.id;
     const existingIndex = annotations.findIndex(a => a.id === annotationId);
     if (existingIndex >= 0) {
       annotations.splice(existingIndex, 1);
@@ -2081,15 +2087,17 @@ class AdminMap {
     this.layerManager.updateLocationVisibility(this.state.getShowLocations());
   }
   
-  async loadMapData() {
+  async loadMapData(options = {}) {
     if (!this.map || !this.dataLoader) return;
-    
+
+    const { skipAutoCenter = false } = options;
+
     // Ensure map sources are set up
     if (!this.map.getSource(LAYER_CONFIG.sources.annotationsPoi)) {
       logger.debug('Map sources not ready, setting up...');
       this.setupMapSources();
     }
-    
+
     logger.debug('Loading map data...');
     try {
       await this.dataLoader.loadAll({
@@ -2097,19 +2105,21 @@ class AdminMap {
         loadAnnotations: true,
         loadLocations: true
       });
-      
+
       this.updateMapData();
-      
+
       // Update popup manager with new annotations
       if (this.popupManager) {
         this.popupManager.setAnnotations(this.annotationManager.getAnnotations());
       }
-      
-      // Try to center map on user location or existing data after loading
-      await this.boundsManager.autoCenter(
-        this.annotationManager.getAnnotations(),
-        this.locationManager.getLocations()
-      );
+
+      // Center map on user location or data only when explicitly loading (e.g. refresh button), not on sync-activity refresh
+      if (!skipAutoCenter) {
+        await this.boundsManager.autoCenter(
+          this.annotationManager.getAnnotations(),
+          this.locationManager.getLocations()
+        );
+      }
     } catch (error) {
       logger.error('Failed to load map data:', error);
     }
@@ -2185,16 +2195,18 @@ class AdminMap {
       
       if (!this.annotationManager) return;
       
-      // Get all annotation IDs, optionally filtered by team
+      // Get all annotation IDs, optionally filtered by team (support both teamId and team_id from API/WS)
       let annotations = this.annotationManager.getAnnotations();
       const currentTeamId = this.state.getCurrentTeamId();
       if (currentTeamId) {
-        annotations = annotations.filter(ann => ann.teamId === currentTeamId);
+        annotations = annotations.filter(ann => (ann.teamId || ann.team_id) === currentTeamId);
       }
       const annotationIds = annotations.map(annotation => annotation.id);
-      
+
       if (annotationIds.length === 0) {
         this.showFeedback('No annotations to clear', 2000);
+        // Refresh from server so any ghost annotations (e.g. deleted by client but not removed from map) disappear
+        await this.loadMapData({ skipAutoCenter: true });
         return;
       }
       
