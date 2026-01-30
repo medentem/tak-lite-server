@@ -1597,19 +1597,6 @@ class AdminMap {
       });
     }
 
-    // Location search
-    const searchInput = q('#map_search');
-    const searchGoBtn = q('#map_search_go');
-    const runSearch = () => this.runLocationSearch();
-    if (searchInput) {
-      searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') runSearch();
-      });
-    }
-    if (searchGoBtn) {
-      searchGoBtn.addEventListener('click', runSearch);
-    }
-
     // Monitor areas toggle (geographical social media monitors)
     const showMonitors = q('#map_show_monitors');
     const showMonitorsWrapper = q('#map_show_monitors_wrapper');
@@ -1672,17 +1659,17 @@ class AdminMap {
   }
 
   /**
-   * Run location search: geocode input and fly/fit map to result.
+   * Run location search with a query string (e.g. from command palette).
+   * @param {string} query - City, zip, or address to search
    */
-  async runLocationSearch() {
-    const input = q('#map_search');
-    const query = input?.value?.trim();
-    if (!query) {
+  async runLocationSearchWithQuery(query) {
+    const trimmed = (query || '').trim();
+    if (!trimmed) {
       this.showFeedback('Enter a city, zip, or address', 3000);
       return;
     }
     this.showFeedback('Searching...', 2000);
-    const result = await this.geocodeQuery(query);
+    const result = await this.geocodeQuery(trimmed);
     if (!result || !this.map) {
       this.showFeedback('Location not found', 3000);
       return;

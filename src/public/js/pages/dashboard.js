@@ -54,6 +54,11 @@ export class DashboardPage {
     this.commandPalette = new CommandPalette({
       onCommandSelect: (command) => {
         console.log('Command selected:', command.id);
+      },
+      onLocationSearch: (query) => {
+        if (window.adminMap && typeof window.adminMap.runLocationSearchWithQuery === 'function') {
+          window.adminMap.runLocationSearchWithQuery(query);
+        }
       }
     });
   }

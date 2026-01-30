@@ -207,35 +207,6 @@ body.dashboard-visible .container #dash {
   align-items: flex-end;
 }
 
-.map-search-wrapper {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  width: 100%;
-  max-width: 240px;
-}
-
-.map-search-input {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 12px;
-  background: rgba(17, 26, 43, 0.9);
-  border: 1px solid rgba(31, 42, 68, 0.5);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 13px;
-  backdrop-filter: blur(10px);
-}
-
-.map-search-input::placeholder {
-  color: var(--muted);
-}
-
-.map-search-input:focus {
-  outline: none;
-  border-color: rgba(59, 130, 246, 0.5);
-}
-
 .map-control-select,
 .map-control-btn {
   padding: 8px 12px;
