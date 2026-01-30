@@ -503,24 +503,24 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         };
         
         if (teamId) {
-          // Broadcast to specific team room
+          // Broadcast to specific team room (data as string for Android/client compatibility)
           io.to(`team:${teamId}`).emit('annotation:update', {
             id,
             teamId,
             type,
-            data: clientData,
+            data: JSON.stringify(clientData),
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
             timestamp: data.timestamp
           });
         } else {
-          // Broadcast to global room for null team_id data
+          // Broadcast to global room for null team_id data (data as string for Android/client compatibility)
           io.to('global').emit('annotation:update', {
             id,
             teamId,
             type,
-            data: clientData,
+            data: JSON.stringify(clientData),
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
@@ -643,24 +643,24 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         };
         
         if (existing.team_id) {
-          // Broadcast to specific team room
+          // Broadcast to specific team room (data as string for Android/client compatibility)
           io.to(`team:${existing.team_id}`).emit('annotation:update', {
             id: annotationId,
             teamId: existing.team_id,
             type: existing.type,
-            data: clientData,
+            data: JSON.stringify(clientData),
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
             timestamp: updatedData.timestamp || Date.now()
           });
         } else {
-          // Broadcast to global room for null team_id data
+          // Broadcast to global room for null team_id data (data as string for Android/client compatibility)
           io.to('global').emit('annotation:update', {
             id: annotationId,
             teamId: existing.team_id,
             type: existing.type,
-            data: clientData,
+            data: JSON.stringify(clientData),
             userId,
             userName: 'Admin',
             userEmail: 'admin@system',
