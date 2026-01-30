@@ -24,25 +24,14 @@ export class SocketGateway {
     // Require authentication during connection via auth token in query or headers
     this.io.use(async (socket, next) => {
       try {
-        console.log('[SOCKET] Authentication attempt:', {
-          auth: socket.handshake.auth,
-          headers: socket.handshake.headers,
-          query: socket.handshake.query
-        });
-        
         const token = (socket.handshake.auth?.token as string) || (socket.handshake.headers['authorization']?.toString().split(' ')[1] || '');
         if (!token) {
-          console.log('[SOCKET] Missing token');
           return next(new Error('Missing token'));
         }
-        
-        console.log('[SOCKET] Token found, verifying...');
         const payload = await this.security.verifyJwt<{ sub: string; is_admin?: boolean }>(token);
         (socket.data as any).user = { id: payload.sub, is_admin: !!payload.is_admin };
-        console.log('[SOCKET] Authentication successful for user:', payload.sub);
         next();
       } catch (e) {
-        console.error('[SOCKET] Authentication failed:', e);
         next(new Error('Invalid token'));
       }
     });
@@ -53,13 +42,12 @@ export class SocketGateway {
     console.log('[SOCKET] Client connected:', socket.id);
     socket.emit('hello');
     
-    // Emit admin stats update for admin users
     const user = (socket.data as any).user;
     if (user?.is_admin) {
+      socket.join('admin');
       this.emitAdminStatsUpdate();
     }
     
-    // Emit admin connection update for all connections
     this.emitAdminConnectionUpdate('connect', socket.id);
 
     socket.on('team:join', async (teamId: string) => {
@@ -280,7 +268,7 @@ export class SocketGateway {
   private async emitAdminStatsUpdate() {
     try {
       const stats = await this.getAdminStats();
-      this.io.emit('admin:stats_update', stats);
+      this.io.to('admin').emit('admin:stats_update', stats);
     } catch (error) {
       console.error('[SOCKET] Failed to emit admin stats update:', error);
     }
@@ -300,7 +288,7 @@ export class SocketGateway {
         .map(([name, set]) => [name, set.size])
     );
     
-    this.io.emit('admin:connection_update', {
+    this.io.to('admin').emit('admin:connection_update', {
       type,
       socketId,
       rooms,
@@ -351,7 +339,7 @@ export class SocketGateway {
   
   // Emit sync activity to admin users
   public emitSyncActivity(type: string, details: string) {
-    this.io.emit('admin:sync_activity', { type, details });
+    this.io.to('admin').emit('admin:sync_activity', { type, details });
   }
   
   // Emit location update to admin users (always emit so dashboard shows client locations even when user not in DB)
@@ -369,10 +357,10 @@ export class SocketGateway {
         timestamp: locationData.timestamp,
         user_status: locationData.userStatus || 'GREEN'
       };
-      this.io.emit('admin:location_update', adminEventData);
+      this.io.to('admin').emit('admin:location_update', adminEventData);
     }).catch(error => {
       console.error('[SOCKET] Failed to get user info for admin location update:', error);
-      this.io.emit('admin:location_update', {
+      this.io.to('admin').emit('admin:location_update', {
         userId,
         teamId: locationData.teamId,
         latitude: locationData.latitude,
@@ -396,10 +384,10 @@ export class SocketGateway {
         user_name: userInfo?.name ?? annotation.user_name ?? userId,
         user_email: userInfo?.email ?? annotation.user_email ?? ''
       };
-      this.io.emit('admin:annotation_update', adminEventData);
+      this.io.to('admin').emit('admin:annotation_update', adminEventData);
     }).catch(error => {
       console.error('[SOCKET] Failed to get user info for admin annotation update:', error);
-      this.io.emit('admin:annotation_update', {
+      this.io.to('admin').emit('admin:annotation_update', {
         ...annotation,
         teamId: annotation.team_id ?? annotation.teamId,
         userId: annotation.user_id ?? annotation.userId ?? userId
@@ -415,10 +403,10 @@ export class SocketGateway {
         user_name: userInfo?.name ?? deletionData.user_name ?? userId,
         user_email: userInfo?.email ?? deletionData.user_email ?? ''
       };
-      this.io.emit('admin:annotation_delete', adminEventData);
+      this.io.to('admin').emit('admin:annotation_delete', adminEventData);
     }).catch(error => {
       console.error('[SOCKET] Failed to get user info for admin annotation delete:', error);
-      this.io.emit('admin:annotation_delete', deletionData);
+      this.io.to('admin').emit('admin:annotation_delete', deletionData);
     });
   }
 
@@ -430,10 +418,10 @@ export class SocketGateway {
         user_name: userInfo?.name ?? deletionData.user_name ?? userId,
         user_email: userInfo?.email ?? deletionData.user_email ?? ''
       };
-      this.io.emit('admin:annotation_bulk_delete', adminEventData);
+      this.io.to('admin').emit('admin:annotation_bulk_delete', adminEventData);
     }).catch(error => {
       console.error('[SOCKET] Failed to get user info for admin bulk annotation delete:', error);
-      this.io.emit('admin:annotation_bulk_delete', deletionData);
+      this.io.to('admin').emit('admin:annotation_bulk_delete', deletionData);
     });
   }
 
@@ -445,10 +433,10 @@ export class SocketGateway {
         user_name: userInfo?.name ?? messageData.user_name ?? userId,
         user_email: userInfo?.email ?? messageData.user_email ?? ''
       };
-      this.io.emit('admin:message_received', adminEventData);
+      this.io.to('admin').emit('admin:message_received', adminEventData);
     }).catch(error => {
       console.error('[SOCKET] Failed to get user info for admin message received:', error);
-      this.io.emit('admin:message_received', messageData);
+      this.io.to('admin').emit('admin:message_received', messageData);
     });
   }
   

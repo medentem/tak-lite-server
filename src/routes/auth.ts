@@ -36,22 +36,16 @@ export function createAuthRouter(db: DatabaseService, config: ConfigService) {
     try {
       const schema = Joi.object({ email: Joi.string().email().required(), password: Joi.string().required() });
       const { email, password } = await schema.validateAsync(req.body);
-      console.log(`[AUTH] Login attempt for email: ${email}`);
       
       const user = await db.client('users').where({ email }).first();
       if (!user) {
-        console.log(`[AUTH] User not found for email: ${email}`);
         return res.status(401).json({ error: 'Invalid credentials' });
       }
       
-      console.log(`[AUTH] User found: ${user.id}, checking password...`);
       const v = await security.verifyPassword(password, user.password_hash);
       if (!v.ok) {
-        console.log(`[AUTH] Password verification failed for user: ${user.id}`);
         return res.status(401).json({ error: 'Invalid credentials' });
       }
-      
-      console.log(`[AUTH] Password verified successfully for user: ${user.id}`);
       if (v.needsRehash) {
         try {
           const newHash = await security.hashPassword(password);
@@ -74,8 +68,6 @@ export function createAuthRouter(db: DatabaseService, config: ConfigService) {
       const expiresIn = parseExpires(process.env.JWT_EXPIRES_IN);
       const token = await security.signJwt({ sub: user.id, is_admin: user.is_admin }, { expiresIn });
       const { jti, token: refresh } = await tokens.rotate(user.id, null, null);
-      
-      console.log(`[AUTH] Login successful for user: ${user.id}, token generated`);
       
       // Set HttpOnly cookie for browser-based admin UI; clients may still use bearer token from body
       const useCookie = String(req.query.cookie || '1') === '1';
@@ -165,7 +157,12 @@ export function createAuthRouter(db: DatabaseService, config: ConfigService) {
       if (!jti || !refresh) return res.status(401).json({ error: 'Missing refresh' });
       const row = await tokens.verify(jti, refresh);
       if (!row) return res.status(401).json({ error: 'Invalid refresh' });
-      const access = await security.signJwt({ sub: row.userId }, { expiresIn: parseExpires(process.env.JWT_EXPIRES_IN) });
+      const user = await db.client('users').where({ id: row.userId }).select(['id', 'is_admin']).first();
+      if (!user) return res.status(401).json({ error: 'User not found' });
+      const access = await security.signJwt(
+        { sub: user.id, is_admin: !!user.is_admin },
+        { expiresIn: parseExpires(process.env.JWT_EXPIRES_IN) }
+      );
       const { jti: newJti, token: newRefresh } = await tokens.rotate(row.userId, jti, refresh);
       const isProd = (process.env.NODE_ENV || 'production') === 'production';
       res.cookie('taklite_token', access, { httpOnly: true, secure: isProd, sameSite: 'strict', maxAge: 1000*60*60, path: '/' });

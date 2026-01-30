@@ -26,7 +26,7 @@ export class SecurityService {
 
   async verifyJwt<T = any>(token: string): Promise<T> {
     const secret = await this.getJwtSecret();
-    return jwt.verify(token, secret) as T;
+    return jwt.verify(token, secret, { algorithms: ['HS256'] }) as T;
   }
 
   // Password hashing helpers (argon2id primary, bcrypt fallback)

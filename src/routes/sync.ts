@@ -92,61 +92,58 @@ export function createSyncRouter(sync: SyncService) {
     } catch (err) { next(err); }
   });
 
-  // Read: annotations for a team (or all teams if teamId is null)
+  // Read: annotations for a team (teamId required; paginated)
   router.get('/annotations', async (req, res, next) => {
     try {
       if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-      const qSchema = Joi.object({ teamId: Joi.string().uuid().allow(null).optional() });
-      const { teamId } = await qSchema.validateAsync({ teamId: req.query.teamId || null });
+      const qSchema = Joi.object({
+        teamId: Joi.string().uuid().required(),
+        limit: Joi.number().integer().min(1).max(500).default(100),
+        offset: Joi.number().integer().min(0).default(0)
+      }).options({ stripUnknown: true });
+      const { teamId, limit, offset } = await qSchema.validateAsync({
+        teamId: req.query.teamId,
+        limit: req.query.limit != null ? Number(req.query.limit) : 100,
+        offset: req.query.offset != null ? Number(req.query.offset) : 0
+      });
+      await sync.assertTeamMembership(req.user.sub, teamId);
       const db = (sync as any).db as import('../services/database').DatabaseService;
-      
-      let query = db.client('annotations').orderBy('updated_at', 'desc');
-      
-      // If teamId is provided, show team data + global data (null team_id)
-      if (teamId) {
-        await sync.assertTeamMembership(req.user.sub, teamId);
-        query = query.where(function() {
+      const rows = await db.client('annotations')
+        .where(function() {
           this.where('team_id', teamId).orWhereNull('team_id');
-        });
-      }
-      // If teamId is null, show annotations for all teams (no filtering)
-      
-      const rows = await query;
+        })
+        .orderBy('updated_at', 'desc')
+        .limit(limit)
+        .offset(offset);
       res.json(rows);
     } catch (err) { next(err); }
   });
 
-  // Read: recent messages for a team (or all teams if teamId is null)
+  // Read: recent messages for a team (teamId required)
   router.get('/messages', async (req, res, next) => {
     try {
       if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
       const qSchema = Joi.object({
-        teamId: Joi.string().uuid().allow(null).optional(),
+        teamId: Joi.string().uuid().required(),
         limit: Joi.number().integer().min(1).max(200).default(50),
         before: Joi.date().optional()
-      });
+      }).options({ stripUnknown: true });
       const { teamId, limit, before } = await qSchema.validateAsync({
-        teamId: req.query.teamId || null,
-        limit: req.query.limit ? Number(req.query.limit) : undefined,
+        teamId: req.query.teamId,
+        limit: req.query.limit != null ? Number(req.query.limit) : 50,
         before: req.query.before
       });
+      await sync.assertTeamMembership(req.user.sub, teamId);
       const db = (sync as any).db as import('../services/database').DatabaseService;
-      
-      let query = db.client('messages').orderBy('created_at', 'desc').limit(limit);
-      
-      // If teamId is provided, show team data + global data (null team_id)
-      if (teamId) {
-        await sync.assertTeamMembership(req.user.sub, teamId);
-        query = query.where(function() {
+      let query = db.client('messages')
+        .where(function() {
           this.where('team_id', teamId).orWhereNull('team_id');
-        });
-      }
-      // If teamId is null, show messages for all teams (no filtering)
-      
+        })
+        .orderBy('created_at', 'desc')
+        .limit(limit);
       if (before) {
         query = query.andWhere('created_at', '<', before);
       }
-      
       const rows = await query;
       res.json(rows);
     } catch (err) { next(err); }

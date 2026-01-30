@@ -169,14 +169,13 @@ export class ManagementPage {
     try {
       const email = q('#u_email')?.value.trim();
       const name = q('#u_name')?.value.trim();
-      const isAdmin = q('#u_admin')?.checked || false;
 
       if (!email) {
         showError('Email is required');
         return;
       }
 
-      const result = await post('/api/admin/users', { email, name, is_admin: isAdmin });
+      const result = await post('/api/admin/users', { email, name });
       showSuccess('User created successfully');
       if (result?.password) {
         this.showPasswordReveal('Send this password to the user through a secure channel (it will not be shown again):', result.password);
@@ -188,7 +187,6 @@ export class ManagementPage {
       // Clear form
       if (q('#u_email')) q('#u_email').value = '';
       if (q('#u_name')) q('#u_name').value = '';
-      if (q('#u_admin')) q('#u_admin').checked = false;
     } catch (error) {
       showError(`Failed to create user: ${error.message}`);
     }

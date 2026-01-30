@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs';
 import { Server } from 'socket.io';
+import rateLimit from 'express-rate-limit';
 import { DatabaseService } from '../services/database';
 import Joi from 'joi';
 import { ConfigService } from '../services/config';
@@ -11,6 +12,14 @@ import { AuditService } from '../services/audit';
 import { logger } from '../utils/logger';
 const bcrypt = require('bcryptjs');
 import { v4 as uuidv4 } from 'uuid';
+
+const resetPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many password reset attempts; try again later.'
+});
 
 export function createAdminRouter(config: ConfigService, db?: DatabaseService, io?: Server) {
   const router = Router();
@@ -932,20 +941,20 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
   router.post('/users', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
-      const schema = Joi.object({ email: Joi.string().email().required(), name: Joi.string().min(1).default(''), is_admin: Joi.boolean().default(false) });
-      const { email, name, is_admin } = await schema.validateAsync(req.body);
+      const schema = Joi.object({ email: Joi.string().email().required(), name: Joi.string().min(1).default('') }).options({ stripUnknown: true });
+      const { email, name } = await schema.validateAsync(req.body);
       const exists = await db.client('users').where({ email }).first();
       if (exists) return res.status(400).json({ error: 'User already exists' });
       const id = uuidv4();
       const password = uuidv4().replace(/-/g, '').slice(0, 14);
       const password_hash = await bcrypt.hash(password, 10);
-      await db.client('users').insert({ id, email, name: name || email, is_admin, password_hash });
+      await db.client('users').insert({ id, email, name: name || email, is_admin: false, password_hash });
       const defaultTeam = await db.client('teams').orderBy('created_at', 'asc').first();
       if (defaultTeam) {
         await db.client('team_memberships').insert({ user_id: id, team_id: defaultTeam.id });
       }
-      if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'user.create', resourceType: 'user', resourceId: id, metadata: { email, is_admin } });
-      res.json({ user: { id, email, name: name || email, is_admin }, password });
+      if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'user.create', resourceType: 'user', resourceId: id, metadata: { email } });
+      res.json({ user: { id, email, name: name || email, is_admin: false }, password });
     } catch (err) { next(err); }
   });
 
@@ -962,7 +971,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
     } catch (err) { next(err); }
   });
 
-  router.post('/users/:userId/reset-password', async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/users/:userId/reset-password', resetPasswordLimiter, async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
       const user = await db.client('users').where({ id: req.params.userId }).first();
@@ -1047,13 +1056,20 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
     try {
       if (!db) return res.json([]);
       
-      const { 
-        threat_level, 
-        threat_type, 
-        status = 'pending',
-        limit = 50, 
-        offset = 0 
-      } = req.query;
+      const qSchema = Joi.object({
+        threat_level: Joi.string().optional(),
+        threat_type: Joi.string().optional(),
+        status: Joi.string().valid('pending', 'reviewed', 'approved', 'dismissed', 'all').default('pending'),
+        limit: Joi.number().integer().min(1).max(100).default(50),
+        offset: Joi.number().integer().min(0).default(0)
+      }).options({ stripUnknown: true });
+      const { threat_level, threat_type, status, limit, offset } = await qSchema.validateAsync({
+        threat_level: req.query.threat_level,
+        threat_type: req.query.threat_type,
+        status: req.query.status ?? 'pending',
+        limit: req.query.limit != null ? Number(req.query.limit) : 50,
+        offset: req.query.offset != null ? Number(req.query.offset) : 0
+      });
       
       let query = db.client('threat_analyses')
         .select([
@@ -1063,8 +1079,8 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           'processing_metadata', 'grok_analysis', 'citations'
         ])
         .orderBy('created_at', 'desc')
-        .limit(parseInt(limit as string))
-        .offset(parseInt(offset as string));
+        .limit(limit)
+        .offset(offset);
       
       if (threat_level) {
         query = query.where('threat_level', threat_level);

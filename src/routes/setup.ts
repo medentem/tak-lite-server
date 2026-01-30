@@ -1,10 +1,19 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import Joi from 'joi';
 import { DatabaseService } from '../services/database';
 import { ConfigService } from '../services/config';
 import { SecurityService } from '../services/security';
+
+const setupCompleteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many setup attempts; try again later.'
+});
 
 export function createSetupRouter(db: DatabaseService, config: ConfigService) {
   const router = Router();
@@ -15,7 +24,7 @@ export function createSetupRouter(db: DatabaseService, config: ConfigService) {
     res.json({ completed: !!completed });
   });
 
-  router.post('/complete', async (req, res, next) => {
+  router.post('/complete', setupCompleteLimiter, async (req, res, next) => {
     try {
       const schema = Joi.object({
         adminEmail: Joi.string().email().required(),

@@ -239,14 +239,9 @@ app.get('/metrics', async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    version: process.env.npm_package_version || '1.0.0'
-  });
+// Health check endpoint (minimal response to avoid information disclosure)
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ status: 'ok' });
 });
 
 // Favicon endpoint to prevent 404 errors
