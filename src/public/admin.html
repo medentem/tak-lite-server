@@ -263,6 +263,10 @@
         <div class="dashboard-map-fullscreen">
           <!-- Map Controls Overlay (Top Right) -->
           <div class="map-controls-overlay">
+            <div class="map-search-wrapper">
+              <input type="text" id="map_search" class="map-search-input" placeholder="Search city, zip, or address..." title="Search and zoom to location">
+              <button id="map_search_go" class="map-control-btn" title="Go to location">⌕</button>
+            </div>
             <select id="map_team_select" class="map-control-select">
               <option value="">All Teams</option>
             </select>
@@ -277,6 +281,10 @@
               <label class="map-control-label">
                 <input id="map_show_locations" type="checkbox" checked />
                 <span>Locations</span>
+              </label>
+              <label class="map-control-label" id="map_show_monitors_wrapper" style="display: none;">
+                <input id="map_show_monitors" type="checkbox" />
+                <span>Monitor areas</span>
               </label>
             </div>
           </div>

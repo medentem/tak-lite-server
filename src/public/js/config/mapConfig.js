@@ -134,7 +134,14 @@ export const LAYER_CONFIG = {
     annotationsPolygon: 'annotations-polygon',
     locations: 'locations',
     tempArea: 'temp-area',
-    tempLine: 'temp-line'
+    tempLine: 'temp-line',
+    monitorAreas: 'monitor-areas'
+  },
+
+  /** Monitor areas layer IDs (geographical social media monitors) */
+  monitorAreaLayers: {
+    fill: 'monitor-areas-fill',
+    stroke: 'monitor-areas-stroke'
   }
 };
 

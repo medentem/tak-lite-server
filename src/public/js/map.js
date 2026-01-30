@@ -105,10 +105,11 @@ class AdminMap {
     this.poiDrawingTool = null;
     this.lineDrawingTool = null;
     this.areaDrawingTool = null;
-    
-    // UI elements
-    this.editForm = null;
-    this.modalOverlay = null;
+
+    // Geographical monitors overlay
+    this.geographicalMonitors = [];
+    this.monitorAreasLoaded = false;
+    this.showMonitorsWrapperEl = null;
     
     // Setup event listeners
     this.setupEventListeners();
@@ -150,6 +151,28 @@ class AdminMap {
     this.eventBus.on(MAP_EVENTS.COLOR_MENU_OPENED, (data) => {
       logger.debug('Color menu opened via event bus');
     });
+
+    // Command palette: create POI/area/line at map center
+    document.addEventListener('command-palette:create-annotation', (e) => {
+      const type = e.detail?.type;
+      if (type && ['poi', 'area', 'line'].includes(type)) {
+        this.startCreateAnnotationAtCenter(type);
+      }
+    });
+  }
+
+  /**
+   * Start create annotation flow at map center (from command palette).
+   * @param {string} type - 'poi' | 'area' | 'line'
+   */
+  startCreateAnnotationAtCenter(type) {
+    if (!this.map || !this.colorMenu) return;
+    const center = this.map.getCenter();
+    const point = this.map.project(center);
+    this.state.setPendingAnnotation({ lng: center.lng, lat: center.lat });
+    this.state.setCurrentShape(type === 'poi' ? 'circle' : type);
+    this.showColorMenu(point, type === 'poi' ? 'poi' : type);
+    this.showFeedback(`Choose a color for your ${type === 'poi' ? 'POI' : type}`, 3000);
   }
   
   async init() {
@@ -1573,6 +1596,31 @@ class AdminMap {
         this.state.setShowLocations(e.target.checked);
       });
     }
+
+    // Location search
+    const searchInput = q('#map_search');
+    const searchGoBtn = q('#map_search_go');
+    const runSearch = () => this.runLocationSearch();
+    if (searchInput) {
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') runSearch();
+      });
+    }
+    if (searchGoBtn) {
+      searchGoBtn.addEventListener('click', runSearch);
+    }
+
+    // Monitor areas toggle (geographical social media monitors)
+    const showMonitors = q('#map_show_monitors');
+    const showMonitorsWrapper = q('#map_show_monitors_wrapper');
+    if (showMonitors) {
+      showMonitors.addEventListener('change', (e) => {
+        this.setMonitorAreasVisible(e.target.checked);
+      });
+    }
+    this.showMonitorsWrapperEl = showMonitorsWrapper;
+    // Load geographical monitors to determine if we should show the toggle
+    this.loadGeographicalMonitorsForToggle();
     
     // Resize map when dashboard page is shown (container may have been hidden with 0 size at init)
     document.addEventListener('pageChanged', (e) => {
@@ -1584,6 +1632,172 @@ class AdminMap {
     });
     
     // WebSocket listeners are set up in initializeMap()
+  }
+
+  /**
+   * Geocode a query using Nominatim (OpenStreetMap). Respects rate limits with User-Agent.
+   * @param {string} query - Address, city, zip, or place name
+   * @returns {Promise<{ lat: number, lon: number, bbox?: [south, north, west, east], display_name?: string }|null>}
+   */
+  async geocodeQuery(query) {
+    const trimmed = (query || '').trim();
+    if (!trimmed) return null;
+    try {
+      const params = new URLSearchParams({
+        q: trimmed,
+        format: 'json',
+        limit: '1',
+        addressdetails: '1'
+      });
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?${params}`,
+        {
+          headers: { 'Accept-Language': 'en', 'User-Agent': 'TAK-Lite-Admin/1.0 (map search)' }
+        }
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      const first = data && data[0];
+      if (!first || first.lat == null || first.lon == null) return null;
+      return {
+        lat: parseFloat(first.lat),
+        lon: parseFloat(first.lon),
+        bbox: first.boundingbox ? first.boundingbox.map(Number) : null,
+        display_name: first.display_name
+      };
+    } catch (err) {
+      logger.error('Geocoding failed', err);
+      return null;
+    }
+  }
+
+  /**
+   * Run location search: geocode input and fly/fit map to result.
+   */
+  async runLocationSearch() {
+    const input = q('#map_search');
+    const query = input?.value?.trim();
+    if (!query) {
+      this.showFeedback('Enter a city, zip, or address', 3000);
+      return;
+    }
+    this.showFeedback('Searching...', 2000);
+    const result = await this.geocodeQuery(query);
+    if (!result || !this.map) {
+      this.showFeedback('Location not found', 3000);
+      return;
+    }
+    const { lat, lon, bbox } = result;
+    if (bbox && bbox.length >= 4) {
+      const [south, north, west, east] = bbox;
+      this.boundsManager.fitBounds([[west, south], [east, north]], { duration: 1000 });
+    } else {
+      this.boundsManager.centerOnCoordinates(lon, lat, 12);
+    }
+    this.showFeedback('Location found', 2000);
+  }
+
+  /**
+   * Fetch geographical monitors and show/hide the "Monitor areas" toggle wrapper.
+   */
+  async loadGeographicalMonitorsForToggle() {
+    try {
+      const data = await get('/api/social-media/geographical-monitors');
+      const monitors = data?.monitors || [];
+      this.geographicalMonitors = monitors;
+      const wrapper = this.showMonitorsWrapperEl || q('#map_show_monitors_wrapper');
+      if (wrapper && monitors.length > 0) {
+        wrapper.style.display = '';
+      }
+    } catch (err) {
+      logger.debug('Could not load geographical monitors for toggle', err);
+    }
+  }
+
+  /**
+   * Set monitor areas layer visibility. Loads and geocodes monitor areas if needed.
+   * @param {boolean} visible
+   */
+  async setMonitorAreasVisible(visible) {
+    if (!this.layerManager || !this.map) return;
+    if (visible) {
+      await this.loadMonitorAreasData();
+      this.layerManager.updateMonitorAreaVisibility(true);
+    } else {
+      this.layerManager.updateMonitorAreaVisibility(false);
+    }
+  }
+
+  /**
+   * Load geographical monitors, geocode each area, and update monitor-areas source.
+   */
+  async loadMonitorAreasData() {
+    if (this.monitorAreasLoaded && this.geographicalMonitors.length > 0) {
+      this.updateMonitorAreasSource();
+      return;
+    }
+    let monitors = this.geographicalMonitors;
+    if (monitors.length === 0) {
+      try {
+        const data = await get('/api/social-media/geographical-monitors');
+        monitors = data?.monitors || [];
+        this.geographicalMonitors = monitors;
+      } catch (err) {
+        logger.error('Failed to load geographical monitors', err);
+        this.showFeedback('Could not load monitor areas', 3000);
+        return;
+      }
+    }
+    if (monitors.length === 0) {
+      this.showFeedback('No geographical monitors configured', 3000);
+      return;
+    }
+    this.showFeedback('Loading monitor areas...', 2000);
+    const features = [];
+    for (let i = 0; i < monitors.length; i++) {
+      const area = monitors[i].geographical_area || monitors[i].name || '';
+      if (!area) continue;
+      const geo = await this.geocodeQuery(area);
+      if (!geo) continue;
+      const { lat, lon, bbox } = geo;
+      let coords;
+      if (bbox && bbox.length >= 4) {
+        const [south, north, west, east] = bbox;
+        coords = [[[west, south], [east, south], [east, north], [west, north], [west, south]]];
+      } else {
+        const radiusDeg = 0.05;
+        const points = 32;
+        const ring = [];
+        for (let k = 0; k <= points; k++) {
+          const t = (k / points) * 2 * Math.PI;
+          ring.push([lon + radiusDeg * Math.cos(t), lat + radiusDeg * Math.sin(t)]);
+        }
+        coords = [ring];
+      }
+      features.push({
+        type: 'Feature',
+        properties: { id: monitors[i].id, name: area },
+        geometry: { type: 'Polygon', coordinates: coords }
+      });
+      if (i < monitors.length - 1) {
+        await new Promise(r => setTimeout(r, 1100));
+      }
+    }
+    this.monitorAreasData = features;
+    this.monitorAreasLoaded = true;
+    this.updateMonitorAreasSource();
+    this.showFeedback(`${features.length} monitor area(s) shown`, 2000);
+  }
+
+  /**
+   * Update the monitor-areas GeoJSON source from cached features.
+   */
+  updateMonitorAreasSource() {
+    if (!this.map) return;
+    const source = this.map.getSource(LAYER_CONFIG.sources.monitorAreas);
+    if (!source) return;
+    const features = this.monitorAreasData || [];
+    source.setData({ type: 'FeatureCollection', features });
   }
   
   

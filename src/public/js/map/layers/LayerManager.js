@@ -26,7 +26,8 @@ export class LayerManager {
       sources.annotationsLine,
       sources.annotationsArea,
       sources.annotationsPolygon,
-      sources.locations
+      sources.locations,
+      sources.monitorAreas
     ];
     
     sourceIds.forEach(sourceId => {
@@ -65,11 +66,61 @@ export class LayerManager {
     // 5. Lines - on top of areas and polygons
     this.addLineLayer(layers.line);
     
-    // 6. POI markers - on top of everything (most important for clicking)
+    // 6. Monitor areas (fill + stroke) - geographical social media monitors
+    if (LAYER_CONFIG.monitorAreaLayers) {
+      this.addMonitorAreaFillLayer(LAYER_CONFIG.monitorAreaLayers.fill);
+      this.addMonitorAreaStrokeLayer(LAYER_CONFIG.monitorAreaLayers.stroke);
+    }
+
+    // 7. POI markers - on top of everything (most important for clicking)
     this.addPoiLayer(layers.poi);
     
-    // 7. Location markers - top layer (most important for clicking)
+    // 8. Location markers - top layer (most important for clicking)
     this.addLocationLayer(LAYER_CONFIG.locationLayer);
+  }
+
+  /**
+   * Add monitor areas fill layer (geographical monitors overlay)
+   */
+  addMonitorAreaFillLayer(layerId) {
+    if (this.map.getLayer(layerId)) return;
+    this.map.addLayer({
+      id: layerId,
+      type: 'fill',
+      source: LAYER_CONFIG.sources.monitorAreas,
+      paint: {
+        'fill-color': '#6366f1',
+        'fill-opacity': 0.15
+      },
+      layout: {
+        visibility: 'none'
+      }
+    });
+    this.layers.set(layerId, { type: 'fill', category: 'monitor' });
+  }
+
+  /**
+   * Add monitor areas stroke layer
+   */
+  addMonitorAreaStrokeLayer(layerId) {
+    if (this.map.getLayer(layerId)) return;
+    this.map.addLayer({
+      id: layerId,
+      type: 'line',
+      source: LAYER_CONFIG.sources.monitorAreas,
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round',
+        visibility: 'none'
+      },
+      paint: {
+        'line-color': '#6366f1',
+        'line-width': 2,
+        'line-opacity': 0.6,
+        'line-dasharray': [2, 2]
+      }
+    });
+    this.layers.set(layerId, { type: 'line', category: 'monitor' });
   }
 
   /**
@@ -315,6 +366,14 @@ export class LayerManager {
    */
   updateLocationVisibility(visible) {
     this.updateVisibility('location', visible);
+  }
+
+  /**
+   * Update monitor area layer visibility (geographical monitors overlay)
+   * @param {boolean} visible - Whether to show monitor area layers
+   */
+  updateMonitorAreaVisibility(visible) {
+    this.updateVisibility('monitor', visible);
   }
 
   /**

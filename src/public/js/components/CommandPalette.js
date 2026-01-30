@@ -72,32 +72,34 @@ export class CommandPalette {
       {
         id: 'create-poi',
         title: 'Create Point of Interest',
-        description: 'Add a new POI annotation',
+        description: 'Add a new POI annotation at map center',
         icon: '🎯',
         shortcut: 'P',
         action: () => {
-          // Trigger POI creation
-          console.log('Create POI');
+          this.hide();
+          document.dispatchEvent(new CustomEvent('command-palette:create-annotation', { detail: { type: 'poi' } }));
         }
       },
       {
         id: 'create-area',
         title: 'Create Area',
-        description: 'Draw an area annotation',
+        description: 'Draw an area annotation at map center',
         icon: '📐',
         shortcut: 'A',
         action: () => {
-          console.log('Create Area');
+          this.hide();
+          document.dispatchEvent(new CustomEvent('command-palette:create-annotation', { detail: { type: 'area' } }));
         }
       },
       {
         id: 'create-line',
         title: 'Create Route',
-        description: 'Draw a line/route annotation',
+        description: 'Draw a line/route annotation at map center',
         icon: '➖',
         shortcut: 'L',
         action: () => {
-          console.log('Create Line');
+          this.hide();
+          document.dispatchEvent(new CustomEvent('command-palette:create-annotation', { detail: { type: 'line' } }));
         }
       },
       {
