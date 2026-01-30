@@ -226,7 +226,7 @@ export class ManagementPage {
         return;
       }
 
-      await post(`/api/admin/teams/${teamId}/members`, { user_id: userId });
+      await post(`/api/admin/teams/${teamId}/members`, { userId });
       showSuccess('Team member added successfully');
       
       // Reload team members

@@ -937,6 +937,10 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       const password = uuidv4().replace(/-/g, '').slice(0, 14);
       const password_hash = await bcrypt.hash(password, 10);
       await db.client('users').insert({ id, email, name: name || email, is_admin, password_hash });
+      const defaultTeam = await db.client('teams').orderBy('created_at', 'asc').first();
+      if (defaultTeam) {
+        await db.client('team_memberships').insert({ user_id: id, team_id: defaultTeam.id });
+      }
       if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'user.create', resourceType: 'user', resourceId: id, metadata: { email, is_admin } });
       res.json({ user: { id, email, name: name || email, is_admin }, password });
     } catch (err) { next(err); }
