@@ -1649,13 +1649,15 @@ class AdminMap {
     }
     
     // Ensure data structure is correct
-    // WebSocket events have: { id, teamId, type, data: {...}, userId, ... }
-    // We need: { id, type, data: {...}, user_id, team_id, ... }
+    // WebSocket events have: { id, teamId, type, data: {...}, userId, userName, createdBy, ... }
+    // We need: { id, type, data: {...}, user_id, team_id, user_name (creator), ... }
+    // Prefer createdBy for "created by" so edits don't overwrite with editor name
     const annotation = {
       id: data.id,
       type: data.type,
       user_id: data.userId || data.user_id,
       team_id: data.teamId || data.team_id,
+      user_name: data.createdBy || data.userName || data.user_name,
       data: data.data || {},
       created_at: data.created_at,
       updated_at: data.updated_at
@@ -1751,6 +1753,9 @@ class AdminMap {
       }
       if (annotation.team_id !== undefined) {
         updatedAnnotation.team_id = annotation.team_id;
+      }
+      if (annotation.user_name !== undefined) {
+        updatedAnnotation.user_name = annotation.user_name; // createdBy / creator name
       }
       if (annotation.created_at) {
         updatedAnnotation.created_at = annotation.created_at;

@@ -145,6 +145,7 @@ export class SocketGateway {
           type: annotation.type, // Add discriminator field for Kotlinx Serialization
           id: annotation.id, // Ensure ID is in the data object
           creatorId: annotation.user_id, // Map user_id to creatorId
+          creatorUsername: (annotation as any).user_name ?? annotation.user_id,
           source: 'server', // Set source to server
           originalSource: 'server' // Set original source to server
         };

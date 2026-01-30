@@ -264,22 +264,36 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       const limit = parseInt(req.query.limit as string) || 1000;
       const since = req.query.since as string; // ISO timestamp
       
-      let query = db.client('annotations')
-        .select(['id', 'user_id', 'team_id', 'type', 'data', 'created_at', 'updated_at'])
-        .orderBy('updated_at', 'desc')
+      let query = db.client('annotations as a')
+        .leftJoin('users as u', 'a.user_id', 'u.id')
+        .select([
+          'a.id', 'a.user_id', 'a.team_id', 'a.type', 'a.data', 'a.created_at', 'a.updated_at',
+          'u.name as user_name'
+        ])
+        .orderBy('a.updated_at', 'desc')
         .limit(limit);
       
       if (teamId) {
         query = query.where(function() {
-          this.where('team_id', teamId).orWhereNull('team_id');
+          this.where('a.team_id', teamId).orWhereNull('a.team_id');
         });
       }
       
       if (since) {
-        query = query.where('updated_at', '>', since);
+        query = query.where('a.updated_at', '>', since);
       }
       
-      const annotations = await query;
+      const rows = await query;
+      const annotations = rows.map((r: any) => ({
+        id: r.id,
+        user_id: r.user_id,
+        team_id: r.team_id,
+        type: r.type,
+        data: r.data,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        user_name: r.user_name ?? (r.user_id === 'admin' ? 'Admin' : null)
+      }));
       res.json(annotations);
     } catch (err) { next(err); }
   });
@@ -422,7 +436,10 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         metadata: { teamId, type } 
       });
       
-      // Emit real-time update to admin clients
+      const creatorUser = await db.client('users').where({ id: userId }).first();
+      const creatorUsername = creatorUser?.name ?? (userId === 'admin' ? 'Admin' : userId);
+      
+      // Emit real-time update to admin clients (createdBy = creator for popover)
       if (io) {
         io.emit('admin:annotation_update', {
           id,
@@ -432,6 +449,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           userId,
           userName: 'Admin',
           userEmail: 'admin@system',
+          createdBy: creatorUsername,
           timestamp: data.timestamp
         });
         
@@ -442,6 +460,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           type: type, // Add discriminator field for Kotlinx Serialization
           id: id, // Ensure ID is in the data object
           creatorId: userId, // Map userId to creatorId
+          creatorUsername,
           source: 'server', // Set source to server
           originalSource: 'server' // Set original source to server
         };
@@ -522,6 +541,9 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         return res.status(404).json({ error: 'Annotation not found' });
       }
       
+      const creatorUser = await db.client('users').where({ id: existing.user_id }).first();
+      const creatorUsername = creatorUser?.name ?? (existing.user_id === 'admin' ? 'Admin' : existing.user_id);
+      
       // Merge with existing data
       // Handle both string and object formats (some DB drivers auto-parse JSONB)
       let existingData;
@@ -557,7 +579,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         metadata: { teamId: existing.team_id, type: existing.type } 
       });
       
-      // Emit real-time update to admin clients
+      // Emit real-time update to admin clients (createdBy = original creator for popover)
       if (io) {
         io.emit('admin:annotation_update', {
           id: annotationId,
@@ -567,6 +589,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           userId,
           userName: 'Admin',
           userEmail: 'admin@system',
+          createdBy: creatorUsername,
           timestamp: updatedData.timestamp || Date.now()
         });
         
@@ -576,7 +599,8 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           ...updatedData,
           type: existing.type, // Add discriminator field for Kotlinx Serialization
           id: annotationId, // Ensure ID is in the data object
-          creatorId: userId, // Map userId to creatorId
+          creatorId: existing.user_id, // Original creator
+          creatorUsername,
           source: 'server', // Set source to server
           originalSource: 'server' // Set original source to server
         };
@@ -1301,6 +1325,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           type: smartAnnotationType, // Add discriminator field for Kotlinx Serialization
           id: annotationId, // Ensure ID is in the data object
           creatorId: userId, // Map userId to creatorId
+          creatorUsername: 'System (Threat Detection)',
           source: 'server', // Set source to server
           originalSource: 'server' // Set original source to server
         };

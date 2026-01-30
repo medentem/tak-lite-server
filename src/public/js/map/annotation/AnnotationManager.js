@@ -278,6 +278,7 @@ export class AnnotationManager {
         description: data.description || '',
         timestamp: data.timestamp || Date.now(),
         creatorId: data.creatorId || annotation.user_id,
+        creatorUsername: data.creatorUsername || annotation.user_name || null,
         source: data.source || 'server'
       };
       

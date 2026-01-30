@@ -222,8 +222,9 @@ export class PopupManager {
    * Add common information
    */
   addCommonInfo(lines, properties, lngLat) {
-    if (properties.creatorId) {
-      lines.push(`Created by: ${properties.creatorId}`);
+    const createdBy = properties.creatorUsername || properties.creatorId;
+    if (createdBy) {
+      lines.push(`Created by: ${createdBy}`);
     }
     if (properties.source) {
       lines.push(`Source: ${properties.source}`);

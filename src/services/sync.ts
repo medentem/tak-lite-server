@@ -143,7 +143,9 @@ export class SyncService {
     const source = meshOrigin ? ' (mesh-originated)' : '';
     this.emitSyncActivity('annotation_update', `User ${userId} ${action} annotation ${id} in team ${teamId}${source}`);
     
-    return row;
+    const user = await this.db.client('users').where({ id: userId }).first();
+    const user_name = user?.name ?? (userId === 'admin' ? 'Admin' : null);
+    return { ...row, user_name };
   }
 
   private validateAnnotationData(type: string, data: any): void {
