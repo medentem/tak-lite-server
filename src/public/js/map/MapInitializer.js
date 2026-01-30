@@ -80,13 +80,32 @@ export class MapInitializer {
   }
 
   /**
-   * Create map style configuration
+   * Get map style for a given type (street = OSM, satellite = ESRI World Imagery).
+   * Matches Android app behavior: STREETS vs SATELLITE.
+   * @param {'street'|'satellite'} type
    * @returns {Object} Map style object
    */
-  createMapStyle() {
+  getStyleForType(type) {
+    if (type === 'satellite') {
+      return {
+        version: 8,
+        name: 'Satellite',
+        sources: {
+          'satellite': {
+            type: 'raster',
+            tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+            tileSize: 256,
+            attribution: '© Esri, Maxar, Earthstar Geographics'
+          }
+        },
+        layers: [
+          { id: 'satellite', type: 'raster', source: 'satellite' }
+        ]
+      };
+    }
     return {
       version: 8,
-      name: 'Dark',
+      name: 'Street',
       sources: {
         'osm': {
           type: 'raster',
@@ -100,14 +119,18 @@ export class MapInitializer {
           id: 'osm',
           type: 'raster',
           source: 'osm',
-          paint: {
-            'raster-opacity': 0.7
-          }
+          paint: { 'raster-opacity': 0.7 }
         }
       ]
-      // Removed glyphs configuration to prevent 404 errors from fonts.openmaptiles.org
-      // Since this is a simple raster style, custom fonts are not needed
     };
+  }
+
+  /**
+   * Create map style configuration (default: street).
+   * @returns {Object} Map style object
+   */
+  createMapStyle() {
+    return this.getStyleForType('street');
   }
 
   /**

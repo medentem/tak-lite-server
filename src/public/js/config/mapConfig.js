@@ -44,6 +44,9 @@ export const DISPLAY_CONFIG = {
   
   /** User location zoom level */
   userLocationZoom: 12,
+
+  /** Zoom level when flying to a single geocoded point (no bbox) — lower = more zoomed out */
+  locationSearchZoom: 10,
   
   /** Map fit bounds padding in pixels */
   fitBoundsPadding: 50

@@ -1553,6 +1553,16 @@ class AdminMap {
       });
     }
     
+    // Map style toggle (street / satellite)
+    const styleStreet = q('#map_style_street');
+    const styleSatellite = q('#map_style_satellite');
+    if (styleStreet) {
+      styleStreet.addEventListener('click', () => this.setMapStyle('street'));
+    }
+    if (styleSatellite) {
+      styleSatellite.addEventListener('click', () => this.setMapStyle('satellite'));
+    }
+
     // Refresh button
     const refreshBtn = q('#map_refresh');
     if (refreshBtn) {
@@ -1622,6 +1632,28 @@ class AdminMap {
   }
 
   /**
+   * Switch map base style between street (OSM) and satellite (ESRI), matching Android app.
+   * @param {'street'|'satellite'} type
+   */
+  setMapStyle(type) {
+    if (!this.map || !this.mapInitializer) return;
+    const style = this.mapInitializer.getStyleForType(type);
+    if (!style) return;
+    this.currentMapType = type;
+    this.map.setStyle(style);
+    const streetBtn = q('#map_style_street');
+    const satelliteBtn = q('#map_style_satellite');
+    if (streetBtn) {
+      streetBtn.classList.toggle('active', type === 'street');
+      streetBtn.setAttribute('aria-pressed', type === 'street' ? 'true' : 'false');
+    }
+    if (satelliteBtn) {
+      satelliteBtn.classList.toggle('active', type === 'satellite');
+      satelliteBtn.setAttribute('aria-pressed', type === 'satellite' ? 'true' : 'false');
+    }
+  }
+
+  /**
    * Geocode a query via server proxy (avoids CORS; Nominatim is called server-side).
    * @param {string} query - Address, city, zip, or place name
    * @returns {Promise<{ lat: number, lon: number, bbox?: number[], display_name?: string }|null>}
@@ -1665,7 +1697,8 @@ class AdminMap {
       const [south, north, west, east] = bbox;
       this.boundsManager.fitBounds([[west, south], [east, north]], { duration: 1000 });
     } else {
-      this.boundsManager.centerOnCoordinates(lon, lat, 12);
+      const zoom = DISPLAY_CONFIG.locationSearchZoom ?? 10;
+      this.boundsManager.centerOnCoordinates(lon, lat, zoom);
     }
     this.showFeedback('Location found', 2000);
   }

@@ -247,6 +247,37 @@ body.dashboard-visible .container #dash {
   border-color: rgba(239, 68, 68, 0.5);
 }
 
+.map-style-toggle {
+  display: flex;
+  gap: 0;
+  background: rgba(17, 26, 43, 0.9);
+  border: 1px solid rgba(31, 42, 68, 0.5);
+  border-radius: 6px;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+}
+
+.map-style-btn {
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.map-style-btn:hover {
+  color: var(--text);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.map-style-btn.active {
+  background: rgba(59, 130, 246, 0.25);
+  color: var(--text);
+  font-weight: 500;
+}
+
 .map-control-toggle {
   display: flex;
   flex-direction: column;
