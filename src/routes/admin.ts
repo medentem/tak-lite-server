@@ -590,7 +590,10 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         existingData = existing.data;
       }
       const mergedData = { ...existingData, ...data };
-      
+      // Bump timestamp so clients (e.g. Android HybridSyncManager) treat this as a new version
+      // and do not skip as "duplicate annotation version" when only label/description changed
+      mergedData.timestamp = Date.now();
+
       await db.client('annotations')
         .where({ id: annotationId })
         .update({
