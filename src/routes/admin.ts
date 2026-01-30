@@ -118,6 +118,43 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
     res.json({ setupCompleted: !!(await config.get('setup.completed')) });
   });
 
+  // Geocode proxy for command palette / map search (avoids CORS; Nominatim requires server-side requests)
+  router.get('/geocode', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const q = (req.query.q as string)?.trim();
+      if (!q) return res.status(400).json({ error: 'Missing query parameter q' });
+      const params = new URLSearchParams({
+        q,
+        format: 'json',
+        limit: '1',
+        addressdetails: '1'
+      });
+      const nominatimRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?${params}`,
+        { headers: { 'Accept-Language': 'en', 'User-Agent': 'TAK-Lite-Server/1.0 (admin map search)' } }
+      );
+      if (!nominatimRes.ok) {
+        return res.status(nominatimRes.status).json({ error: 'Geocoding service unavailable' });
+      }
+      const data = (await nominatimRes.json()) as any[];
+      const first = data?.[0];
+      if (!first || first.lat == null || first.lon == null) {
+        return res.json({ lat: null, lon: null, bbox: null, display_name: null });
+      }
+      const bbox = Array.isArray(first.boundingbox)
+        ? first.boundingbox.map((v: string | number) => Number(v))
+        : null;
+      res.json({
+        lat: parseFloat(first.lat),
+        lon: parseFloat(first.lon),
+        bbox: bbox && bbox.length >= 4 ? bbox : null,
+        display_name: first.display_name ?? null
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get('/version', async (_req: Request, res: Response) => {
     try {
       // Try multiple possible locations for package.json

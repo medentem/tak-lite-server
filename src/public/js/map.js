@@ -1622,35 +1622,21 @@ class AdminMap {
   }
 
   /**
-   * Geocode a query using Nominatim (OpenStreetMap). Respects rate limits with User-Agent.
+   * Geocode a query via server proxy (avoids CORS; Nominatim is called server-side).
    * @param {string} query - Address, city, zip, or place name
-   * @returns {Promise<{ lat: number, lon: number, bbox?: [south, north, west, east], display_name?: string }|null>}
+   * @returns {Promise<{ lat: number, lon: number, bbox?: number[], display_name?: string }|null>}
    */
   async geocodeQuery(query) {
     const trimmed = (query || '').trim();
     if (!trimmed) return null;
     try {
-      const params = new URLSearchParams({
-        q: trimmed,
-        format: 'json',
-        limit: '1',
-        addressdetails: '1'
-      });
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?${params}`,
-        {
-          headers: { 'Accept-Language': 'en', 'User-Agent': 'TAK-Lite-Admin/1.0 (map search)' }
-        }
-      );
-      if (!res.ok) return null;
-      const data = await res.json();
-      const first = data && data[0];
-      if (!first || first.lat == null || first.lon == null) return null;
+      const result = await get(`/api/admin/geocode?q=${encodeURIComponent(trimmed)}`);
+      if (!result || result.lat == null || result.lon == null) return null;
       return {
-        lat: parseFloat(first.lat),
-        lon: parseFloat(first.lon),
-        bbox: first.boundingbox ? first.boundingbox.map(Number) : null,
-        display_name: first.display_name
+        lat: Number(result.lat),
+        lon: Number(result.lon),
+        bbox: Array.isArray(result.bbox) && result.bbox.length >= 4 ? result.bbox : null,
+        display_name: result.display_name
       };
     } catch (err) {
       logger.error('Geocoding failed', err);

@@ -21,9 +21,6 @@ export class CommandPalette {
       ...options
     };
 
-    this.locationSearchMode = false;
-    this.defaultPlaceholder = 'Type a command or search...';
-
     this.init();
   }
 
@@ -50,30 +47,27 @@ export class CommandPalette {
     
     // Input handler
     this.input.addEventListener('input', (e) => {
-      if (!this.locationSearchMode) {
-        this.filter(e.target.value);
-      }
+      this.filter(e.target.value);
     });
     
     // Keyboard navigation
     this.input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        if (this.locationSearchMode) {
-          const query = (this.input?.value || '').trim();
-          if (this.options.onLocationSearch) {
-            this.options.onLocationSearch(query);
-          }
+        const query = (this.input?.value || '').trim();
+        // If no command matches and user typed something, treat as location search
+        if (this.filteredCommands.length === 0 && query.length > 0 && this.options.onLocationSearch) {
+          this.options.onLocationSearch(query);
           this.hide();
           return;
         }
         this.executeSelected();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        if (!this.locationSearchMode) this.selectNext();
+        this.selectNext();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        if (!this.locationSearchMode) this.selectPrevious();
+        this.selectPrevious();
       }
     });
     
@@ -139,16 +133,6 @@ export class CommandPalette {
         }
       },
       {
-        id: 'search-location',
-        title: 'Search location',
-        description: 'Search city, zip, or address and zoom map',
-        icon: '⌕',
-        shortcut: 'G',
-        action: () => {
-          this.enterLocationSearchMode();
-        }
-      },
-      {
         id: 'center-map',
         title: 'Center Map',
         description: 'Reset map view to center',
@@ -197,8 +181,12 @@ export class CommandPalette {
   render() {
     if (!this.results) return;
     
+    const query = (this.input?.value || '').trim();
     if (this.filteredCommands.length === 0) {
-      this.results.innerHTML = '<div class="command-palette-item"><div class="command-palette-item-content"><div class="command-palette-item-title">No commands found</div></div></div>';
+      const hint = query.length > 0
+        ? 'Press Enter to search as location'
+        : 'No commands found';
+      this.results.innerHTML = `<div class="command-palette-item"><div class="command-palette-item-content"><div class="command-palette-item-description">${hint}</div></div></div>`;
       return;
     }
     
@@ -261,9 +249,7 @@ export class CommandPalette {
   show() {
     if (this.palette) {
       this.palette.classList.remove('hidden');
-      this.locationSearchMode = false;
       if (this.input) {
-        this.input.placeholder = this.defaultPlaceholder;
         this.input.focus();
         this.input.select();
       }
@@ -274,27 +260,10 @@ export class CommandPalette {
   hide() {
     if (this.palette) {
       this.palette.classList.add('hidden');
-      this.locationSearchMode = false;
       if (this.input) {
         this.input.value = '';
-        this.input.placeholder = this.defaultPlaceholder;
       }
       this.selectedIndex = 0;
-    }
-  }
-
-  /**
-   * Switch to location search: user types address in the same input and presses Enter.
-   */
-  enterLocationSearchMode() {
-    this.locationSearchMode = true;
-    if (this.input) {
-      this.input.value = '';
-      this.input.placeholder = 'Enter city, zip, or address...';
-      this.input.focus();
-    }
-    if (this.results) {
-      this.results.innerHTML = '<div class="command-palette-item"><div class="command-palette-item-content"><div class="command-palette-item-description">Press Enter to search and zoom map</div></div></div>';
     }
   }
 }
