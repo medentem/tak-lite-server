@@ -33,12 +33,11 @@ export class MapWebSocketManager {
       logger.warn('WebSocket not available');
       return;
     }
-    
+
     if (this.isConnected) {
-      logger.warn('WebSocket already connected');
       return;
     }
-    
+
     logger.debug('Setting up map WebSocket listeners...');
     
     // Listen for annotation updates

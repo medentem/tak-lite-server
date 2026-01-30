@@ -102,6 +102,7 @@ class WebSocketService {
       this.reconnectAttempts = 0;
       this.updateStatus('Connected', '#22c55e');
       this.emit('connected');
+      document.dispatchEvent(new CustomEvent('socketConnected'));
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -109,6 +110,7 @@ class WebSocketService {
       this.isConnecting = false;
       this.updateStatus('Disconnected', '#ef4444');
       this.emit('disconnected', reason);
+      document.dispatchEvent(new CustomEvent('socketDisconnected', { detail: { reason } }));
 
       // Attempt reconnection if not intentional
       if (reason !== 'io client disconnect') {
