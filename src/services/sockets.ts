@@ -386,17 +386,24 @@ export class SocketGateway {
   }
   
   // Emit annotation update to admin users (always emit so dashboard shows client-created annotations even when user not in DB)
+  // Include teamId/userId (camelCase) so dashboard team filter and payload shape match admin routes
   public emitAdminAnnotationUpdate(userId: string, annotation: any) {
     this.getUserInfo(userId).then(userInfo => {
       const adminEventData = {
         ...annotation,
+        teamId: annotation.team_id ?? annotation.teamId,
+        userId: annotation.user_id ?? annotation.userId ?? userId,
         user_name: userInfo?.name ?? annotation.user_name ?? userId,
         user_email: userInfo?.email ?? annotation.user_email ?? ''
       };
       this.io.emit('admin:annotation_update', adminEventData);
     }).catch(error => {
       console.error('[SOCKET] Failed to get user info for admin annotation update:', error);
-      this.io.emit('admin:annotation_update', annotation);
+      this.io.emit('admin:annotation_update', {
+        ...annotation,
+        teamId: annotation.team_id ?? annotation.teamId,
+        userId: annotation.user_id ?? annotation.userId ?? userId
+      });
     });
   }
 
