@@ -68,11 +68,12 @@
         try {
           setLoading(loginBtn, true);
           const data = await post('/api/auth/login?cookie=1', { username, password });
-          
+          if (!data?.token) {
+            showMessage('Login failed. Please check your credentials.', 'error', loginMsg);
+            return;
+          }
           setToken(data.token);
           showMessage('Login successful! Redirecting...', 'success', loginMsg);
-          
-          // Redirect to admin dashboard after successful login
           setTimeout(() => {
             window.location.href = '/admin';
           }, 500);

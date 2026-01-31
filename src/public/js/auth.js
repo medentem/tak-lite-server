@@ -84,7 +84,10 @@ export class Auth {
       }
 
       const data = await post('/api/auth/login?cookie=1', { username, password });
-      
+      if (!data?.token) {
+        showError('Login failed. Please check your credentials.');
+        return false;
+      }
       currentToken = data.token;
       setToken(data.token);
       // Fetch whoami so we have isAdmin for the dashboard
