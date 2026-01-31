@@ -278,7 +278,14 @@ th {
   margin-top: 16px;
   background: #0c1527;
   border-radius: 8px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: visible;
+  min-width: 0;
+}
+
+.users-table table, .teams-table table {
+  width: 100%;
+  table-layout: fixed;
 }
 
 .users-table th, .teams-table th {
@@ -291,6 +298,33 @@ th {
 .users-table td, .teams-table td {
   padding: 12px;
   border-bottom: 1px solid #1f2a44;
+}
+
+/* Email/Name columns: wrap long text so row fits container and Actions stay visible */
+.users-table th:nth-child(1), .users-table td:nth-child(1),
+.users-table th:nth-child(2), .users-table td:nth-child(2),
+.teams-table th:nth-child(1), .teams-table td:nth-child(1),
+.teams-table th:nth-child(2), .teams-table td:nth-child(2) {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.users-table th:nth-child(1), .users-table td:nth-child(1),
+.teams-table th:nth-child(1), .teams-table td:nth-child(1) {
+  width: 28%;
+}
+
+.users-table th:nth-child(2), .users-table td:nth-child(2),
+.teams-table th:nth-child(2), .teams-table td:nth-child(2) {
+  width: 22%;
+}
+
+/* Actions column: keep buttons on one line and visible */
+.users-table th:nth-child(4), .users-table td:nth-child(4),
+.teams-table th:nth-child(3), .teams-table td:nth-child(3) {
+  width: 35%;
+  min-width: 140px;
+  white-space: nowrap;
 }
 
 /* Fixed Input Widths */
