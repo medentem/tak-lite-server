@@ -5,14 +5,23 @@
 import { q } from '../utils/dom.js';
 
 export class Navigation {
-  constructor() {
+  constructor(isAdmin = true) {
     this.currentPage = 'dashboard';
-    this.pages = ['dashboard', 'settings', 'management', 'threats', 'messages'];
+    this.isAdmin = isAdmin;
+    this.pages = isAdmin ? ['dashboard', 'settings', 'management', 'threats', 'messages'] : ['dashboard'];
     this.init();
   }
 
   init() {
     this.setupNavigationLinks();
+    if (!this.isAdmin) {
+      ['threats', 'messages', 'settings', 'management'].forEach((page) => {
+        const link = q(`#nav-${page}`);
+        if (link) link.style.display = 'none';
+      });
+      const socialLink = q('#nav-social');
+      if (socialLink) socialLink.style.display = 'none';
+    }
     this.setupBrowserHistory();
     this.checkInitialPage();
   }
@@ -43,6 +52,9 @@ export class Navigation {
       this.navigate(hash, false);
     } else {
       this.navigate('dashboard', false);
+    }
+    if (!this.isAdmin) {
+      document.body.classList.add('dashboard-visible');
     }
   }
 

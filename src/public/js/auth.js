@@ -12,6 +12,7 @@ let currentToken = getToken() || '';
 export class Auth {
   constructor() {
     this.isAuthenticated = false;
+    this.isAdmin = false;
   }
 
   async checkExistingAuth() {
@@ -35,6 +36,7 @@ export class Auth {
 
       if (res.ok) {
         const userData = await res.json();
+        this.isAdmin = !!userData.isAdmin;
         this.setAuthenticated(true, userData.name ?? userData.email);
         return true;
       }
@@ -43,6 +45,7 @@ export class Auth {
     }
 
     this.setAuthenticated(false);
+    this.isAdmin = false;
     return false;
   }
 
@@ -55,6 +58,7 @@ export class Auth {
 
       if (res.ok) {
         const userData = await res.json();
+        this.isAdmin = !!userData.isAdmin;
         this.setAuthenticated(true, userData.name ?? userData.email);
         return true;
       } else {
@@ -65,6 +69,7 @@ export class Auth {
     } catch (e) {
       removeToken();
       currentToken = '';
+      this.isAdmin = false;
       return false;
     }
   }
@@ -82,6 +87,20 @@ export class Auth {
       
       currentToken = data.token;
       setToken(data.token);
+      // Fetch whoami so we have isAdmin for the dashboard
+      try {
+        const whoRes = await fetch('/api/auth/whoami', {
+          method: 'GET',
+          credentials: 'include',
+          headers: { 'Authorization': `Bearer ${data.token}` }
+        });
+        if (whoRes.ok) {
+          const userData = await whoRes.json();
+          this.isAdmin = !!userData.isAdmin;
+        }
+      } catch (_) {
+        this.isAdmin = false;
+      }
       this.setAuthenticated(true, username);
       
       showSuccess('Login successful!');
@@ -120,7 +139,8 @@ export class Auth {
 
   setAuthenticated(authenticated, displayName = null) {
     this.isAuthenticated = authenticated;
-    
+    if (!authenticated) this.isAdmin = false;
+
     const loginCard = q('#loginCard');
     const logoutBtn = q('#logout');
     const whoSpan = q('#who');

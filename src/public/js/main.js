@@ -36,12 +36,12 @@ class AdminApp {
       const isAuthenticated = await auth.checkExistingAuth();
       
       if (isAuthenticated) {
-        this.setupAuthenticatedApp();
+        this.setupAuthenticatedApp(auth.isAdmin);
       } else {
         // Wait for login
         document.addEventListener('authChanged', (e) => {
           if (e.detail.authenticated) {
-            this.setupAuthenticatedApp();
+            this.setupAuthenticatedApp(auth.isAdmin);
           }
         });
       }
@@ -67,10 +67,10 @@ class AdminApp {
     }
   }
 
-  setupAuthenticatedApp() {
+  setupAuthenticatedApp(isAdmin = true) {
     try {
-      // Initialize navigation
-      this.navigation = new Navigation();
+      // Initialize navigation (non-admins only see dashboard)
+      this.navigation = new Navigation(isAdmin);
 
       // Connect WebSocket (only after auth is confirmed)
       if (typeof io !== 'undefined') {

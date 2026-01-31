@@ -291,9 +291,40 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
 // Auth routes after setup
 app.use('/api/auth', createAuthRouter(databaseService, configService));
 
-// Admin routes (admin only)
+// Admin routes: authenticate required; non-admins may only use read-only dashboard/map endpoints
 const auth = createAuthMiddleware(configService);
-app.use('/api/admin', auth.authenticate, auth.adminOnly, createAdminRouter(configService, databaseService, io));
+const dashboardReadOnlyPaths = ['/config', '/version', '/stats', '/geocode', '/teams'];
+function allowDashboardOrAdmin(req: Request, res: Response, next: NextFunction): void {
+  if ((req.user as any)?.is_admin) {
+    next();
+    return;
+  }
+  if (req.method !== 'GET') {
+    if (req.headers.accept?.includes('text/html')) {
+      res.redirect('/login');
+      return;
+    }
+    res.status(403).json({ error: 'Admin required' });
+    return;
+  }
+  const path = req.path; // path is relative to mount /api/admin
+  const allowed =
+    dashboardReadOnlyPaths.some((p) => path === p || path.startsWith(p + '/')) ||
+    path === '/map/annotations' ||
+    path.startsWith('/map/annotations/') ||
+    path === '/map/locations' ||
+    path === '/map/locations/latest';
+  if (allowed) {
+    next();
+    return;
+  }
+  if (req.headers.accept?.includes('text/html')) {
+    res.redirect('/login');
+    return;
+  }
+  res.status(403).json({ error: 'Admin required' });
+}
+app.use('/api/admin', auth.authenticate, allowDashboardOrAdmin, createAdminRouter(configService, databaseService, io));
 
 // Social media monitoring routes will be registered after migrations
 
@@ -311,8 +342,8 @@ app.get('/login', (_req: Request, res: Response) => {
   res.sendFile(file);
 });
 
-// Serve admin UI (requires authentication and admin role)
-app.get('/admin', auth.authenticate, auth.adminOnly, async (req: Request, res: Response, next: NextFunction) => {
+// Serve admin/dashboard UI (requires authentication; non-admins see map only)
+app.get('/admin', auth.authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     res.setHeader('Content-Type', 'text/html');
     // CSP for admin: allow Socket.IO CDN, MapLibre CDN, map tiles (OSM + ESRI satellite), web workers, local scripts, and inline scripts
