@@ -91,10 +91,13 @@ class AdminApp {
         setTimeout(() => clearInterval(checkSocketIO), 5000);
       }
 
-      // Initialize pages
-      Object.values(this.pages).forEach(page => {
+      // Initialize pages (non-admins only get dashboard to avoid 403s on admin-only API calls)
+      const pagesToInit = isAdmin
+        ? Object.values(this.pages)
+        : [this.pages.dashboard];
+      pagesToInit.forEach(page => {
         try {
-          if (page.init) {
+          if (page && page.init) {
             page.init();
           }
         } catch (error) {

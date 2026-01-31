@@ -21,6 +21,12 @@ const resetPasswordLimiter = rateLimit({
   message: 'Too many password reset attempts; try again later.'
 });
 
+/** Return team IDs the user is a member of (for non-admin scoping). */
+async function getUserTeamIds(database: DatabaseService, userId: string): Promise<string[]> {
+  const rows = await database.client('team_memberships').where('user_id', userId).select('team_id');
+  return rows.map((r: { team_id: string }) => r.team_id);
+}
+
 export function createAdminRouter(config: ConfigService, db?: DatabaseService, io?: Server) {
   const router = Router();
   const audit = db ? new AuditService(db) : null;
@@ -214,10 +220,17 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
   });
 
   // Lightweight team/user reads to support visibility and credential distribution
-  router.get('/teams', async (_req: Request, res: Response, next: NextFunction) => {
+  router.get('/teams', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.json([]);
-      const teams = await db.client('teams').select(['id', 'name', 'created_at']).orderBy('name');
+      const user = req.user as { sub?: string; is_admin?: boolean } | undefined;
+      let query = db.client('teams').select(['id', 'name', 'created_at']).orderBy('name');
+      if (user && !user.is_admin && user.sub) {
+        const teamIds = await getUserTeamIds(db, user.sub);
+        if (teamIds.length === 0) return res.json([]);
+        query = query.whereIn('id', teamIds);
+      }
+      const teams = await query;
       res.json(teams);
     } catch (err) { next(err); }
   });
@@ -225,10 +238,16 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
   router.get('/teams/:teamId/members', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.json([]);
+      const user = req.user as { sub?: string; is_admin?: boolean } | undefined;
+      const teamId = req.params.teamId;
+      if (user && !user.is_admin && user.sub) {
+        const teamIds = await getUserTeamIds(db, user.sub);
+        if (!teamIds.includes(teamId)) return res.status(403).json({ error: 'Access denied to this team' });
+      }
       const members = await db
         .client('team_memberships as tm')
         .join('users as u', 'u.id', 'tm.user_id')
-        .where('tm.team_id', req.params.teamId)
+        .where('tm.team_id', teamId)
         .select(['u.id', 'u.email', 'u.name', 'u.is_admin']);
       res.json(members);
     } catch (err) { next(err); }
@@ -309,6 +328,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       const teamId = req.query.teamId as string;
       const limit = parseInt(req.query.limit as string) || 1000;
       const since = req.query.since as string; // ISO timestamp
+      const user = req.user as { sub?: string; is_admin?: boolean } | undefined;
       
       let query = db.client('annotations as a')
         .leftJoin('users as u', 'a.user_id', 'u.id')
@@ -319,7 +339,12 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         .orderBy('a.updated_at', 'desc')
         .limit(limit);
       
-      if (teamId) {
+      if (user && !user.is_admin && user.sub) {
+        const allowedTeamIds = await getUserTeamIds(db, user.sub);
+        query = query.where(function() {
+          this.whereIn('a.team_id', allowedTeamIds).orWhereNull('a.team_id');
+        });
+      } else if (teamId) {
         query = query.where(function() {
           this.where('a.team_id', teamId).orWhereNull('a.team_id');
         });
@@ -351,6 +376,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       const teamId = req.query.teamId as string;
       const limit = parseInt(req.query.limit as string) || 100;
       const since = req.query.since as string; // ISO timestamp
+      const user = req.user as { sub?: string; is_admin?: boolean } | undefined;
       
       let query = db.client('locations as l')
         .join('users as u', 'u.id', 'l.user_id')
@@ -362,7 +388,12 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         .orderBy('l.timestamp', 'desc')
         .limit(limit);
       
-      if (teamId) {
+      if (user && !user.is_admin && user.sub) {
+        const allowedTeamIds = await getUserTeamIds(db, user.sub);
+        query = query.where(function() {
+          this.whereIn('l.team_id', allowedTeamIds).orWhereNull('l.team_id');
+        });
+      } else if (teamId) {
         query = query.where(function() {
           this.where('l.team_id', teamId).orWhereNull('l.team_id');
         });
@@ -382,9 +413,17 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       if (!db) return res.json([]);
       
       const teamId = req.query.teamId as string;
+      const user = req.user as { sub?: string; is_admin?: boolean } | undefined;
       
       if (!teamId) {
         return res.status(400).json({ error: 'teamId is required' });
+      }
+      
+      if (user && !user.is_admin && user.sub) {
+        const allowedTeamIds = await getUserTeamIds(db, user.sub);
+        if (!allowedTeamIds.includes(teamId)) {
+          return res.status(403).json({ error: 'Access denied to this team' });
+        }
       }
       
       // Get latest location for each user in the team
