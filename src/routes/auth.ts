@@ -34,10 +34,24 @@ export function createAuthRouter(db: DatabaseService, config: ConfigService) {
 
   router.post('/login', loginLimiter, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const schema = Joi.object({ username: Joi.string().min(1).required(), password: Joi.string().required() });
-      const { username, password } = await schema.validateAsync(req.body);
-      
-      const user = await db.client('users').where({ name: username }).first();
+      // Accept either username or email for backward compatibility (e.g. legacy Android sends "email")
+      const schema = Joi.object({
+        username: Joi.string().min(1).optional(),
+        email: Joi.string().min(1).optional(), // allow any string; lookup by name or email
+        password: Joi.string().required()
+      }).or('username', 'email');
+      const body = await schema.validateAsync(req.body);
+      const password = body.password as string;
+      const loginId = (body.username && String(body.username).trim()) || (body.email && String(body.email).trim());
+      if (!loginId) {
+        return res.status(400).json({ error: '"username" or "email" is required' });
+      }
+
+      // Look up by username (name) first, then by email for backward compatibility
+      let user = await db.client('users').where({ name: loginId }).first();
+      if (!user) {
+        user = await db.client('users').where({ email: loginId }).first();
+      }
       if (!user) {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
