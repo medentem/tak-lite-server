@@ -1,3 +1,26 @@
+// On load: show setup key field when server requires it; pre-fill from ?key=...
+(function initSetupPage() {
+  const params = new URLSearchParams(window.location.search);
+  const keyFromUrl = params.get('key');
+  const setupKeyEl = document.getElementById('setupKey');
+  const setupKeyGroup = document.getElementById('setupKeyGroup');
+
+  fetch('/api/setup/status')
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data.requiresSetupKey && setupKeyGroup) {
+        setupKeyGroup.classList.remove('hidden');
+        if (setupKeyEl && keyFromUrl) setupKeyEl.value = keyFromUrl;
+      }
+    })
+    .catch(function () {
+      if (keyFromUrl && setupKeyGroup) {
+        setupKeyGroup.classList.remove('hidden');
+        if (setupKeyEl) setupKeyEl.value = keyFromUrl;
+      }
+    });
+})();
+
 document.getElementById('submit').onclick = async () => {
   const submitBtn = document.getElementById('submit');
   const msgEl = document.getElementById('msg');
@@ -13,6 +36,8 @@ document.getElementById('submit').onclick = async () => {
     const password = document.getElementById('password').value;
     const orgName = document.getElementById('org').value.trim();
     const corsOrigin = document.getElementById('cors').value.trim();
+    const setupKeyEl = document.getElementById('setupKey');
+    const setupKey = setupKeyEl ? setupKeyEl.value : '';
     
     if (!email || !password || !orgName) {
       showMessage('Please fill in all required fields', 'error');
@@ -28,6 +53,12 @@ document.getElementById('submit').onclick = async () => {
       showMessage('Please enter a valid email address', 'error');
       return;
     }
+
+    const setupKeyGroup = document.getElementById('setupKeyGroup');
+    if (setupKeyGroup && !setupKeyGroup.classList.contains('hidden') && !setupKey) {
+      showMessage('Setup key is required by this deployment.', 'error');
+      return;
+    }
     
     const payload = {
       adminEmail: email,
@@ -35,6 +66,7 @@ document.getElementById('submit').onclick = async () => {
       orgName: orgName,
       corsOrigin: corsOrigin
     };
+    if (setupKey) payload.setupKey = setupKey;
     
     const res = await fetch('/api/setup/complete', { 
       method: 'POST', 

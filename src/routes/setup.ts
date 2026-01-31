@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import Joi from 'joi';
 import { DatabaseService } from '../services/database';
@@ -15,13 +16,29 @@ const setupCompleteLimiter = rateLimit({
   message: 'Too many setup attempts; try again later.'
 });
 
+/** When SETUP_SECRET is set, setup can only be completed by someone who provides it (eliminates setup race). */
+function getSetupSecret(): string | undefined {
+  return process.env.SETUP_SECRET?.trim() || undefined;
+}
+
+function verifySetupKey(provided: string): boolean {
+  const expected = getSetupSecret();
+  if (!expected) return true;
+  if (!provided || typeof provided !== 'string') return false;
+  const a = Buffer.from(provided, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
 export function createSetupRouter(db: DatabaseService, config: ConfigService) {
   const router = Router();
   const security = new SecurityService(config);
 
   router.get('/status', async (_req, res) => {
     const completed = await config.get<boolean>('setup.completed');
-    res.json({ completed: !!completed });
+    const requiresSetupKey = !!getSetupSecret();
+    res.json({ completed: !!completed, requiresSetupKey });
   });
 
   router.post('/complete', setupCompleteLimiter, async (req, res, next) => {
@@ -30,12 +47,21 @@ export function createSetupRouter(db: DatabaseService, config: ConfigService) {
         adminEmail: Joi.string().email().required(),
         adminPassword: Joi.string().min(10).required(),
         orgName: Joi.string().min(2).required(),
-        corsOrigin: Joi.string().allow('').optional()
+        corsOrigin: Joi.string().allow('').optional(),
+        setupKey: Joi.string().allow('').optional()
       });
-      const { adminEmail, adminPassword, orgName, corsOrigin } = await schema.validateAsync(req.body);
+      const { adminEmail, adminPassword, orgName, corsOrigin, setupKey } = await schema.validateAsync(req.body);
 
       const already = await config.get<boolean>('setup.completed');
       if (already) return res.status(400).json({ error: 'Setup already completed' });
+
+      if (!verifySetupKey(setupKey ?? '')) {
+        return res.status(403).json({
+          error: getSetupSecret()
+            ? 'Invalid or missing setup key. Set SETUP_SECRET in your deployment environment and provide it here.'
+            : 'Setup key was provided but this server does not require one.'
+        });
+      }
 
       const password_hash = await bcrypt.hash(adminPassword, 10);
       const adminId = uuidv4();

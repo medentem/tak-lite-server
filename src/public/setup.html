@@ -19,6 +19,13 @@
       </div>
       
       <div class="card">
+        <div id="setupKeyGroup" class="field-group hidden">
+          <label for="setupKey">Setup Key</label>
+          <input id="setupKey" type="password" placeholder="Enter the setup key from your deployment" autocomplete="one-time-code" />
+          <div class="help-text">
+            <strong>Required by this deployment.</strong> Set <code>SETUP_SECRET</code> in your app environment (e.g. DigitalOcean App Platform) and enter the same value here. Only someone with this key can complete setup.
+          </div>
+        </div>
         <div class="field-group">
           <label for="email">Admin Email Address</label>
           <input id="email" type="email" placeholder="admin@example.com" required />

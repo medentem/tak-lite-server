@@ -36,10 +36,10 @@ deploy/
    - Go to [DigitalOcean App Platform](https://cloud.digitalocean.com/apps)
    - Click "Create App" → "GitHub" → Select your repository
    - Use the configuration from `.do/app.yaml`
-   - Set environment variables in the UI
+   - Set environment variables in the UI (e.g. `JWT_SECRET`; optionally `SETUP_SECRET` for secure first-time setup)
    - Deploy!
 
-**Configuration**: See `.do/app.yaml` for complete configuration.
+**Configuration**: See `.do/app.yaml` for complete configuration. To prevent anyone who finds your app URL from completing setup before you do, set **SETUP_SECRET** (as a secret) in the app's environment; then open `/setup` and enter that value in the "Setup Key" field (or use a claim link: `/setup?key=your-secret`).
 
 ### 2. DigitalOcean Droplets with Docker (Most Control)
 
