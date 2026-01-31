@@ -40,8 +40,8 @@ header {
   gap: 16px;
 }
 
-/* Form Elements */
-input, button, select, textarea {
+/* Form Elements - exclude checkbox/radio so they keep intrinsic size */
+input:not([type="checkbox"]):not([type="radio"]), button, select, textarea {
   height: 40px;
   border-radius: 8px;
   border: 1px solid #233153;
@@ -49,6 +49,13 @@ input, button, select, textarea {
   color: var(--text);
   padding: 0 12px;
   font-size: 14px;
+}
+
+input[type="checkbox"], input[type="radio"] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  flex-shrink: 0;
 }
 
 input::placeholder {
@@ -273,14 +280,14 @@ th {
   float: right;
 }
 
-/* Fixed Input Widths */
-.field-group input {
+/* Fixed Input Widths - exclude checkbox/radio so they don't stretch */
+.field-group input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
   box-sizing: border-box;
   max-width: 100%;
 }
 
-.row input {
+.row input:not([type="checkbox"]):not([type="radio"]) {
   flex: 1;
   min-width: 0;
 }
