@@ -3,7 +3,7 @@
  */
 
 import { q, showMessage, showError, showSuccess } from '../utils/dom.js';
-import { get, post, del } from '../utils/api.js';
+import { get, post, put, del } from '../utils/api.js';
 import { escapeHtml } from '../utils/formatting.js';
 
 export class ManagementPage {
@@ -62,7 +62,9 @@ export class ManagementPage {
       const action = btn.dataset.act;
       const id = btn.dataset.id || btn.dataset.uid;
 
-      if (action === 'reset') {
+      if (action === 'edit') {
+        this.showEditUserModal(id);
+      } else if (action === 'reset') {
         this.resetUserPassword(id);
       } else if (action === 'del') {
         this.deleteUser(id);
@@ -70,6 +72,72 @@ export class ManagementPage {
         this.removeTeamMember(id);
       }
     });
+  }
+
+  showEditUserModal(userId) {
+    const user = this.users.find((u) => u.id === userId);
+    if (!user) return;
+    const existing = document.getElementById('user-edit-modal');
+    if (existing) existing.remove();
+    const modalHtml = `
+      <div id="user-edit-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+        <div class="card" style="min-width: 320px; max-width: 420px;">
+          <h3 style="margin-top: 0;">Edit User</h3>
+          <div class="field-group">
+            <label for="user-edit-name">Username</label>
+            <input type="text" id="user-edit-name" value="${escapeHtml(user.name)}" />
+          </div>
+          <div class="field-group">
+            <label for="user-edit-email">Email (optional)</label>
+            <input type="email" id="user-edit-email" value="${user.email ? escapeHtml(user.email) : ''}" placeholder="Optional" />
+          </div>
+          <div class="field-group" style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="user-edit-admin" ${user.is_admin ? 'checked' : ''} />
+            <label for="user-edit-admin" style="margin: 0;">Administrator</label>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button type="button" id="user-edit-cancel" class="secondary">Cancel</button>
+            <button type="button" id="user-edit-save" class="primary">Save</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = document.getElementById('user-edit-modal');
+    const cancelBtn = document.getElementById('user-edit-cancel');
+    const saveBtn = document.getElementById('user-edit-save');
+    const closeModal = () => {
+      if (modal) modal.remove();
+    };
+    cancelBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+    saveBtn.addEventListener('click', () => {
+      this.saveUserEdit(userId, closeModal);
+    });
+  }
+
+  async saveUserEdit(userId, closeModal) {
+    try {
+      const name = q('#user-edit-name')?.value.trim();
+      const email = q('#user-edit-email')?.value.trim();
+      const isAdmin = q('#user-edit-admin')?.checked ?? false;
+      if (!name) {
+        showError('Username is required');
+        return;
+      }
+      await put(`/api/admin/users/${userId}`, {
+        name,
+        email: email || null,
+        is_admin: isAdmin
+      });
+      showSuccess('User updated');
+      closeModal();
+      await this.loadData();
+    } catch (error) {
+      showError(`Failed to update user: ${error.message}`);
+    }
   }
 
   async loadData() {
@@ -106,6 +174,7 @@ export class ManagementPage {
           ${u.is_admin ? '<span class="user-row-admin">Admin</span>' : ''}
         </div>
         <div class="user-row-actions">
+          <button data-act="edit" data-id="${u.id}" class="secondary">Edit</button>
           <button data-act="reset" data-id="${u.id}" class="secondary">Reset PW</button>
           <button data-act="del" data-id="${u.id}" class="secondary">Delete</button>
         </div>
