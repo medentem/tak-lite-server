@@ -45,17 +45,20 @@ deploy/
 
 If you see **"self signed certificate in certificate chain"** or DB connection failures when using a managed database (e.g. DigitalOcean App Platform with a linked DB):
 
-1. **CA cert format**  
-   The app now normalizes `DATABASE_CA_CERT`: it replaces literal `\n` in the env value with real newlines so Node TLS can parse the PEM. DigitalOcean often injects the CA cert with `\n` as two characters; without normalization, verification fails. No change is required on your side—just ensure `DATABASE_CA_CERT` is set from the DB component (e.g. `${tak-lite-server-db.CA_CERT}`).
+1. **Decomposed connection (DigitalOcean)**  
+   With DigitalOcean managed Postgres, using a single `connectionString` plus `ssl: { ca }` in the pg client breaks SSL validation and triggers `SELF_SIGNED_CERT_IN_CHAIN`. The app therefore **decomposes** `DATABASE_URL` into host, port, database, user, and password when a CA cert is set, and passes those plus `ssl` to the driver. No config change is required—just ensure `DATABASE_CA_CERT` is set from the DB component (e.g. `${tak-lite-server-db.CA_CERT}`).
 
-2. **Verification is on**  
-   When a CA cert is present, the app uses `rejectUnauthorized: true` so the database connection is fully verified. Do **not** set `NODE_TLS_REJECT_UNAUTHORIZED=0`; that disables TLS verification for all outbound connections (DB, APIs, etc.) and is unsafe.
+2. **CA cert format**  
+   The app normalizes `DATABASE_CA_CERT`: it replaces literal `\n` in the env value with real newlines so Node TLS can parse the PEM. DigitalOcean often injects the CA with `\n` as two characters; without normalization, verification can fail.
 
-3. **Escape hatch (DB only)**  
-   If you still cannot get certificate validation working (e.g. custom DB with an unusual chain), you can set **`DATABASE_SSL_INSECURE=1`** in the app environment. This disables TLS verification **only for the database connection**, not globally. Use only as a last resort and avoid in production if possible.
+3. **Verification is on**  
+   When a CA cert is present, the app uses `rejectUnauthorized: true`. Do **not** set `NODE_TLS_REJECT_UNAUTHORIZED=0`; that disables TLS verification for all outbound connections and is unsafe.
 
-4. **PGSSLMODE**  
-   Use `PGSSLMODE=require` (or `verify-full` if your provider supports it) so the client insists on TLS; the app’s SSL config then handles the CA.
+4. **Escape hatch (DB only)**  
+   If you still cannot get certificate validation working, you can set **`DATABASE_SSL_INSECURE=1`** in the app environment. This disables TLS verification **only for the database connection**. Use only as a last resort.
+
+5. **PGSSLMODE**  
+   Use `PGSSLMODE=require` so the client requires TLS; the app’s SSL config then supplies the CA.
 
 ### 2. DigitalOcean Droplets with Docker (Most Control)
 

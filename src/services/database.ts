@@ -17,6 +17,27 @@ function isDbSslInsecure(): boolean {
   return process.env.DATABASE_SSL_INSECURE === '1' || process.env.DATABASE_SSL_INSECURE === 'true';
 }
 
+/**
+ * Decompose a Postgres URL into individual connection params. Required for DigitalOcean
+ * managed DB: using connectionString + ssl with pg breaks certificate validation
+ * (SELF_SIGNED_CERT_IN_CHAIN); individual params + ssl work correctly.
+ */
+function parseConnectionUrl(url: string): { host: string; port: number; database: string; user: string; password: string } | null {
+  try {
+    const u = new URL(url);
+    const database = u.pathname ? u.pathname.slice(1).replace(/%2F/g, '/') : 'postgres';
+    return {
+      host: u.hostname,
+      port: u.port ? parseInt(u.port, 10) : 5432,
+      database,
+      user: decodeURIComponent(u.username),
+      password: decodeURIComponent(u.password)
+    };
+  } catch {
+    return null;
+  }
+}
+
 export class DatabaseService {
   private knexInstance: Knex;
 
@@ -57,22 +78,30 @@ export class DatabaseService {
       logger.warn('No DATABASE_CA_CERT; connection uses default TLS (no custom CA).');
     }
 
-    // Log connection string (redacted) and presence of CA
+    // When using a CA, decompose the URL into individual params so pg SSL validation works
+    // (DigitalOcean managed DB: connectionString + ssl causes SELF_SIGNED_CERT_IN_CHAIN)
+    const useDecomposed = !!ca && !sslInsecure;
+    const parsed = useDecomposed ? parseConnectionUrl(connection) : null;
+
     const connectionForLog = connection
       .replace(/(password=)([^&]+)/, '$1***')
       .replace(/(:)([^:@]+)(@)/, '$1***$3');
     logger.info('Database Connection', {
       connectionString: connectionForLog,
       hasCa: !!ca,
-      sslModeInUrl: connection.includes('sslmode=')
+      useDecomposed: useDecomposed && !!parsed
     });
+
+    const knexConnection = useDecomposed && parsed
+      ? { ...parsed, ssl: sslConfig }
+      : { connectionString: connection, ssl: sslConfig };
+    if (useDecomposed && !parsed) {
+      logger.warn('Could not parse DATABASE_URL for decomposed connection; using connectionString (SSL validation may fail)');
+    }
 
     this.knexInstance = knex({
       client: 'pg',
-      connection: {
-        connectionString: connection,
-        ssl: sslConfig
-      },
+      connection: knexConnection,
       pool: {
         min: 2,
         max: 10,
