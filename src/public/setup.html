@@ -27,10 +27,17 @@
           </div>
         </div>
         <div class="field-group">
-          <label for="email">Admin Email Address</label>
-          <input id="email" type="email" placeholder="admin@example.com" required />
+          <label for="adminUsername">Admin Username</label>
+          <input id="adminUsername" type="text" placeholder="admin" required autocomplete="username" />
           <div class="help-text">
-            <strong>Primary administrator account</strong> that will have full access to manage users, teams, and settings
+            <strong>Primary administrator account</strong> — you will sign in with this username
+          </div>
+        </div>
+        <div class="field-group">
+          <label for="adminEmail">Admin Email (optional)</label>
+          <input id="adminEmail" type="email" placeholder="admin@example.com" autocomplete="email" />
+          <div class="help-text">
+            Optional contact or recovery address
           </div>
         </div>
         

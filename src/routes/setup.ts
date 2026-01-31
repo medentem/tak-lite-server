@@ -44,13 +44,14 @@ export function createSetupRouter(db: DatabaseService, config: ConfigService) {
   router.post('/complete', setupCompleteLimiter, async (req, res, next) => {
     try {
       const schema = Joi.object({
-        adminEmail: Joi.string().email().required(),
+        adminUsername: Joi.string().min(1).required(),
+        adminEmail: Joi.string().email().allow('', null).optional(),
         adminPassword: Joi.string().min(10).required(),
         orgName: Joi.string().min(2).required(),
         corsOrigin: Joi.string().allow('').optional(),
         setupKey: Joi.string().allow('').optional()
       });
-      const { adminEmail, adminPassword, orgName, corsOrigin, setupKey } = await schema.validateAsync(req.body);
+      const { adminUsername, adminEmail, adminPassword, orgName, corsOrigin, setupKey } = await schema.validateAsync(req.body);
 
       const already = await config.get<boolean>('setup.completed');
       if (already) return res.status(400).json({ error: 'Setup already completed' });
@@ -67,19 +68,21 @@ export function createSetupRouter(db: DatabaseService, config: ConfigService) {
       const adminId = uuidv4();
       const teamId = uuidv4();
 
+      const emailToStore = (adminEmail && String(adminEmail).trim()) || null;
+
       await db.client.transaction(async (trx) => {
-        // Idempotent creates
-        const existingUser = await trx('users').where({ email: adminEmail }).first();
+        // Idempotent creates: look up by username (name)
+        const existingUser = await trx('users').where({ name: adminUsername }).first();
         if (!existingUser) {
           await trx('users').insert({
             id: adminId,
-            email: adminEmail,
+            email: emailToStore,
             password_hash,
-            name: 'Administrator',
+            name: adminUsername,
             is_admin: true
           });
         }
-        const userRow = existingUser || (await trx('users').where({ email: adminEmail }).first());
+        const userRow = existingUser || (await trx('users').where({ name: adminUsername }).first());
         const ensureTeam = await trx('teams').where({ name: `${orgName} Team` }).first();
         if (!ensureTeam) {
           await trx('teams').insert({ id: teamId, name: `${orgName} Team` });
@@ -98,7 +101,7 @@ export function createSetupRouter(db: DatabaseService, config: ConfigService) {
       await config.set('setup.completed', true);
 
       // Auto-login the user after setup completion
-      const user = await db.client('users').where({ email: adminEmail }).first();
+      const user = await db.client('users').where({ name: adminUsername }).first();
       if (user) {
         // Generate JWT token
         const token = await security.signJwt({ sub: user.id, is_admin: user.is_admin }, { expiresIn: '7d' });
@@ -117,7 +120,7 @@ export function createSetupRouter(db: DatabaseService, config: ConfigService) {
         res.json({ 
           success: true, 
           user: {
-            email: user.email,
+            email: user.email ?? undefined,
             name: user.name,
             isAdmin: user.is_admin
           },

@@ -34,10 +34,10 @@ export function createAuthRouter(db: DatabaseService, config: ConfigService) {
 
   router.post('/login', loginLimiter, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const schema = Joi.object({ email: Joi.string().email().required(), password: Joi.string().required() });
-      const { email, password } = await schema.validateAsync(req.body);
+      const schema = Joi.object({ username: Joi.string().min(1).required(), password: Joi.string().required() });
+      const { username, password } = await schema.validateAsync(req.body);
       
-      const user = await db.client('users').where({ email }).first();
+      const user = await db.client('users').where({ name: username }).first();
       if (!user) {
         return res.status(401).json({ error: 'Invalid credentials' });
       }

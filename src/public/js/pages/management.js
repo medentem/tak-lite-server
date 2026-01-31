@@ -101,8 +101,8 @@ export class ManagementPage {
       row.className = 'user-row';
       row.innerHTML = `
         <div class="user-row-info">
-          <span class="user-row-email">${escapeHtml(u.email)}</span>
-          ${u.name ? `<span class="user-row-name">${escapeHtml(u.name)}</span>` : ''}
+          <span class="user-row-name">${escapeHtml(u.name)}</span>
+          ${u.email ? `<span class="user-row-email">${escapeHtml(u.email)}</span>` : ''}
           ${u.is_admin ? '<span class="user-row-admin">Admin</span>' : ''}
         </div>
         <div class="user-row-actions">
@@ -143,7 +143,7 @@ export class ManagementPage {
       this.users.forEach(u => {
         const o = document.createElement('option');
         o.value = u.id;
-        o.textContent = `${u.name || ''} <${u.email}>`;
+        o.textContent = u.email ? `${u.name} (${u.email})` : u.name;
         userSelect.appendChild(o);
       });
     }
@@ -171,15 +171,15 @@ export class ManagementPage {
 
   async createUser() {
     try {
+      const username = q('#u_name')?.value.trim();
       const email = q('#u_email')?.value.trim();
-      const name = q('#u_name')?.value.trim();
 
-      if (!email) {
-        showError('Email is required');
+      if (!username) {
+        showError('Username is required');
         return;
       }
 
-      const result = await post('/api/admin/users', { email, name });
+      const result = await post('/api/admin/users', { username, email: email || undefined });
       showSuccess('User created successfully');
       if (result?.password) {
         this.showPasswordReveal('Send this password to the user through a secure channel (it will not be shown again):', result.password);
@@ -189,8 +189,8 @@ export class ManagementPage {
       await this.loadData();
 
       // Clear form
-      if (q('#u_email')) q('#u_email').value = '';
       if (q('#u_name')) q('#u_name').value = '';
+      if (q('#u_email')) q('#u_email').value = '';
     } catch (error) {
       showError(`Failed to create user: ${error.message}`);
     }

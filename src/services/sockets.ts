@@ -441,7 +441,7 @@ export class SocketGateway {
   }
   
   // Helper method to get user information
-  private async getUserInfo(userId: string): Promise<{ name: string; email: string } | null> {
+  private async getUserInfo(userId: string): Promise<{ name: string; email: string | null } | null> {
     try {
       const user = await this.sync.database.client('users').where('id', userId).select(['name', 'email']).first();
       return user || null;

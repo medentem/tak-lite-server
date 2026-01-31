@@ -40,7 +40,7 @@
       <div id="loginCard" class="card hidden">
         <h2>Sign in</h2>
         <div class="row">
-          <input id="email" type="email" placeholder="admin@example.com" style="flex:1" />
+          <input id="username" type="text" placeholder="Username" autocomplete="username" style="flex:1" />
           <input id="password" type="password" placeholder="password" style="flex:1" />
           <button id="login">Login</button>
         </div>
@@ -96,8 +96,8 @@
             <h2>Users</h2>
             <p class="help-text" style="margin-top:0;margin-bottom:12px;">New users are created as regular users. To grant admin access, create the user first, then use <strong>Edit</strong> on that user.</p>
             <div class="row">
-              <input id="u_email" type="email" placeholder="user@example.com" />
-              <input id="u_name" type="text" placeholder="Name" />
+              <input id="u_name" type="text" placeholder="Username" title="Required" />
+              <input id="u_email" type="email" placeholder="Email (optional)" title="Optional" />
               <button id="u_create">Create User</button>
             </div>
             <div id="u_msg" class="message hidden"></div>

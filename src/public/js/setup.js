@@ -32,14 +32,15 @@ document.getElementById('submit').onclick = async () => {
     hideMessage();
     
     // Validate inputs
-    const email = document.getElementById('email').value.trim();
+    const adminUsername = document.getElementById('adminUsername').value.trim();
+    const adminEmail = document.getElementById('adminEmail').value.trim();
     const password = document.getElementById('password').value;
     const orgName = document.getElementById('org').value.trim();
     const corsOrigin = document.getElementById('cors').value.trim();
     const setupKeyEl = document.getElementById('setupKey');
     const setupKey = setupKeyEl ? setupKeyEl.value : '';
     
-    if (!email || !password || !orgName) {
+    if (!adminUsername || !password || !orgName) {
       showMessage('Please fill in all required fields', 'error');
       return;
     }
@@ -49,8 +50,8 @@ document.getElementById('submit').onclick = async () => {
       return;
     }
     
-    if (!email.includes('@')) {
-      showMessage('Please enter a valid email address', 'error');
+    if (adminEmail && !adminEmail.includes('@')) {
+      showMessage('Please enter a valid email address or leave email blank', 'error');
       return;
     }
 
@@ -61,11 +62,12 @@ document.getElementById('submit').onclick = async () => {
     }
     
     const payload = {
-      adminEmail: email,
+      adminUsername,
       adminPassword: password,
       orgName: orgName,
       corsOrigin: corsOrigin
     };
+    if (adminEmail) payload.adminEmail = adminEmail;
     if (setupKey) payload.setupKey = setupKey;
     
     const res = await fetch('/api/setup/complete', { 

@@ -35,7 +35,7 @@ export class Auth {
 
       if (res.ok) {
         const userData = await res.json();
-        this.setAuthenticated(true, userData.email);
+        this.setAuthenticated(true, userData.name ?? userData.email);
         return true;
       }
     } catch (e) {
@@ -55,7 +55,7 @@ export class Auth {
 
       if (res.ok) {
         const userData = await res.json();
-        this.setAuthenticated(true, userData.email);
+        this.setAuthenticated(true, userData.name ?? userData.email);
         return true;
       } else {
         removeToken();
@@ -69,20 +69,20 @@ export class Auth {
     }
   }
 
-  async login(email, password) {
+  async login(username, password) {
     try {
       setLoading(true);
       
-      if (!email || !password) {
-        showError('Please enter both email and password');
+      if (!username || !password) {
+        showError('Please enter both username and password');
         return false;
       }
 
-      const data = await post('/api/auth/login?cookie=1', { email, password });
+      const data = await post('/api/auth/login?cookie=1', { username, password });
       
       currentToken = data.token;
       setToken(data.token);
-      this.setAuthenticated(true, email);
+      this.setAuthenticated(true, username);
       
       showSuccess('Login successful!');
       
@@ -118,7 +118,7 @@ export class Auth {
     showMessage('Logged out successfully', 'info');
   }
 
-  setAuthenticated(authenticated, email = null) {
+  setAuthenticated(authenticated, displayName = null) {
     this.isAuthenticated = authenticated;
     
     const loginCard = q('#loginCard');
@@ -134,13 +134,13 @@ export class Auth {
       document.body.classList.remove('admin-page-visible', 'dashboard-visible');
     }
 
-    if (whoSpan && email) {
-      whoSpan.textContent = email;
+    if (whoSpan && displayName) {
+      whoSpan.textContent = displayName;
     }
 
     // Dispatch event
     document.dispatchEvent(new CustomEvent('authChanged', {
-      detail: { authenticated, email }
+      detail: { authenticated, displayName }
     }));
   }
 
@@ -154,9 +154,9 @@ export const auth = new Auth();
 // Setup login button
 if (q('#login')) {
   q('#login').addEventListener('click', async () => {
-    const email = q('#email')?.value.trim();
+    const username = q('#username')?.value.trim();
     const password = q('#password')?.value;
-    await auth.login(email, password);
+    await auth.login(username, password);
   });
 }
 

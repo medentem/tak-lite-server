@@ -19,8 +19,8 @@
       <div id="loginCard" class="card" style="max-width: 400px; margin: 60px auto;">
         <h2>Sign in</h2>
         <div class="field-group">
-          <label for="email">Email</label>
-          <input id="email" type="email" placeholder="admin@example.com" />
+          <label for="username">Username</label>
+          <input id="username" type="text" placeholder="Username" autocomplete="username" />
         </div>
         <div class="field-group">
           <label for="password">Password</label>
@@ -55,19 +55,19 @@
       }
 
       async function handleLogin() {
-        const email = q('#email')?.value.trim();
+        const username = q('#username')?.value.trim();
         const password = q('#password')?.value;
         const loginMsg = q('#loginMsg');
         const loginBtn = q('#login');
 
-        if (!email || !password) {
-          showMessage('Please enter both email and password', 'error', loginMsg);
+        if (!username || !password) {
+          showMessage('Please enter both username and password', 'error', loginMsg);
           return;
         }
 
         try {
           setLoading(loginBtn, true);
-          const data = await post('/api/auth/login?cookie=1', { email, password });
+          const data = await post('/api/auth/login?cookie=1', { username, password });
           
           setToken(data.token);
           showMessage('Login successful! Redirecting...', 'success', loginMsg);

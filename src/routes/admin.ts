@@ -941,29 +941,43 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
   router.post('/users', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
-      const schema = Joi.object({ email: Joi.string().email().required(), name: Joi.string().min(1).default('') }).options({ stripUnknown: true });
-      const { email, name } = await schema.validateAsync(req.body);
-      const exists = await db.client('users').where({ email }).first();
-      if (exists) return res.status(400).json({ error: 'User already exists' });
+      const schema = Joi.object({
+        username: Joi.string().min(1).required(),
+        email: Joi.string().email().allow('', null).optional()
+      }).options({ stripUnknown: true });
+      const { username, email } = await schema.validateAsync(req.body);
+      const exists = await db.client('users').where({ name: username }).first();
+      if (exists) return res.status(400).json({ error: 'Username already exists' });
       const id = uuidv4();
       const password = uuidv4().replace(/-/g, '').slice(0, 14);
       const password_hash = await bcrypt.hash(password, 10);
-      await db.client('users').insert({ id, email, name: name || email, is_admin: false, password_hash });
+      const emailToStore = (email && String(email).trim()) || null;
+      await db.client('users').insert({ id, email: emailToStore, name: username, is_admin: false, password_hash });
       const defaultTeam = await db.client('teams').orderBy('created_at', 'asc').first();
       if (defaultTeam) {
         await db.client('team_memberships').insert({ user_id: id, team_id: defaultTeam.id });
       }
-      if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'user.create', resourceType: 'user', resourceId: id, metadata: { email } });
-      res.json({ user: { id, email, name: name || email, is_admin: false }, password });
+      if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'user.create', resourceType: 'user', resourceId: id, metadata: { username } });
+      res.json({ user: { id, email: emailToStore, name: username, is_admin: false }, password });
     } catch (err) { next(err); }
   });
 
   router.put('/users/:userId', async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
-      const schema = Joi.object({ name: Joi.string().min(1).optional(), is_admin: Joi.boolean().optional() });
+      const schema = Joi.object({
+        name: Joi.string().min(1).optional(),
+        email: Joi.string().email().allow('', null).optional(),
+        is_admin: Joi.boolean().optional()
+      }).options({ stripUnknown: true });
       const data = await schema.validateAsync(req.body);
-      await db.client('users').where({ id: req.params.userId }).update({ ...data, updated_at: db.client.fn.now() });
+      if (data.name !== undefined) {
+        const existing = await db.client('users').where({ name: data.name }).whereNot({ id: req.params.userId }).first();
+        if (existing) return res.status(400).json({ error: 'Username already in use' });
+      }
+      const updatePayload: Record<string, unknown> = { ...data, updated_at: db.client.fn.now() };
+      if (data.email !== undefined) updatePayload.email = (data.email && String(data.email).trim()) || null;
+      await db.client('users').where({ id: req.params.userId }).update(updatePayload);
       const user = await db.client('users').where({ id: req.params.userId }).first(['id', 'email', 'name', 'is_admin', 'created_at']);
       if (!user) return res.status(404).json({ error: 'Not found' });
       if (audit) await audit.log({ actorUserId: (req.user as any)?.sub, action: 'user.update', resourceType: 'user', resourceId: req.params.userId, metadata: data });

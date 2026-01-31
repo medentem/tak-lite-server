@@ -97,7 +97,7 @@ export class MessagesPage {
       teamId: data.team_id,
       userId: data.user_id,
       userName: data.user_name || 'Unknown User',
-      userEmail: data.user_email || 'unknown@example.com',
+      userEmail: data.user_email ?? '',
       content: data.content,
       messageType: data.message_type || 'text'
     };

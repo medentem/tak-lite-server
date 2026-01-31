@@ -87,7 +87,7 @@ export class LocationManager {
         timestamp: data.timestamp,
         created_at: new Date().toISOString(),
         user_name: data.user_name || 'Unknown User',
-        user_email: data.user_email || 'unknown@example.com',
+        user_email: data.user_email ?? '',
         user_status: data.user_status || 'GREEN'
       };
       this.locations.unshift(newLocation); // Add to beginning of array
