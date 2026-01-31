@@ -91,7 +91,7 @@
 
       <!-- Management Page -->
       <div id="managementPage" class="hidden">
-        <div class="grid">
+        <div class="management-stack">
           <div class="card">
             <h2>Users</h2>
             <p class="help-text" style="margin-top:0;margin-bottom:12px;">New users are created as regular users. To grant admin access, create the user first, then use <strong>Edit</strong> on that user.</p>
@@ -108,9 +108,7 @@
                 <button type="button" id="u_password_copy" class="secondary">Copy</button>
               </div>
             </div>
-            <div class="users-table">
-              <table id="u_table"><thead><tr><th>Email</th><th>Name</th><th>Admin</th><th>Actions</th></tr></thead><tbody></tbody></table>
-            </div>
+            <div class="user-list" id="u_list"></div>
           </div>
 
           <div class="card">
@@ -125,9 +123,7 @@
               <button id="t_add_member">Add Member</button>
             </div>
             <div id="t_msg" class="message hidden"></div>
-            <div class="teams-table">
-              <table id="t_table"><thead><tr><th>User</th><th>Email</th><th>Actions</th></tr></thead><tbody></tbody></table>
-            </div>
+            <div class="team-members" id="t_list"></div>
           </div>
         </div>
       </div>

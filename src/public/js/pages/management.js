@@ -4,6 +4,7 @@
 
 import { q, showMessage, showError, showSuccess } from '../utils/dom.js';
 import { get, post, del } from '../utils/api.js';
+import { escapeHtml } from '../utils/formatting.js';
 
 export class ManagementPage {
   constructor() {
@@ -91,22 +92,25 @@ export class ManagementPage {
   }
 
   renderUsers() {
-    const tbody = q('#u_table tbody');
-    if (!tbody) return;
+    const list = q('#u_list');
+    if (!list) return;
 
-    tbody.innerHTML = '';
+    list.innerHTML = '';
     this.users.forEach(u => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${u.email}</td>
-        <td>${u.name || ''}</td>
-        <td>${u.is_admin ? 'Yes' : 'No'}</td>
-        <td><div class="row" style="flex-wrap:nowrap;gap:8px;">
+      const row = document.createElement('div');
+      row.className = 'user-row';
+      row.innerHTML = `
+        <div class="user-row-info">
+          <span class="user-row-email">${escapeHtml(u.email)}</span>
+          ${u.name ? `<span class="user-row-name">${escapeHtml(u.name)}</span>` : ''}
+          ${u.is_admin ? '<span class="user-row-admin">Admin</span>' : ''}
+        </div>
+        <div class="user-row-actions">
           <button data-act="reset" data-id="${u.id}" class="secondary">Reset PW</button>
           <button data-act="del" data-id="${u.id}" class="secondary">Delete</button>
-        </div></td>
+        </div>
       `;
-      tbody.appendChild(tr);
+      list.appendChild(row);
     });
   }
 
@@ -237,27 +241,30 @@ export class ManagementPage {
   async loadTeamMembers(teamId) {
     try {
       const members = await get(`/api/admin/teams/${teamId}/members`);
-      const tbody = q('#t_table tbody');
-      
-      if (!tbody) return;
+      const list = q('#t_list');
 
-      tbody.innerHTML = '';
+      if (!list) return;
+
+      list.innerHTML = '';
 
       if (members.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--muted);">No members in this team</td></tr>';
+        list.innerHTML = '<div class="member-row" style="justify-content: center; color: var(--muted);">No members in this team</div>';
         return;
       }
 
       members.forEach(m => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${m.name || ''}</td>
-          <td>${m.email}</td>
-          <td>
+        const row = document.createElement('div');
+        row.className = 'member-row';
+        row.innerHTML = `
+          <div class="member-row-info">
+            <span class="member-row-name">${escapeHtml(m.name || '—')}</span>
+            <span class="member-row-email">${escapeHtml(m.email)}</span>
+          </div>
+          <div class="member-row-actions">
             <button data-act="kick" data-uid="${m.id}" class="secondary">Remove</button>
-          </td>
+          </div>
         `;
-        tbody.appendChild(tr);
+        list.appendChild(row);
       });
     } catch (error) {
       console.error('Failed to load team members:', error);

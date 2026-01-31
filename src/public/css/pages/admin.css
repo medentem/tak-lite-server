@@ -93,6 +93,134 @@ body.admin-page-visible:not(.dashboard-visible) .container > [id$="Page"] {
   margin-right: auto;
 }
 
+/* Management page: Users and Teams stacked vertically */
+.management-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* User list: one row per user, info left / actions right, no overlap */
+.user-list {
+  margin-top: 16px;
+  background: #0c1527;
+  border-radius: 8px;
+  border: 1px solid #1f2a44;
+  overflow: hidden;
+}
+
+.user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #1f2a44;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.user-row:last-child {
+  border-bottom: none;
+}
+
+.user-row-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.user-row-email {
+  word-break: break-word;
+  overflow-wrap: break-word;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.user-row-name {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.user-row-admin {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: white;
+  flex-shrink: 0;
+}
+
+.user-row-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.user-row-actions .secondary {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* Team members list: same pattern */
+.team-members {
+  margin-top: 16px;
+  background: #0c1527;
+  border-radius: 8px;
+  border: 1px solid #1f2a44;
+  overflow: hidden;
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #1f2a44;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.member-row:last-child {
+  border-bottom: none;
+}
+
+.member-row-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.member-row-name,
+.member-row-email {
+  word-break: break-word;
+  overflow-wrap: break-word;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.member-row-email {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.member-row-actions {
+  flex-shrink: 0;
+}
+
+.member-row-actions .secondary {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
 /* When dashboard is visible, container uses full height so dashboard fills below nav */
 body.dashboard-visible .container {
   display: flex;
