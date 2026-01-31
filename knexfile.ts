@@ -1,5 +1,18 @@
 import type { Knex } from 'knex';
 
+/** Normalize CA cert: env vars often have literal \\n; Node TLS expects real newlines. */
+function normalizeCaCert(raw: string | undefined): string | undefined {
+  if (!raw || !raw.trim()) return undefined;
+  const normalized = raw.trim().replace(/\\n/g, '\n');
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function getSslConfig(): boolean | { ca: string; rejectUnauthorized: boolean } {
+  const ca = normalizeCaCert(process.env.DATABASE_CA_CERT);
+  if (ca) return { ca, rejectUnauthorized: true };
+  return true;
+}
+
 const config: { [key: string]: Knex.Config } = {
   development: {
     client: 'pg',
@@ -12,24 +25,17 @@ const config: { [key: string]: Knex.Config } = {
     client: 'pg',
     connection: {
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_CA_CERT ? {
-        ca: process.env.DATABASE_CA_CERT,
-        rejectUnauthorized: false // Let NODE_TLS_REJECT_UNAUTHORIZED handle validation
-      } : true
+      ssl: getSslConfig()
     },
     migrations: {
       directory: './migrations'
     }
   },
-  // Add a default configuration that uses SSL with CA certificate when available
   default: {
     client: 'pg',
     connection: {
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_CA_CERT ? {
-        ca: process.env.DATABASE_CA_CERT,
-        rejectUnauthorized: false // Let NODE_TLS_REJECT_UNAUTHORIZED handle validation
-      } : true
+      ssl: getSslConfig()
     },
     migrations: {
       directory: './migrations'

@@ -2,6 +2,21 @@ import knex, { Knex } from 'knex';
 import path from 'path';
 import { logger } from '../utils/logger';
 
+/**
+ * Normalize CA cert string for Node TLS. DigitalOcean (and others) often inject
+ * multiline env vars with literal backslash-n; Node expects real newlines in PEM.
+ */
+function normalizeCaCert(raw: string | undefined): string | undefined {
+  if (!raw || !raw.trim()) return undefined;
+  const normalized = raw.trim().replace(/\\n/g, '\n');
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+/** When true, disables TLS certificate verification for the DB connection only (not global). Avoid in production. */
+function isDbSslInsecure(): boolean {
+  return process.env.DATABASE_SSL_INSECURE === '1' || process.env.DATABASE_SSL_INSECURE === 'true';
+}
+
 export class DatabaseService {
   private knexInstance: Knex;
 
@@ -10,30 +25,36 @@ export class DatabaseService {
     if (!connection) {
       throw new Error('DATABASE_URL is required');
     }
-    
-    // Debug logging for SSL configuration
+
+    const rawCa = process.env.DATABASE_CA_CERT;
+    const ca = normalizeCaCert(rawCa);
+    const sslInsecure = isDbSslInsecure();
+
     logger.info('Database SSL Configuration', {
       nodeEnv: process.env.NODE_ENV,
-      hasDatabaseCaCert: !!process.env.DATABASE_CA_CERT,
+      hasDatabaseCaCert: !!rawCa,
+      caNormalized: !!ca,
       pgsslmode: process.env.PGSSLMODE,
-      nodeTlsRejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED,
-      databaseUrl: connection ? 'SET' : 'NOT_SET'
+      databaseUrl: connection ? 'SET' : 'NOT_SET',
+      sslInsecure
     });
-    
-    // Configure SSL with CA certificate when available
-    // NODE_TLS_REJECT_UNAUTHORIZED='0' handles certificate validation globally
-    const sslConfig = process.env.DATABASE_CA_CERT ? {
-      ca: process.env.DATABASE_CA_CERT,
-      rejectUnauthorized: false // Let NODE_TLS_REJECT_UNAUTHORIZED handle validation
-    } : true;
-    
-    logger.info('SSL Config Applied', { sslConfig, nodeEnv: process.env.NODE_ENV });
-    
-    // Log the first 20 chars of the CA cert for verification (secure, no full cert)
-    if (process.env.DATABASE_CA_CERT) {
-      logger.info('CA Cert Preview', { caStart: process.env.DATABASE_CA_CERT.substring(0, 20) + '...' });
+
+    let sslConfig: boolean | { ca?: string; rejectUnauthorized: boolean };
+    if (sslInsecure) {
+      logger.warn('DATABASE_SSL_INSECURE is set; DB TLS verification is disabled. Do not use in production.');
+      sslConfig = { rejectUnauthorized: false };
+    } else if (ca) {
+      sslConfig = { ca, rejectUnauthorized: true };
     } else {
-      logger.warn('CA Cert Missing');
+      sslConfig = true;
+    }
+
+    if (rawCa && !ca) {
+      logger.warn('DATABASE_CA_CERT was set but normalized to empty; check format (PEM with newlines or \\n literals).');
+    } else if (ca) {
+      logger.info('CA Cert applied with rejectUnauthorized: true');
+    } else if (!sslInsecure) {
+      logger.warn('No DATABASE_CA_CERT; connection uses default TLS (no custom CA).');
     }
 
     // Log connection string (redacted) and presence of CA
@@ -42,8 +63,8 @@ export class DatabaseService {
       .replace(/(:)([^:@]+)(@)/, '$1***$3');
     logger.info('Database Connection', {
       connectionString: connectionForLog,
-      hasCaFromEnv: !!process.env.DATABASE_CA_CERT,
-      sslModeOverridden: process.env.DATABASE_URL?.includes('sslmode=require')
+      hasCa: !!ca,
+      sslModeInUrl: connection.includes('sslmode=')
     });
 
     this.knexInstance = knex({

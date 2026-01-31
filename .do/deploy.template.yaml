@@ -24,10 +24,8 @@ spec:
           value: ${tak-lite-server-db.CA_CERT}
         - key: PGSSLMODE
           scope: RUN_AND_BUILD_TIME
-          value: prefer
-        - key: NODE_TLS_REJECT_UNAUTHORIZED
-          scope: RUN_AND_BUILD_TIME
-          value: "0"
+          value: require
+        # Do not set NODE_TLS_REJECT_UNAUTHORIZED=0; it disables TLS verification for all connections. If DB cert validation fails, see deploy/README.md "Database TLS / certificates".
         - key: JWT_SECRET
           scope: RUN_TIME
           type: SECRET

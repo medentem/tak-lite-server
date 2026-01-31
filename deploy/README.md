@@ -41,6 +41,22 @@ deploy/
 
 **Configuration**: See `.do/app.yaml` for complete configuration. To prevent anyone who finds your app URL from completing setup before you do, set **SETUP_SECRET** (as a secret) in the app's environment; then open `/setup` and enter that value in the "Setup Key" field (or use a claim link: `/setup?key=your-secret`).
 
+#### Database TLS / certificates (DigitalOcean and others)
+
+If you see **"self signed certificate in certificate chain"** or DB connection failures when using a managed database (e.g. DigitalOcean App Platform with a linked DB):
+
+1. **CA cert format**  
+   The app now normalizes `DATABASE_CA_CERT`: it replaces literal `\n` in the env value with real newlines so Node TLS can parse the PEM. DigitalOcean often injects the CA cert with `\n` as two characters; without normalization, verification fails. No change is required on your side—just ensure `DATABASE_CA_CERT` is set from the DB component (e.g. `${tak-lite-server-db.CA_CERT}`).
+
+2. **Verification is on**  
+   When a CA cert is present, the app uses `rejectUnauthorized: true` so the database connection is fully verified. Do **not** set `NODE_TLS_REJECT_UNAUTHORIZED=0`; that disables TLS verification for all outbound connections (DB, APIs, etc.) and is unsafe.
+
+3. **Escape hatch (DB only)**  
+   If you still cannot get certificate validation working (e.g. custom DB with an unusual chain), you can set **`DATABASE_SSL_INSECURE=1`** in the app environment. This disables TLS verification **only for the database connection**, not globally. Use only as a last resort and avoid in production if possible.
+
+4. **PGSSLMODE**  
+   Use `PGSSLMODE=require` (or `verify-full` if your provider supports it) so the client insists on TLS; the app’s SSL config then handles the CA.
+
 ### 2. DigitalOcean Droplets with Docker (Most Control)
 
 **Best for**: Full control, cost-effective, custom configurations
