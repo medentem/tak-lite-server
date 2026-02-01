@@ -261,7 +261,8 @@ export class SocialMediaMonitoringService {
       const threats = await this.grokService.searchThreats(
         search.geographical_area, 
         search.search_query || undefined, 
-        lastSearchTime
+        lastSearchTime,
+        search.id
       );
       
       for (const threat of threats) {
@@ -457,6 +458,130 @@ export class SocialMediaMonitoringService {
     posts_processed_today: number;
   }> {
     return await this.configService.getServiceStatus();
+  }
+
+  /**
+   * Get AI usage summary and cost forecast for the social media monitoring service.
+   * Accounts for configured intervals, prompt/completion tokens, and active monitors.
+   */
+  async getAIUsageSummary(): Promise<{
+    today: { cost_usd: number; prompt_tokens: number; completion_tokens: number; total_tokens: number; api_calls: number; search_calls: number };
+    month: { cost_usd: number; prompt_tokens: number; completion_tokens: number; total_tokens: number; api_calls: number };
+    last_24h: { cost_usd: number; search_calls: number };
+    forecast: {
+      cost_today_remaining_usd: number;
+      cost_month_forecast_usd: number;
+      daily_calls_at_current_setup: number;
+      active_monitors_in_forecast: number;
+    };
+  }> {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOf24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const defaultSummary = {
+      today: { cost_usd: 0, prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, api_calls: 0, search_calls: 0 },
+      month: { cost_usd: 0, prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, api_calls: 0 },
+      last_24h: { cost_usd: 0, search_calls: 0 },
+      forecast: {
+        cost_today_remaining_usd: 0,
+        cost_month_forecast_usd: 0,
+        daily_calls_at_current_setup: 0,
+        active_monitors_in_forecast: 0,
+      },
+    };
+
+    try {
+      const hasTable = await this.db.client.schema.hasTable('ai_usage_log');
+      if (!hasTable) return defaultSummary;
+
+      const todayRows = await this.db.client('ai_usage_log')
+        .where('created_at', '>=', startOfToday)
+        .select(
+          this.db.client.raw('COALESCE(SUM(estimated_cost_usd), 0) as cost_usd'),
+          this.db.client.raw('COALESCE(SUM(prompt_tokens), 0) as prompt_tokens'),
+          this.db.client.raw('COALESCE(SUM(completion_tokens), 0) as completion_tokens'),
+          this.db.client.raw('COALESCE(SUM(total_tokens), 0) as total_tokens'),
+          this.db.client.raw('COUNT(*)::int as api_calls'),
+          this.db.client.raw("COUNT(*) FILTER (WHERE call_type = 'search')::int as search_calls")
+        )
+        .first();
+
+      const monthRows = await this.db.client('ai_usage_log')
+        .where('created_at', '>=', startOfMonth)
+        .select(
+          this.db.client.raw('COALESCE(SUM(estimated_cost_usd), 0) as cost_usd'),
+          this.db.client.raw('COALESCE(SUM(prompt_tokens), 0) as prompt_tokens'),
+          this.db.client.raw('COALESCE(SUM(completion_tokens), 0) as completion_tokens'),
+          this.db.client.raw('COALESCE(SUM(total_tokens), 0) as total_tokens'),
+          this.db.client.raw('COUNT(*)::int as api_calls')
+        )
+        .first();
+
+      const last24hRows = await this.db.client('ai_usage_log')
+        .where('created_at', '>=', startOf24h)
+        .select(
+          this.db.client.raw('COALESCE(SUM(estimated_cost_usd), 0) as cost_usd'),
+          this.db.client.raw("COUNT(*) FILTER (WHERE call_type = 'search')::int as search_calls")
+        )
+        .first();
+
+      const today = {
+        cost_usd: Number(todayRows?.cost_usd ?? 0),
+        prompt_tokens: Number(todayRows?.prompt_tokens ?? 0),
+        completion_tokens: Number(todayRows?.completion_tokens ?? 0),
+        total_tokens: Number(todayRows?.total_tokens ?? 0),
+        api_calls: Number(todayRows?.api_calls ?? 0),
+        search_calls: Number(todayRows?.search_calls ?? 0),
+      };
+
+      const month = {
+        cost_usd: Number(monthRows?.cost_usd ?? 0),
+        prompt_tokens: Number(monthRows?.prompt_tokens ?? 0),
+        completion_tokens: Number(monthRows?.completion_tokens ?? 0),
+        total_tokens: Number(monthRows?.total_tokens ?? 0),
+        api_calls: Number(monthRows?.api_calls ?? 0),
+      };
+
+      const last_24h = {
+        cost_usd: Number(last24hRows?.cost_usd ?? 0),
+        search_calls: Number(last24hRows?.search_calls ?? 0),
+      };
+
+      // Forecast: use active (is_active) monitors and their intervals
+      const searches = await this.grokService.getGeographicalSearches();
+      const activeMonitors = searches.filter(s => s.is_active);
+      const dailySearchCalls = activeMonitors.reduce((sum, s) => sum + Math.floor(86400 / Math.max(60, s.monitoring_interval)), 0);
+
+      const avgCostPerSearch =
+        last_24h.search_calls > 0 ? last_24h.cost_usd / last_24h.search_calls : 0;
+      const costPerSearch = avgCostPerSearch > 0 ? avgCostPerSearch : 0.01; // fallback $0.01 per search if no history
+
+      const secondsElapsedToday = (now.getTime() - startOfToday.getTime()) / 1000;
+      const secondsRemainingToday = Math.max(0, 86400 - secondsElapsedToday);
+      const fractionOfDayRemaining = secondsRemainingToday / 86400;
+      const estimatedCallsRemainingToday = dailySearchCalls * fractionOfDayRemaining;
+      const costTodayRemaining = estimatedCallsRemainingToday * costPerSearch;
+
+      const daysRemainingInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1;
+      const costMonthForecast = month.cost_usd + daysRemainingInMonth * dailySearchCalls * costPerSearch;
+
+      return {
+        today,
+        month,
+        last_24h,
+        forecast: {
+          cost_today_remaining_usd: Math.round(costTodayRemaining * 1000000) / 1000000,
+          cost_month_forecast_usd: Math.round(costMonthForecast * 1000000) / 1000000,
+          daily_calls_at_current_setup: dailySearchCalls,
+          active_monitors_in_forecast: activeMonitors.length,
+        },
+      };
+    } catch (err: any) {
+      logger.warn('Failed to get AI usage summary', { error: err?.message });
+      return defaultSummary;
+    }
   }
 
   async toggleService(enabled: boolean): Promise<void> {

@@ -42,13 +42,16 @@ export function formatArea(squareMeters) {
  */
 export function formatAge(timestamp) {
   const now = Date.now();
-  const timestampMs = typeof timestamp === 'number' 
-    ? timestamp 
-    : typeof timestamp === 'string' 
-      ? new Date(timestamp).getTime() 
-      : timestamp instanceof Date 
-        ? timestamp.getTime() 
-        : 0;
+  let timestampMs = 0;
+  if (typeof timestamp === 'number') {
+    timestampMs = timestamp;
+  } else if (timestamp instanceof Date) {
+    timestampMs = timestamp.getTime();
+  } else if (typeof timestamp === 'string') {
+    // Numeric strings (e.g. from data-timestamp) are milliseconds; parse as number so they're not misinterpreted by Date()
+    const num = Number(timestamp);
+    timestampMs = Number.isFinite(num) ? num : new Date(timestamp).getTime();
+  }
   
   const ageMs = now - timestampMs;
   

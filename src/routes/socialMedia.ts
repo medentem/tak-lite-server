@@ -101,6 +101,16 @@ export function createSocialMediaRouter(
     }
   });
 
+  // AI usage and cost summary (for monitoring and forecasting)
+  router.get('/ai-usage', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const summary = await socialMediaService.getAIUsageSummary();
+      res.json({ usage: summary });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // Test AI connection
   router.post('/test-ai', async (req: Request, res: Response, next: NextFunction) => {
     try {

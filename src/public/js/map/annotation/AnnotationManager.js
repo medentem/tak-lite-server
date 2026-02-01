@@ -270,13 +270,14 @@ export class AnnotationManager {
         center: data.center
       });
       
+      const createdMs = annotation.created_at ? new Date(annotation.created_at).getTime() : null;
       const properties = {
         id: annotation.id,
         type: annotation.type,
         color: getColorHex(data.color || 'green'),
         label: data.label || '',
         description: data.description || '',
-        timestamp: data.timestamp || Date.now(),
+        timestamp: data.timestamp ?? createdMs ?? Date.now(),
         creatorId: data.creatorId || annotation.user_id,
         creatorUsername: data.creatorUsername || annotation.user_name || null,
         source: data.source || 'server'

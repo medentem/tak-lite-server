@@ -390,6 +390,41 @@
           </div>
         </div>
 
+        <!-- AI Usage & Cost Section -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div>
+              <h2 style="margin:0 0 4px;">AI Usage & Cost</h2>
+              <div style="font-size:13px; color:var(--muted); margin-top:4px;">
+                Token usage and estimated cost for Grok API. Forecast is based on active monitors and their intervals.
+              </div>
+            </div>
+            <button onclick="loadAIUsage()" class="secondary" title="Refresh usage">Refresh</button>
+          </div>
+          <div id="ai-usage-content" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:16px;">
+            <div class="kpi">
+              <div class="value" id="usage-today-cost">$0.00</div>
+              <div class="label">Cost Today</div>
+            </div>
+            <div class="kpi">
+              <div class="value" id="usage-month-cost">$0.00</div>
+              <div class="label">Cost This Month</div>
+            </div>
+            <div class="kpi">
+              <div class="value" id="usage-today-tokens">0</div>
+              <div class="label">Tokens Today</div>
+            </div>
+            <div class="kpi">
+              <div class="value" id="usage-today-calls">0</div>
+              <div class="label">API Calls Today</div>
+            </div>
+          </div>
+          <div id="ai-usage-forecast" style="margin-top:16px; padding:12px; background:#0d1b34; border-radius:8px; border:1px solid #223056; font-size:13px;">
+            <strong style="color:#cbd5e1;">Forecast:</strong>
+            <span id="usage-forecast-text">—</span>
+          </div>
+        </div>
+
         <!-- Legacy monitor creation removed - use geographical monitoring instead -->
 
         <!-- Legacy monitors section removed - use geographical monitoring instead -->
@@ -451,8 +486,9 @@
           
           <div class="form-group">
             <label>Monitoring Interval (seconds)</label>
-            <input type="number" name="monitoring_interval" value="300" min="60" max="3600">
+            <input type="number" name="monitoring_interval" value="300" min="60" max="3600" id="monitor-interval-input">
             <div class="help-text">How often to search for new threats (60-3600 seconds)</div>
+            <div id="monitor-interval-estimate" style="font-size:12px; color:var(--muted); margin-top:4px;">—</div>
           </div>
           
           <div class="form-group">
@@ -602,7 +638,8 @@
             loadServiceStatus(),
             loadServiceConfig(),
             loadGeographicalMonitors(),
-            loadAIConfig()
+            loadAIConfig(),
+            loadAIUsage()
           ]);
         } catch (error) {
           console.error('Failed to load page data:', error);
@@ -614,6 +651,7 @@
         document.getElementById('geographical-monitor-form').addEventListener('submit', handleGeographicalMonitorSubmit);
         document.getElementById('ai-config-form').addEventListener('submit', handleAIConfigSubmit);
         document.getElementById('service-config-form').addEventListener('submit', handleServiceConfigSubmit);
+        document.getElementById('monitor-interval-input')?.addEventListener('input', updateMonitorIntervalEstimate);
         
         // Start auto-refresh for service status
         startStatusAutoRefresh();
@@ -676,6 +714,36 @@
         } catch (error) {
           console.error('Failed to load service config:', error);
         }
+      }
+
+      // Load AI usage and cost summary
+      let aiUsageSummary = null;
+      async function loadAIUsage() {
+        try {
+          const data = await apiCall('/api/social-media/ai-usage');
+          aiUsageSummary = data.usage;
+          renderAIUsage();
+        } catch (error) {
+          console.error('Failed to load AI usage:', error);
+          document.getElementById('ai-usage-forecast').querySelector('#usage-forecast-text').textContent = 'Unable to load usage.';
+        }
+      }
+
+      function renderAIUsage() {
+        if (!aiUsageSummary) return;
+        const u = aiUsageSummary;
+        const fmt = (n) => (typeof n === 'number' && !Number.isNaN(n) ? n.toFixed(4) : '0').replace(/\.?0+$/, '') || '0';
+        const fmtCost = (c) => '$' + (typeof c === 'number' && !Number.isNaN(c) ? c.toFixed(2) : '0.00');
+        document.getElementById('usage-today-cost').textContent = fmtCost(u.today.cost_usd);
+        document.getElementById('usage-month-cost').textContent = fmtCost(u.month.cost_usd);
+        document.getElementById('usage-today-tokens').textContent = (u.today.total_tokens || 0).toLocaleString();
+        document.getElementById('usage-today-calls').textContent = (u.today.api_calls || 0).toLocaleString();
+        const f = u.forecast;
+        const forecastParts = [];
+        forecastParts.push(`~${(f.daily_calls_at_current_setup || 0).toLocaleString()} API calls/day with ${f.active_monitors_in_forecast || 0} active monitor(s).`);
+        if (f.cost_today_remaining_usd != null) forecastParts.push(`Est. remaining today: ${fmtCost(f.cost_today_remaining_usd)}.`);
+        if (f.cost_month_forecast_usd != null) forecastParts.push(`Est. month total: ${fmtCost(f.cost_month_forecast_usd)}.`);
+        document.getElementById('usage-forecast-text').textContent = forecastParts.join(' ') || '—';
       }
 
       // Render service status
@@ -909,6 +977,21 @@
       function showGeographicalMonitorModal() {
         document.getElementById('geographical-monitor-form').reset();
         document.getElementById('geographical-monitor-modal').classList.remove('hidden');
+        updateMonitorIntervalEstimate();
+      }
+
+      function updateMonitorIntervalEstimate() {
+        const input = document.getElementById('monitor-interval-input');
+        const el = document.getElementById('monitor-interval-estimate');
+        if (!input || !el) return;
+        const sec = parseInt(input.value, 10) || 300;
+        const interval = Math.max(60, Math.min(3600, sec));
+        const callsPerDay = Math.floor(86400 / interval);
+        const avgCostPerSearch = (aiUsageSummary?.last_24h?.search_calls > 0 && aiUsageSummary?.last_24h?.cost_usd != null)
+          ? aiUsageSummary.last_24h.cost_usd / aiUsageSummary.last_24h.search_calls
+          : 0.01;
+        const estCostPerDay = callsPerDay * avgCostPerSearch;
+        el.textContent = `~${callsPerDay.toLocaleString()} requests/day • est. ~$${estCostPerDay.toFixed(2)}/day`;
       }
 
       function showAIConfigModal() {
@@ -1280,10 +1363,11 @@
 
       // Auto-refresh functionality
       function startStatusAutoRefresh() {
-        // Refresh service status every 30 seconds
+        // Refresh service status and AI usage every 30 seconds
         statusRefreshInterval = setInterval(async () => {
           try {
             await loadServiceStatus();
+            await loadAIUsage();
           } catch (error) {
             console.warn('Auto-refresh failed:', error);
           }

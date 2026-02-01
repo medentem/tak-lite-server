@@ -123,15 +123,21 @@ export class DashboardPage {
   updateStatsDisplay(stats) {
     if (!stats) return;
 
-    // Update KPI values
+    // API/socket stats use { db: { users, teams, ... }, sockets: { authenticatedConnections, ... } }
+    const db = stats.db || {};
+    const sockets = stats.sockets || {};
+
+    // Update KPI values: Users = connected (authenticated) count; Teams = total in DB
     const usersEl = q('#k_users');
     if (usersEl) {
-      usersEl.textContent = stats.users?.active || stats.users?.total || 0;
+      const connected = sockets.authenticatedConnections;
+      const total = db.users;
+      usersEl.textContent = connected !== undefined ? connected : (stats.users?.active ?? stats.users?.total ?? total ?? 0);
     }
 
     const teamsEl = q('#k_teams');
     if (teamsEl) {
-      teamsEl.textContent = stats.teams?.total || 0;
+      teamsEl.textContent = db.teams ?? stats.teams?.total ?? 0;
     }
 
     const syncStatusEl = q('#k_sync_status');
