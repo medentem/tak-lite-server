@@ -3,12 +3,14 @@ import Joi from 'joi';
 import { DatabaseService } from '../services/database';
 import { SocialMediaMonitoringService } from '../services/socialMediaMonitoring';
 import { SocialMediaConfigService } from '../services/socialMediaConfig';
+import { XaiManagementService } from '../services/xaiManagement';
 import { logger } from '../utils/logger';
 
 export function createSocialMediaRouter(
   databaseService: DatabaseService,
   socialMediaService: SocialMediaMonitoringService,
-  configService: SocialMediaConfigService
+  configService: SocialMediaConfigService,
+  xaiManagementService: XaiManagementService
 ): Router {
   const router = Router();
 
@@ -105,7 +107,61 @@ export function createSocialMediaRouter(
   router.get('/ai-usage', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const summary = await socialMediaService.getAIUsageSummary();
-      res.json({ usage: summary });
+      const payload: { usage: typeof summary; xai_account?: { configured: boolean; team_id?: string; balance?: unknown; usage?: unknown } } = { usage: summary };
+      if (await xaiManagementService.isConfigured()) {
+        const [balance, usage] = await Promise.all([
+          xaiManagementService.fetchBalance(),
+          xaiManagementService.fetchUsage(),
+        ]);
+        const config = await xaiManagementService.getConfig();
+        payload.xai_account = {
+          configured: true,
+          team_id: config?.team_id ?? undefined,
+          balance: balance ?? undefined,
+          usage: usage ?? undefined,
+        };
+      } else {
+        payload.xai_account = { configured: false };
+      }
+      res.json(payload);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // xAI Management API config (for actual balance/usage from x.ai — different key from Grok API key)
+  const xaiManagementSchema = Joi.object({
+    management_api_key: Joi.string().allow('').optional(),
+    team_id: Joi.string().allow('').optional(),
+  });
+
+  router.get('/xai-management-config', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const config = await xaiManagementService.getConfig();
+      const configured = await xaiManagementService.isConfigured();
+      res.json({
+        configured,
+        team_id: config?.team_id ?? undefined,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put('/xai-management-config', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { error, value } = xaiManagementSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({ error: error.details[0].message });
+      }
+      const key = (value.management_api_key ?? '').trim();
+      const teamId = (value.team_id ?? '').trim();
+      if (!key || !teamId) {
+        await xaiManagementService.clearConfig();
+        return res.json({ configured: false, message: 'Management key and team ID cleared.' });
+      }
+      await xaiManagementService.setConfig(key, teamId);
+      res.json({ configured: true, team_id: teamId });
     } catch (error) {
       next(error);
     }

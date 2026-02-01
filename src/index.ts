@@ -27,6 +27,7 @@ import { AuditService } from './services/audit';
 import { SecurityService } from './services/security';
 import { SocialMediaMonitoringService } from './services/socialMediaMonitoring';
 import { SocialMediaConfigService } from './services/socialMediaConfig';
+import { XaiManagementService } from './services/xaiManagement';
 import { createSocialMediaRouter } from './routes/socialMedia';
 
 // Placeholder imports for future optional services/routes
@@ -493,7 +494,8 @@ process.on('SIGINT', async () => {
     (global as any).retentionService = retentionService;
     
     // Register social media routes after services are initialized
-    app.use('/api/social-media', auth.authenticate, auth.adminOnly, createSocialMediaRouter(databaseService, socialMediaService, socialMediaConfigService));
+    const xaiManagementService = new XaiManagementService(databaseService);
+    app.use('/api/social-media', auth.authenticate, auth.adminOnly, createSocialMediaRouter(databaseService, socialMediaService, socialMediaConfigService, xaiManagementService));
     
     // Auto-start monitors if configured
     try {

@@ -423,6 +423,12 @@
             <strong style="color:#cbd5e1;">Forecast:</strong>
             <span id="usage-forecast-text">—</span>
           </div>
+          <div id="xai-account-section" style="margin-top:16px; padding:12px; background:#0d1b34; border-radius:8px; border:1px solid #223056; font-size:13px;">
+            <strong style="color:#cbd5e1;">xAI account (actual)</strong>
+            <div id="xai-account-content">
+              <span id="xai-account-message">—</span>
+            </div>
+          </div>
         </div>
 
         <!-- Legacy monitor creation removed - use geographical monitoring instead -->
@@ -585,6 +591,35 @@
       </div>
     </div>
 
+    <!-- xAI Management API Key Modal (different from Grok API key) -->
+    <div id="xai-management-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>xAI Management API Key</h3>
+          <button class="close" onclick="closeModal()">&times;</button>
+        </div>
+        <div style="margin-bottom:16px; padding:12px; background:#1e293b; border-radius:8px; border:1px solid #334155; font-size:13px;">
+          <strong>This is a different key from your Grok API key.</strong><br>
+          The Grok API key is used for threat search. The Management API key is used only to <em>view</em> actual balance and usage from x.ai in this dashboard.<br>
+          Get it from <strong>xAI Console → Settings → Management Keys</strong>. You also need your <strong>Team ID</strong> (from the Console URL or team settings).
+        </div>
+        <form id="xai-management-form">
+          <div class="form-group">
+            <label>Management API Key</label>
+            <input type="password" name="management_api_key" placeholder="Your Management API key (not the Grok key)">
+          </div>
+          <div class="form-group">
+            <label>Team ID</label>
+            <input type="text" name="team_id" placeholder="Your xAI team ID">
+          </div>
+          <div class="form-actions">
+            <button type="button" onclick="clearXaiManagementConfig()" class="secondary">Clear key</button>
+            <button type="submit">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Detailed Service Status Modal -->
     <div id="service-status-modal" class="modal hidden">
       <div class="modal-content" style="max-width: 800px;">
@@ -651,6 +686,7 @@
         document.getElementById('geographical-monitor-form').addEventListener('submit', handleGeographicalMonitorSubmit);
         document.getElementById('ai-config-form').addEventListener('submit', handleAIConfigSubmit);
         document.getElementById('service-config-form').addEventListener('submit', handleServiceConfigSubmit);
+        document.getElementById('xai-management-form').addEventListener('submit', handleXaiManagementSubmit);
         document.getElementById('monitor-interval-input')?.addEventListener('input', updateMonitorIntervalEstimate);
         
         // Start auto-refresh for service status
@@ -716,16 +752,22 @@
         }
       }
 
-      // Load AI usage and cost summary
+      // Load AI usage and cost summary (includes xai_account when Management key is set)
       let aiUsageSummary = null;
+      let xaiAccountData = null;
       async function loadAIUsage() {
         try {
           const data = await apiCall('/api/social-media/ai-usage');
           aiUsageSummary = data.usage;
+          xaiAccountData = data.xai_account ?? { configured: false };
           renderAIUsage();
+          renderXaiAccount();
         } catch (error) {
           console.error('Failed to load AI usage:', error);
-          document.getElementById('ai-usage-forecast').querySelector('#usage-forecast-text').textContent = 'Unable to load usage.';
+          const el = document.getElementById('usage-forecast-text');
+          if (el) el.textContent = 'Unable to load usage.';
+          xaiAccountData = { configured: false };
+          renderXaiAccount();
         }
       }
 
@@ -744,6 +786,55 @@
         if (f.cost_today_remaining_usd != null) forecastParts.push(`Est. remaining today: ${fmtCost(f.cost_today_remaining_usd)}.`);
         if (f.cost_month_forecast_usd != null) forecastParts.push(`Est. month total: ${fmtCost(f.cost_month_forecast_usd)}.`);
         document.getElementById('usage-forecast-text').textContent = forecastParts.join(' ') || '—';
+      }
+
+      function renderXaiAccount() {
+        const content = document.getElementById('xai-account-content');
+        if (!content) return;
+        if (!xaiAccountData || !xaiAccountData.configured) {
+          content.innerHTML = '<span id="xai-account-message">Add a Management API key to see actual balance and usage from x.ai.</span> <button onclick="showXaiManagementModal()" class="secondary" style="margin-left:8px;">Add Management Key</button>';
+          return;
+        }
+        const parts = [];
+        if (xaiAccountData.balance != null && typeof xaiAccountData.balance === 'object') {
+          const b = xaiAccountData.balance;
+          const amt = b.balance_usd ?? b.balance ?? b.credits;
+          const cur = b.currency ?? 'USD';
+          if (amt != null) parts.push('Balance: ' + (cur === 'USD' ? '$' : '') + Number(amt).toFixed(2) + (cur !== 'USD' ? ' ' + cur : ''));
+        } else if (xaiAccountData.balance != null) {
+          parts.push('Balance: ' + String(xaiAccountData.balance));
+        }
+        if (xaiAccountData.usage != null && typeof xaiAccountData.usage === 'object') {
+          const u = xaiAccountData.usage;
+          if (u.usage && Array.isArray(u.usage) && u.usage.length) {
+            const total = u.usage.reduce((s, r) => s + (Number(r.cost_usd ?? r.cost ?? 0) || 0), 0);
+            parts.push('Usage (x.ai): $' + total.toFixed(2));
+          } else if (u.cost_usd != null) {
+            parts.push('Usage: $' + Number(u.cost_usd).toFixed(2));
+          }
+        }
+        if (xaiAccountData.team_id) parts.push('Team: ' + xaiAccountData.team_id);
+        const text = parts.length ? parts.join(' · ') : 'Actual data loaded.';
+        content.innerHTML = '<span id="xai-account-message">' + text + '</span> <button onclick="showXaiManagementModal()" class="secondary" style="margin-left:8px;">Manage key</button>';
+      }
+
+      function showXaiManagementModal() {
+        document.getElementById('xai-management-modal').classList.remove('hidden');
+        document.getElementById('xai-management-form').reset();
+      }
+
+      async function clearXaiManagementConfig() {
+        try {
+          await apiCall('/api/social-media/xai-management-config', { method: 'PUT', body: JSON.stringify({ management_api_key: '', team_id: '' }) });
+          showSuccess('Management key cleared.');
+          closeModal();
+          document.getElementById('xai-management-modal').classList.add('hidden');
+          xaiAccountData = { configured: false };
+          renderXaiAccount();
+          loadAIUsage();
+        } catch (e) {
+          showError('Failed to clear key: ' + e.message);
+        }
       }
 
       // Render service status
@@ -1007,6 +1098,29 @@
       }
 
       // Legacy monitor form handlers removed - use geographical monitoring instead
+
+      async function handleXaiManagementSubmit(e) {
+        e.preventDefault();
+        const form = e.target;
+        const key = (form.management_api_key?.value ?? '').trim();
+        const teamId = (form.team_id?.value ?? '').trim();
+        if (!key || !teamId) {
+          showError('Management API key and Team ID are both required.');
+          return;
+        }
+        try {
+          await apiCall('/api/social-media/xai-management-config', {
+            method: 'PUT',
+            body: JSON.stringify({ management_api_key: key, team_id: teamId })
+          });
+          showSuccess('xAI Management key saved. Actual balance and usage will appear in the dashboard.');
+          closeModal();
+          document.getElementById('xai-management-modal').classList.add('hidden');
+          await loadAIUsage();
+        } catch (err) {
+          showError('Failed to save Management key: ' + err.message);
+        }
+      }
 
       async function handleAIConfigSubmit(e) {
         e.preventDefault();
