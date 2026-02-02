@@ -39,6 +39,8 @@
         letter-spacing: 0.5px;
       }
       .card { background:var(--panel); border:1px solid #1f2a44; border-radius:12px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
+      #main-content > .card { margin-bottom: 24px; }
+      #main-content > .card:last-child { margin-bottom: 0; }
       .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:16px; }
       input,button,select,textarea { 
         height:40px; 
@@ -314,7 +316,7 @@
         <div id="globalMessage" class="message hidden"></div>
         
         <!-- Page Description -->
-        <div class="card" style="margin-bottom: 20px;">
+        <div class="card">
           <h2>Social Media Monitoring Setup</h2>
           <div class="help-text">
             <strong>Configure AI-powered threat detection</strong> for geographical areas using Grok AI with automatic health monitoring and recovery.<br>
