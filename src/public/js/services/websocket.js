@@ -152,6 +152,21 @@ class WebSocketService {
       this.emit('sync_activity', data);
     });
 
+    // Map annotation/location events – re-emit so dashboard map receives them even if
+    // MapWebSocketManager.connect() ran after the socket connected (map loads after auth).
+    this.socket.on('admin:annotation_update', (data) => {
+      this.emit('annotation_update', data);
+    });
+    this.socket.on('admin:annotation_delete', (data) => {
+      this.emit('annotation_delete', data);
+    });
+    this.socket.on('admin:annotation_bulk_delete', (data) => {
+      this.emit('annotation_bulk_delete', data);
+    });
+    this.socket.on('admin:location_update', (data) => {
+      this.emit('location_update', data);
+    });
+
     this.socket.on('admin:message_received', (data) => {
       this.emit('message_received', data);
     });

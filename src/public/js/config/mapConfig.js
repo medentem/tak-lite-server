@@ -220,7 +220,7 @@ export const TIMING = {
   contextMenuSetupDelay: 100,
   
   /** Sync activity refresh delay */
-  syncActivityRefreshDelay: 1000,
+  syncActivityRefreshDelay: 400,
   
   /** Geolocation timeout */
   geolocationTimeout: 5000,

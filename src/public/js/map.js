@@ -46,6 +46,7 @@ import {
   TIMING,
   DATA_LIMITS
 } from './config/mapConfig.js';
+import { websocketService } from '../services/websocket.js';
 
 // Import map components
 import {
@@ -101,6 +102,7 @@ class AdminMap {
     this.shapeMenu = null; // Will be initialized after map is created
     this.longPressHandler = null; // Will be initialized after map is created
     this.expirationTickInterval = null; // 1s tick to refresh expiring annotation visuals
+    this._pendingMapDataRefreshTimeout = null; // debounce fallback refresh after annotation_update
     
     // Drawing tools
     this.poiDrawingTool = null;
@@ -353,28 +355,50 @@ class AdminMap {
   }
   
   /**
-   * Setup WebSocket event handlers via EventBus
+   * Ensure map WebSocket listeners are connected. Call when dashboard is shown so we receive
+   * client->server annotation updates even if the socket connected before the map was created.
+   */
+  ensureMapWebSocketConnected() {
+    if (this.webSocketManager && window.socket && window.socket.connected && !this.webSocketManager.getIsConnected()) {
+      this.webSocketManager.connect();
+    }
+  }
+
+  /**
+   * Setup WebSocket event handlers via EventBus and global websocket service.
+   * We listen to both: MapWebSocketManager (window.socket) and websocketService.
+   * The service connects first and always has the socket, so client->server annotation
+   * updates are received even if the map's MapWebSocketManager.connect() ran late.
    */
   setupWebSocketEventHandlers() {
-    // Handle annotation updates
-    this.eventBus.on(MAP_EVENTS.ANNOTATION_UPDATED, (data) => {
+    const onAnnotationUpdate = (data) => {
       this.handleAnnotationUpdate(data);
-    });
-    
-    // Handle annotation deletions
-    this.eventBus.on(MAP_EVENTS.ANNOTATION_DELETED, (data) => {
-      this.handleAnnotationDelete(data);
-    });
-    
-    // Handle bulk annotation deletions
-    this.eventBus.on(MAP_EVENTS.ANNOTATION_BULK_DELETED, (data) => {
-      this.handleBulkAnnotationDelete(data);
-    });
-    
-    // Handle location updates
-    this.eventBus.on(MAP_EVENTS.LOCATION_UPDATED, (data) => {
-      this.handleLocationUpdate(data);
-    });
+      // Fallback: one refetch after a short delay so new annotations appear even if the
+      // in-memory update or paint path fails (debounced so we don't refetch multiple times).
+      if (typeof this.loadMapData !== 'function') return;
+      if (this._pendingMapDataRefreshTimeout) clearTimeout(this._pendingMapDataRefreshTimeout);
+      this._pendingMapDataRefreshTimeout = setTimeout(() => {
+        this._pendingMapDataRefreshTimeout = null;
+        this.loadMapData({ skipAutoCenter: true });
+      }, 400);
+    };
+
+    // EventBus (MapWebSocketManager forwards admin:* to these)
+    this.eventBus.on(MAP_EVENTS.ANNOTATION_UPDATED, onAnnotationUpdate);
+    this.eventBus.on(MAP_EVENTS.ANNOTATION_DELETED, (data) => this.handleAnnotationDelete(data));
+    this.eventBus.on(MAP_EVENTS.ANNOTATION_BULK_DELETED, (data) => this.handleBulkAnnotationDelete(data));
+    this.eventBus.on(MAP_EVENTS.LOCATION_UPDATED, (data) => this.handleLocationUpdate(data));
+
+    // Global websocket service – same events, so we receive them when the service
+    // already has the socket (connects before map exists or regardless of map listener).
+    const onDelete = (data) => this.handleAnnotationDelete(data);
+    const onBulkDelete = (data) => this.handleBulkAnnotationDelete(data);
+    const onLocation = (data) => this.handleLocationUpdate(data);
+    websocketService.on('annotation_update', onAnnotationUpdate);
+    websocketService.on('annotation_delete', onDelete);
+    websocketService.on('annotation_bulk_delete', onBulkDelete);
+    websocketService.on('location_update', onLocation);
+    this._wsAnnotationHandlers = { annotation_update: onAnnotationUpdate, annotation_delete: onDelete, annotation_bulk_delete: onBulkDelete, location_update: onLocation };
   }
   
   /**
@@ -2455,6 +2479,18 @@ class AdminMap {
     // Clean up long press handler
     if (this.longPressHandler) {
       this.longPressHandler.stop();
+    }
+    
+    if (this._pendingMapDataRefreshTimeout) {
+      clearTimeout(this._pendingMapDataRefreshTimeout);
+      this._pendingMapDataRefreshTimeout = null;
+    }
+    if (this._wsAnnotationHandlers) {
+      websocketService.off('annotation_update', this._wsAnnotationHandlers.annotation_update);
+      websocketService.off('annotation_delete', this._wsAnnotationHandlers.annotation_delete);
+      websocketService.off('annotation_bulk_delete', this._wsAnnotationHandlers.annotation_bulk_delete);
+      websocketService.off('location_update', this._wsAnnotationHandlers.location_update);
+      this._wsAnnotationHandlers = null;
     }
     
     // Clean up menu manager

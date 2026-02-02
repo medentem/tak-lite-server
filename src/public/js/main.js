@@ -134,8 +134,15 @@ class AdminApp {
     }
 
     // Load page-specific data
-    if (page === 'dashboard' && this.pages.dashboard.refresh) {
-      this.pages.dashboard.refresh().catch(console.error);
+    if (page === 'dashboard') {
+      if (this.pages.dashboard.refresh) {
+        this.pages.dashboard.refresh().catch(console.error);
+      }
+      // Ensure map WebSocket listeners are connected when dashboard is shown (handles socket
+      // connecting before map was created, so client->server annotations appear in real time)
+      if (window.adminMap && typeof window.adminMap.ensureMapWebSocketConnected === 'function') {
+        window.adminMap.ensureMapWebSocketConnected();
+      }
     } else if (page === 'threats' && this.pages.threats.loadThreats) {
       this.pages.threats.loadThreats().catch(console.error);
     }
