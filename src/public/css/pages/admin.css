@@ -932,6 +932,7 @@ body.dashboard-visible .container #dash {
 .fan-menu-segment-icon.line::before { content: '━'; }
 .fan-menu-segment-icon.edit::before { content: '✏'; }
 .fan-menu-segment-icon.note::before { content: '\1F4C4'; } /* 📄 paper/document icon */
+.fan-menu-segment-icon.timer::before { content: '\23F2'; } /* ⏲ stopwatch */
 .fan-menu-segment-icon.delete::before { content: '✕'; }
 
 /* Color Menu Styles */

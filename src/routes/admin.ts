@@ -612,7 +612,8 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           shape: Joi.string().valid('circle', 'square', 'triangle', 'exclamation').optional(),
           label: Joi.string().max(100).allow('').optional(),
           description: Joi.string().max(1000).allow('').optional(),
-          timestamp: Joi.number().optional()
+          timestamp: Joi.number().optional(),
+          expirationTime: Joi.number().integer().min(0).allow(null).optional()
         }).required()
       });
       

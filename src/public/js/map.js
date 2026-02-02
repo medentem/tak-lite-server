@@ -693,6 +693,9 @@ class AdminMap {
       options.push({ type: 'change-shape', iconClass: `shape-${currentShape}`, label: 'Shape' });
     }
     
+    // Add expiration (timer) option
+    options.push({ type: 'set-expiration', iconClass: 'timer', label: 'Timer' });
+    
     // Add delete option
     options.push({ type: 'delete', iconClass: 'delete', label: 'Delete' });
     
@@ -1089,6 +1092,8 @@ class AdminMap {
     } else if (optionType === 'change-shape') {
       // Handle change shape (POIs only)
       this.handleChangeShape(point);
+    } else if (optionType === 'set-expiration') {
+      this.handleSetExpiration();
     } else if (optionType === 'delete') {
       // Handle delete mode
       this.handleDeleteAnnotation();
@@ -1154,6 +1159,93 @@ class AdminMap {
       this.shapeMenu.hide();
       this.updateAnnotationField('shape', shapeType);
     });
+  }
+  
+  handleSetExpiration() {
+    const currentEditing = this.state.getCurrentEditingAnnotation();
+    if (!currentEditing) {
+      this.showFeedback('No annotation selected', 3000);
+      return;
+    }
+    let data = currentEditing.data;
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch (e) {
+        data = {};
+      }
+    }
+    const expMs = data?.expirationTime;
+    const now = Date.now();
+    const currentStatus = expMs == null
+      ? 'No expiration'
+      : expMs <= now
+        ? 'Expired'
+        : `Expires in ${Math.round((expMs - now) / 60000)} min`;
+    const currentMinutes = expMs != null && expMs > now
+      ? String(Math.round((expMs - now) / 60000))
+      : '';
+    const modalId = 'expiration_prompt_modal';
+    const existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.id = modalId;
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-label', 'Set expiration');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10001;display:flex;align-items:center;justify-content:center;';
+    const box = document.createElement('div');
+    box.className = 'annotation-edit-form';
+    box.style.cssText = 'background:var(--surface, #1e293b);padding:1.25rem;border-radius:8px;min-width:280px;box-shadow:0 10px 40px rgba(0,0,0,0.4);';
+    box.innerHTML = `
+      <h3 style="margin:0 0 0.75rem 0;font-size:1rem;">Set expiration</h3>
+      <p style="margin:0 0 0.5rem 0;font-size:0.85rem;color:var(--muted, #94a3b8);">${escapeHtml(currentStatus)}</p>
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label for="expiration_minutes" style="display:block;margin-bottom:0.25rem;font-size:0.875rem;">Expiration (minutes)</label>
+        <input type="number" id="expiration_minutes" min="1" step="1" placeholder="e.g. 5" value="${escapeHtml(currentMinutes)}" style="width:100%;padding:0.5rem;border-radius:4px;border:1px solid var(--border, #334155);background:var(--input-bg, #0f172a);color:inherit;box-sizing:border-box;">
+        <span style="font-size:0.75rem;color:var(--muted, #94a3b8);">Leave empty for no expiration</span>
+      </div>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
+        <button type="button" id="expiration_clear" class="btn-secondary">Clear</button>
+        <button type="button" id="expiration_cancel" class="btn-secondary">Cancel</button>
+        <button type="button" id="expiration_set" class="btn-primary">Set</button>
+      </div>
+    `;
+    overlay.appendChild(box);
+    const close = () => {
+      overlay.remove();
+    };
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+    box.querySelector('#expiration_cancel').addEventListener('click', close);
+    box.querySelector('#expiration_clear').addEventListener('click', async () => {
+      try {
+        await this.updateAnnotationField('expirationTime', null);
+        this.showFeedback('Expiration cleared', 2000);
+        close();
+      } catch (err) {
+        this.showFeedback(`Failed to clear expiration: ${err.message}`, 5000);
+      }
+    });
+    box.querySelector('#expiration_set').addEventListener('click', async () => {
+      const input = box.querySelector('#expiration_minutes');
+      const raw = input.value.trim();
+      const minutes = raw === '' ? null : parseInt(raw, 10);
+      if (minutes != null && (Number.isNaN(minutes) || minutes < 1)) {
+        this.showFeedback('Enter a valid number of minutes (1 or more)', 3000);
+        return;
+      }
+      const value = minutes == null ? null : now + minutes * 60 * 1000;
+      try {
+        await this.updateAnnotationField('expirationTime', value);
+        this.showFeedback(minutes == null ? 'Expiration cleared' : `Expiration set to ${minutes} min`, 2000);
+        close();
+      } catch (err) {
+        this.showFeedback(`Failed to set expiration: ${err.message}`, 5000);
+      }
+    });
+    document.body.appendChild(overlay);
+    box.querySelector('#expiration_minutes').focus();
   }
   
   async updateAnnotationField(field, value) {

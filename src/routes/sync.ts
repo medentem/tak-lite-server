@@ -115,7 +115,13 @@ export function createSyncRouter(sync: SyncService) {
         .orderBy('updated_at', 'desc')
         .limit(limit)
         .offset(offset);
-      res.json(rows);
+      // Exclude expired annotations: respect expirationTime (epoch ms) from annotation data
+      const now = Date.now();
+      const active = rows.filter((row: { data?: { expirationTime?: number } }) => {
+        const exp = row.data?.expirationTime;
+        return exp == null || (typeof exp === 'number' && exp > now);
+      });
+      res.json(active);
     } catch (err) { next(err); }
   });
 
