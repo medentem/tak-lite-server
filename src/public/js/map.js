@@ -100,6 +100,7 @@ class AdminMap {
     this.colorMenu = null; // Will be initialized after map is created
     this.shapeMenu = null; // Will be initialized after map is created
     this.longPressHandler = null; // Will be initialized after map is created
+    this.expirationTickInterval = null; // 1s tick to refresh expiring annotation visuals
     
     // Drawing tools
     this.poiDrawingTool = null;
@@ -2205,6 +2206,16 @@ class AdminMap {
         this.popupManager.setAnnotations(this.annotationManager.getAnnotations());
       }
 
+      // Start expiration tick (refresh map every 1s when any annotation is expiring)
+      if (!this.expirationTickInterval) {
+        this.expirationTickInterval = setInterval(() => {
+          if (this.annotationManager?.hasExpiringAnnotations()) {
+            this.updateMapData();
+          }
+        }, 1000);
+        document.addEventListener('visibilitychange', this._onVisibilityChange.bind(this));
+      }
+
       // Center map on user location or data only when explicitly loading (e.g. refresh button), not on sync-activity refresh
       if (!skipAutoCenter) {
         await this.boundsManager.autoCenter(
@@ -2217,6 +2228,23 @@ class AdminMap {
     }
   }
   
+  _onVisibilityChange() {
+    if (document.hidden) {
+      if (this.expirationTickInterval) {
+        clearInterval(this.expirationTickInterval);
+        this.expirationTickInterval = null;
+      }
+    } else {
+      if (!this.expirationTickInterval && this.annotationManager) {
+        this.expirationTickInterval = setInterval(() => {
+          if (this.annotationManager?.hasExpiringAnnotations()) {
+            this.updateMapData();
+          }
+        }, 1000);
+      }
+    }
+  }
+
   updateMapData() {
     if (!this.map || !this.dataLoader) return;
     

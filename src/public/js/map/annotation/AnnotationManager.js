@@ -6,7 +6,7 @@
 import { logger } from '../../utils/logger.js';
 import { get, post, put, del } from '../../utils/api.js';
 import { extractCoordinates, generateCirclePolygon } from '../../utils/geography.js';
-import { getColorHex, API_ENDPOINTS, LAYER_CONFIG, DATA_LIMITS, DISPLAY_CONFIG } from '../../config/mapConfig.js';
+import { getColorHex, API_ENDPOINTS, LAYER_CONFIG, DATA_LIMITS, DISPLAY_CONFIG, EXPIRATION_WARNING_MS, EXPIRATION_CRITICAL_MS } from '../../config/mapConfig.js';
 
 export class AnnotationManager {
   /**
@@ -234,6 +234,7 @@ export class AnnotationManager {
       annotationIds: this.annotations.map(a => ({ id: a.id, type: a.type, hasData: !!a.data }))
     });
     
+    const now = Date.now();
     this.annotations.forEach((annotation, index) => {
       logger.debug(`[GEOJSON] Processing annotation ${index + 1}/${this.annotations.length}: ${annotation.id}`);
       // Ensure data exists and is an object
@@ -260,6 +261,23 @@ export class AnnotationManager {
         }
       }
       
+      const expMs = data.expirationTime != null ? Number(data.expirationTime) : null;
+      if (expMs != null && expMs <= now) {
+        return; // Skip expired annotations so they disappear from the map
+      }
+      
+      const baseColor = getColorHex(data.color || 'green');
+      let secondsRemaining = null;
+      let timerColor = baseColor;
+      if (expMs != null && expMs > now) {
+        secondsRemaining = Math.max(0, (expMs - now) / 1000);
+        timerColor = secondsRemaining <= EXPIRATION_CRITICAL_MS / 1000
+          ? '#FF0000'
+          : secondsRemaining <= EXPIRATION_WARNING_MS / 1000
+            ? '#FFA500'
+            : baseColor;
+      }
+      
       logger.debug(`[GEOJSON] Processing annotation ${annotation.id} (${annotation.type})`, {
         dataKeys: Object.keys(data),
         hasPosition: !!data.position,
@@ -274,7 +292,10 @@ export class AnnotationManager {
       const properties = {
         id: annotation.id,
         type: annotation.type,
-        color: getColorHex(data.color || 'green'),
+        color: baseColor,
+        timerColor,
+        expirationTime: expMs ?? null,
+        secondsRemaining,
         label: data.label || '',
         description: data.description || '',
         timestamp: data.timestamp ?? createdMs ?? Date.now(),
@@ -520,6 +541,20 @@ export class AnnotationManager {
    */
   getAnnotations() {
     return this.annotations;
+  }
+
+  /**
+   * Whether any annotation has an expiration time in the future (used to gate timer tick)
+   * @returns {boolean}
+   */
+  hasExpiringAnnotations() {
+    const now = Date.now();
+    return this.annotations.some((a) => {
+      if (!a?.data) return false;
+      const data = typeof a.data === 'string' ? (() => { try { return JSON.parse(a.data); } catch { return {}; } })() : a.data;
+      const exp = data.expirationTime != null ? Number(data.expirationTime) : null;
+      return exp != null && exp > now;
+    });
   }
 
   /**

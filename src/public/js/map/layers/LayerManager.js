@@ -72,10 +72,13 @@ export class LayerManager {
       this.addMonitorAreaStrokeLayer(LAYER_CONFIG.monitorAreaLayers.stroke);
     }
 
-    // 7. POI markers - on top of everything (most important for clicking)
+    // 7. POI timer ring (expiring annotations) - under POI icons
+    this.addPoiTimerRingLayer(layers.poiTimerRing);
+    
+    // 8. POI markers - on top of everything (most important for clicking)
     this.addPoiLayer(layers.poi);
     
-    // 8. Location markers - top layer (most important for clicking)
+    // 9. Location markers - top layer (most important for clicking)
     this.addLocationLayer(LAYER_CONFIG.locationLayer);
   }
 
@@ -137,7 +140,7 @@ export class LayerManager {
       type: 'fill',
       source: LAYER_CONFIG.sources.annotationsArea,
       paint: {
-        'fill-color': ['get', 'color'],
+        'fill-color': ['coalesce', ['get', 'timerColor'], ['get', 'color']],
         'fill-opacity': ['get', 'fillOpacity']
       }
     });
@@ -164,7 +167,7 @@ export class LayerManager {
         'line-cap': 'round'
       },
       paint: {
-        'line-color': ['get', 'color'],
+        'line-color': ['coalesce', ['get', 'timerColor'], ['get', 'color']],
         'line-width': ['get', 'strokeWidth'],
         'line-opacity': 1.0
       }
@@ -188,7 +191,7 @@ export class LayerManager {
       type: 'fill',
       source: LAYER_CONFIG.sources.annotationsPolygon,
       paint: {
-        'fill-color': ['get', 'color'],
+        'fill-color': ['coalesce', ['get', 'timerColor'], ['get', 'color']],
         'fill-opacity': 0.3
       }
     });
@@ -215,7 +218,7 @@ export class LayerManager {
         'line-cap': 'round'
       },
       paint: {
-        'line-color': ['get', 'color'],
+        'line-color': ['coalesce', ['get', 'timerColor'], ['get', 'color']],
         'line-width': 2,
         'line-opacity': 0.8
       }
@@ -243,13 +246,38 @@ export class LayerManager {
         'line-cap': 'round'
       },
       paint: {
-        'line-color': ['get', 'color'],
+        'line-color': ['coalesce', ['get', 'timerColor'], ['get', 'color']],
         'line-width': 3,
         'line-opacity': 0.8
       }
     });
     
     this.layers.set(layerId, { type: 'line', category: 'annotation' });
+    logger.debug(`Added layer: ${layerId}`);
+  }
+
+  /**
+   * Add POI timer ring layer (expiring annotations: orange/red ring under icon)
+   */
+  addPoiTimerRingLayer(layerId) {
+    if (this.map.getLayer(layerId)) {
+      logger.debug(`Layer ${layerId} already exists`);
+      return;
+    }
+    this.map.addLayer({
+      id: layerId,
+      type: 'circle',
+      source: LAYER_CONFIG.sources.annotationsPoi,
+      filter: ['all', ['has', 'secondsRemaining'], ['>', ['get', 'secondsRemaining'], 0]],
+      paint: {
+        'circle-radius': 18,
+        'circle-color': 'rgba(0,0,0,0)',
+        'circle-stroke-color': ['get', 'timerColor'],
+        'circle-stroke-width': 3,
+        'circle-stroke-opacity': 0.9
+      }
+    });
+    this.layers.set(layerId, { type: 'circle', category: 'annotation' });
     logger.debug(`Added layer: ${layerId}`);
   }
 

@@ -104,6 +104,9 @@ export class PopupManager {
         break;
     }
     
+    if (properties.expirationTime != null) {
+      lines.push({ type: 'expiration', expirationTime: Number(properties.expirationTime) });
+    }
     this.addCommonInfo(lines, properties, lngLat);
     return this.buildPopupHTML(lines, properties);
   }
@@ -232,6 +235,18 @@ export class PopupManager {
   }
 
   /**
+   * Format expiration countdown text from epoch ms
+   */
+  formatExpirationText(expirationTimeMs) {
+    const now = Date.now();
+    if (expirationTimeMs <= now) return 'Expired';
+    const sec = Math.max(0, (expirationTimeMs - now) / 1000);
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `Expires in ${m}m ${s}s`;
+  }
+
+  /**
    * Build popup HTML
    */
   buildPopupHTML(lines, properties) {
@@ -243,9 +258,12 @@ export class PopupManager {
     const processedContent = content.map(line => {
       if (typeof line === 'object' && line.type === 'age') {
         return `<span class="age-text" data-timestamp="${line.timestamp}">${formatAge(line.timestamp)}</span>`;
-      } else {
-        return escapeHtml(line);
       }
+      if (typeof line === 'object' && line.type === 'expiration') {
+        const text = this.formatExpirationText(line.expirationTime);
+        return `<span class="expiration-text" data-expiration-time="${line.expirationTime}">${escapeHtml(text)}</span>`;
+      }
+      return escapeHtml(line);
     });
     
     return `
@@ -284,7 +302,7 @@ export class PopupManager {
   }
 
   /**
-   * Update age in current popup
+   * Update age and expiration in current popup
    */
   updatePopupAge() {
     if (!this.currentPopup || !this.currentPopup.isOpen()) return;
@@ -297,6 +315,13 @@ export class PopupManager {
       const timestamp = element.dataset.timestamp;
       if (timestamp) {
         element.textContent = formatAge(timestamp);
+      }
+    });
+    const expirationElements = popupContent.querySelectorAll('.expiration-text');
+    expirationElements.forEach(element => {
+      const expirationTime = element.dataset.expirationTime;
+      if (expirationTime) {
+        element.textContent = this.formatExpirationText(parseInt(expirationTime, 10));
       }
     });
   }

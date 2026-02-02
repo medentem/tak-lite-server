@@ -103,12 +103,19 @@ export const API_ENDPOINTS = {
 };
 
 /**
+ * Annotation expiration thresholds (match Android app)
+ */
+export const EXPIRATION_WARNING_MS = 60 * 1000;   // 1 minute – orange
+export const EXPIRATION_CRITICAL_MS = 10 * 1000;  // 10 seconds – red
+
+/**
  * Map layer configuration
  */
 export const LAYER_CONFIG = {
   /** Annotation layer IDs */
   annotationLayers: {
     poi: 'annotations-poi',
+    poiTimerRing: 'annotations-poi-timer-ring',
     line: 'annotations-line',
     area: 'annotations-area',
     areaStroke: 'annotations-area-stroke',
