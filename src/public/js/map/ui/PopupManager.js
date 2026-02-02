@@ -8,6 +8,11 @@ import { formatAge, escapeHtml, capitalizeFirst, formatDistance, formatArea, get
 import { calculateLineLength, calculateCircleArea, calculatePolygonArea } from '../../utils/geography.js';
 import { TIMING } from '../../config/mapConfig.js';
 
+function isGuidLike(value) {
+  if (!value || typeof value !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 export class PopupManager {
   /**
    * Create a popup manager
@@ -225,7 +230,7 @@ export class PopupManager {
    * Add common information
    */
   addCommonInfo(lines, properties, lngLat) {
-    const createdBy = properties.creatorUsername || properties.creatorId;
+    const createdBy = properties.creatorUsername || (isGuidLike(properties.creatorId) ? 'Unknown' : properties.creatorId);
     if (createdBy) {
       lines.push(`Created by: ${createdBy}`);
     }

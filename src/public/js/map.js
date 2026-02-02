@@ -1744,6 +1744,11 @@ class AdminMap {
       satelliteBtn.classList.toggle('active', type === 'satellite');
       satelliteBtn.setAttribute('aria-pressed', type === 'satellite' ? 'true' : 'false');
     }
+    // setStyle() replaces the style and removes all layers/sources. Re-add our layers and data when the new style is loaded.
+    this.map.once('styledata', () => {
+      this.setupMapSources();
+      this.updateMapData();
+    });
   }
 
   /**
@@ -2247,6 +2252,17 @@ class AdminMap {
 
   updateMapData() {
     if (!this.map || !this.dataLoader) return;
+    
+    // If style was replaced (e.g. satellite/street switch) or not loaded yet, sources/layers are missing.
+    // Set them up and re-run updateMapData once the style is ready so client-created annotations paint immediately.
+    if (!this.map.getSource(LAYER_CONFIG.sources.annotationsPoi)) {
+      if (!this.map.isStyleLoaded()) {
+        this.map.once('styledata', () => this.updateMapData());
+        return;
+      }
+      this.setupMapSources();
+      // After adding sources/layers, set data (sources now exist)
+    }
     
     // Ensure POI icons exist before updating (in case new shape/color combinations were used)
     // All icons should be generated upfront, but this ensures they exist

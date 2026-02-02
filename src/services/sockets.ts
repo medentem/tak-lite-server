@@ -125,6 +125,9 @@ export class SocketGateway {
       
       try {
         const annotation = await this.sync.handleAnnotationUpdate(user.id, data);
+        // Resolve creator display name so clients (e.g. Android) show username in notifications/popovers, not GUID
+        const creatorUser = await this.sync.database.client('users').where({ id: annotation.user_id }).select('name').first();
+        const creatorUsername = creatorUser?.name ?? ((annotation as any).user_name) ?? (annotation.user_id === 'admin' ? 'Admin' : null);
         
         // Broadcast to appropriate rooms based on team filtering logic
         // Include all required fields for polymorphic deserialization
@@ -133,7 +136,7 @@ export class SocketGateway {
           type: annotation.type, // Add discriminator field for Kotlinx Serialization
           id: annotation.id, // Ensure ID is in the data object
           creatorId: annotation.user_id, // Map user_id to creatorId
-          creatorUsername: (annotation as any).user_name ?? annotation.user_id,
+          creatorUsername: creatorUsername ?? null, // Resolved from DB so clients show username in notifications/popovers, not GUID
           source: 'server', // Set source to server
           originalSource: 'server' // Set original source to server
         };
