@@ -1710,7 +1710,17 @@ class AdminMap {
         this.clearAllAnnotations();
       });
     }
-    
+
+    // Layers collapse/expand (mobile: button toggles Annotations/Locations checkboxes)
+    const layersBtn = q('#map_control_layers_btn');
+    const layersWrap = layersBtn?.closest('.map-control-layers');
+    if (layersBtn && layersWrap) {
+      layersBtn.addEventListener('click', () => {
+        const expanded = layersWrap.classList.toggle('expanded');
+        layersBtn.setAttribute('aria-expanded', String(expanded));
+      });
+    }
+
     // Show/hide toggles
     const showAnnotations = q('#map_show_annotations');
     if (showAnnotations) {

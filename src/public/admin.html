@@ -298,19 +298,22 @@
             <button id="map_refresh" class="map-control-btn" title="Refresh Data">↻</button>
             <button id="map_center" class="map-control-btn" title="Center Map">⌂</button>
             <button id="map_clear_all" class="map-control-btn danger" title="Clear All">✕</button>
-            <div class="map-control-toggle">
-              <label class="map-control-label">
-                <input id="map_show_annotations" type="checkbox" checked />
-                <span>Annotations</span>
-              </label>
-              <label class="map-control-label">
-                <input id="map_show_locations" type="checkbox" checked />
-                <span>Locations</span>
-              </label>
-              <label class="map-control-label" id="map_show_monitors_wrapper" style="display: none;">
-                <input id="map_show_monitors" type="checkbox" />
-                <span>Monitor areas</span>
-              </label>
+            <div class="map-control-layers">
+              <button type="button" id="map_control_layers_btn" class="map-control-layers-btn" title="Layers" aria-expanded="false" aria-controls="map_control_toggle" aria-label="Toggle layers"><span class="map-control-layers-btn-text">Layers</span></button>
+              <div id="map_control_toggle" class="map-control-toggle" role="region" aria-label="Map layers">
+                <label class="map-control-label">
+                  <input id="map_show_annotations" type="checkbox" checked />
+                  <span>Annotations</span>
+                </label>
+                <label class="map-control-label">
+                  <input id="map_show_locations" type="checkbox" checked />
+                  <span>Locations</span>
+                </label>
+                <label class="map-control-label" id="map_show_monitors_wrapper" style="display: none;">
+                  <input id="map_show_monitors" type="checkbox" />
+                  <span>Monitor areas</span>
+                </label>
+              </div>
             </div>
           </div>
 

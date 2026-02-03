@@ -406,6 +406,18 @@ body.dashboard-visible .container #dash {
   font-weight: 500;
 }
 
+/* Layers wrapper: on desktop the button is hidden and toggle is always visible */
+.map-control-layers-btn {
+  display: none;
+}
+
+.map-control-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+}
+
 .map-control-toggle {
   display: flex;
   flex-direction: column;
@@ -1418,6 +1430,53 @@ body.dashboard-visible .container #dash {
     margin: 0;
     background: transparent;
     border-radius: 0;
+  }
+
+  /* Collapse Annotations/Locations filters on mobile; expand via "Layers" button */
+  body.dashboard-visible .map-control-layers-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    background: rgba(17, 26, 43, 0.9);
+    border: 1px solid rgba(31, 42, 68, 0.5);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    width: 36px;
+    height: 36px;
+    box-sizing: border-box;
+  }
+
+  body.dashboard-visible .map-control-layers-btn:hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.5);
+  }
+
+  /* Compact: icon-only on mobile to save space */
+  body.dashboard-visible .map-control-layers-btn .map-control-layers-btn-text {
+    display: none;
+  }
+
+  body.dashboard-visible .map-control-layers-btn::before {
+    content: '▾';
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  body.dashboard-visible .map-control-layers.expanded .map-control-layers-btn::before {
+    content: '▴';
+  }
+
+  body.dashboard-visible .map-control-toggle {
+    display: none;
+  }
+
+  body.dashboard-visible .map-control-layers.expanded .map-control-toggle {
+    display: flex;
   }
 
   /* Status bar ⌘K is replaced by search icon in mobile top bar */
