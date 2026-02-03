@@ -60,6 +60,7 @@ import {
   ShapeMenu,
   MenuManager,
   PopupManager,
+  TimerPillOverlay,
   FeedbackDisplay,
   MapStateManager,
   EventBus,
@@ -97,6 +98,7 @@ class AdminMap {
     this.menuManager = new MenuManager();
     this.feedbackDisplay = new FeedbackDisplay();
     this.popupManager = null; // Will be initialized after map is created
+    this.timerPillOverlay = null; // Timer pills for expiring annotations (matches Android)
     this.fanMenu = null; // Will be initialized after map is created
     this.colorMenu = null; // Will be initialized after map is created
     this.shapeMenu = null; // Will be initialized after map is created
@@ -265,6 +267,8 @@ class AdminMap {
       
       // Initialize UI components
       this.popupManager = new PopupManager(this.map, this.annotationManager.getAnnotations());
+      this.timerPillOverlay = new TimerPillOverlay(this.map, 'map_container');
+      this.timerPillOverlay.attach();
       this.fanMenu = new FanMenu('fan_menu', this.map, this.menuManager);
       this.colorMenu = new ColorMenu('color_menu', this.menuManager);
       this.shapeMenu = new ShapeMenu('shape_menu', this.menuManager);
@@ -2329,6 +2333,10 @@ class AdminMap {
     // Update popup manager with current annotations
     if (this.popupManager) {
       this.popupManager.setAnnotations(this.annotationManager.getAnnotations());
+    }
+    // Update on-map timer pills for expiring annotations (matches Android UX)
+    if (this.timerPillOverlay) {
+      this.timerPillOverlay.update(this.annotationManager.getAnnotations());
     }
     
     this.eventBus.emit(MAP_EVENTS.MAP_DATA_UPDATED);

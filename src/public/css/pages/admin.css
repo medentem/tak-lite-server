@@ -802,6 +802,54 @@ body.dashboard-visible .container #dash {
   opacity: 0.8;
 }
 
+/* Timer pill in popup (matches Android expiration pill UX) */
+.popup-content .timer-pill,
+.popup-content .expiration-text {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.7);
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  margin-top: 4px;
+}
+.popup-content .timer-pill.timer-pill-warning,
+.popup-content .expiration-text.timer-pill-warning { background: rgba(245, 158, 11, 0.9); color: #000; }
+.popup-content .timer-pill.timer-pill-critical,
+.popup-content .expiration-text.timer-pill-critical { background: rgba(220, 38, 38, 0.9); color: #fff; }
+
+/* On-map timer pill overlay (matches Android timer text overlay) */
+.annotation-timer-pills-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+.annotation-timer-pill {
+  position: absolute;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.7);
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.annotation-timer-pill.timer-pill-warning {
+  background: rgba(245, 158, 11, 0.95);
+  color: #000;
+}
+.annotation-timer-pill.timer-pill-critical {
+  background: rgba(220, 38, 38, 0.95);
+  color: #fff;
+}
+
 /* Fan Menu Styles */
 .fan-menu {
   position: absolute;

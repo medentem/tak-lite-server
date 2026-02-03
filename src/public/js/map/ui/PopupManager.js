@@ -240,15 +240,28 @@ export class PopupManager {
   }
 
   /**
-   * Format expiration countdown text from epoch ms
+   * Format expiration countdown text from epoch ms (matches Android: "5m 30s", "45s", "EXPIRED")
    */
   formatExpirationText(expirationTimeMs) {
     const now = Date.now();
-    if (expirationTimeMs <= now) return 'Expired';
+    if (expirationTimeMs <= now) return 'EXPIRED';
     const sec = Math.max(0, (expirationTimeMs - now) / 1000);
     const m = Math.floor(sec / 60);
     const s = Math.floor(sec % 60);
-    return `Expires in ${m}m ${s}s`;
+    if (sec >= 60) return `${m}m ${s}s`;
+    return `${Math.floor(sec)}s`;
+  }
+
+  /**
+   * Get pill modifier class for expiration (warning/critical) to match Android timer colors.
+   */
+  getExpirationPillClass(expirationTimeMs) {
+    const now = Date.now();
+    if (expirationTimeMs <= now) return 'timer-pill-critical';
+    const sec = (expirationTimeMs - now) / 1000;
+    if (sec <= 10) return 'timer-pill-critical';
+    if (sec <= 60) return 'timer-pill-warning';
+    return '';
   }
 
   /**
@@ -266,7 +279,9 @@ export class PopupManager {
       }
       if (typeof line === 'object' && line.type === 'expiration') {
         const text = this.formatExpirationText(line.expirationTime);
-        return `<span class="expiration-text" data-expiration-time="${line.expirationTime}">${escapeHtml(text)}</span>`;
+        const pillClass = this.getExpirationPillClass(line.expirationTime);
+        const extraClass = pillClass ? ` ${pillClass}` : '';
+        return `<span class="expiration-text timer-pill${extraClass}" data-expiration-time="${line.expirationTime}">${escapeHtml(text)}</span>`;
       }
       return escapeHtml(line);
     });
@@ -326,7 +341,11 @@ export class PopupManager {
     expirationElements.forEach(element => {
       const expirationTime = element.dataset.expirationTime;
       if (expirationTime) {
-        element.textContent = this.formatExpirationText(parseInt(expirationTime, 10));
+        const expMs = parseInt(expirationTime, 10);
+        element.textContent = this.formatExpirationText(expMs);
+        element.classList.remove('timer-pill-warning', 'timer-pill-critical');
+        const pillClass = this.getExpirationPillClass(expMs);
+        if (pillClass) element.classList.add(pillClass);
       }
     });
   }

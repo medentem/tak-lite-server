@@ -14,6 +14,7 @@ export { ColorMenu } from './ui/ColorMenu.js';
 export { ShapeMenu } from './ui/ShapeMenu.js';
 export { MenuManager } from './ui/MenuManager.js';
 export { PopupManager } from './ui/PopupManager.js';
+export { TimerPillOverlay } from './ui/TimerPillOverlay.js';
 export { FeedbackDisplay } from './ui/FeedbackDisplay.js';
 export { MapStateManager } from './state/MapStateManager.js';
 export { EventBus, MAP_EVENTS } from './events/EventBus.js';
