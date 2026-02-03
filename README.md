@@ -2,6 +2,12 @@
 
 Cloud-native backend for TAK Lite. Purpose-built to bridge disconnected meshes and provide online visibility for teams using the TAK Lite app. Includes first‑run setup, authentication, real‑time sync, and a lightweight admin dashboard.
 
+# How it works
+
+TAK-Lite Server provides an internet-enabled synchronization backbone for all TAK-Lite clients, and provides command and control capabilities to a desktop-based operator interacting with the server-side dashboard. Clients still benefit from the mesh network synchronization in the field, but get additional situational awareness from a remote operator monitoring the operating area. 
+
+![tak-lite-server-overview](https://github.com/user-attachments/assets/4e7ba63a-373e-4d65-a975-f648da8bdf91)
+
 [![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/medentem/tak-lite-server/tree/main&refcode=6be1d132f60d)
 
 > **Recommended**: The "Deploy to DO" button provides the fastest setup with a Dev Database including SSL certificates. For production databases with monitoring alerts, use Option 3 below.
