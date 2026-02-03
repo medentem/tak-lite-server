@@ -1403,6 +1403,12 @@ body.dashboard-visible .container #dash {
     gap: 8px;
   }
 
+  /* Hide Threat and Message count badges on mobile */
+  body.dashboard-visible #threats-badge,
+  body.dashboard-visible #messages-badge {
+    display: none;
+  }
+
   /* Map fills full viewport; status bar overlays it below the 48px mobile top bar */
   body.dashboard-visible .dashboard-map-fullscreen {
     position: absolute;
@@ -1550,6 +1556,7 @@ body.dashboard-visible .container #dash {
 
   .mobile-hud-pill-count {
     font-variant-numeric: tabular-nums;
+    display: none; /* hide count on mobile; show icon only */
   }
 
   .mobile-activity-sheet-overlay {
