@@ -46,7 +46,7 @@ import {
   TIMING,
   DATA_LIMITS
 } from './config/mapConfig.js';
-import { websocketService } from '../services/websocket.js';
+import { websocketService } from './services/websocket.js';
 
 // Import map components
 import {
