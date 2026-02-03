@@ -173,7 +173,7 @@ export class TimerPillOverlay {
 
       // Scale pill by zoom so it shrinks when zoomed out and doesn't dominate the map
       const zoom = this.map.getZoom();
-      const scale = Math.min(1.1, Math.max(0.5, 0.5 + zoom * 0.04));
+      const scale = Math.min(1.2, Math.max(0.2, 0.5 + zoom * 0.04));
 
       // Position via map.project (mapbox uses [lng, lat])
       try {
