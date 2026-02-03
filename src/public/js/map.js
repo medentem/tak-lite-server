@@ -1053,44 +1053,50 @@ class AdminMap {
   setupFanMenuDismiss() {
     // Clean up any existing dismiss listener
     this.cleanupFanMenuDismiss();
-    
-    // Add click listener to document to dismiss fan menu when clicking outside
+
+    // Click/tap outside to dismiss (click covers desktop and synthesized mobile click)
     this.fanMenuDismissHandler = (e) => {
-      logger.debug('Fan menu dismiss handler triggered');
-      logger.debug('Event _longPressHandled:', e._longPressHandled);
-      logger.debug('longPressInProgress:', this.longPressInProgress);
-      
-      // Don't dismiss if this was a long press event
-      if (e._longPressHandled) {
-        logger.debug('Ignoring click dismissal due to long press event');
-        return;
-      }
-      // Ignore the click that is the mouse release after long-press (browser fires click but it's a different event object)
-      if (this.fanMenuOpenedAt && (Date.now() - this.fanMenuOpenedAt) < (TIMING.fanMenuOpenGraceMs ?? 400)) {
-        logger.debug('Ignoring click dismissal: within grace period after fan menu opened');
-        return;
-      }
-      
-      // Check if click is outside the fan menu
-      const fanMenuElement = this.fanMenu?.getElement();
+      if (!this.fanMenu?.getElement()?.classList.contains('visible')) return;
+      if (e._longPressHandled) return;
+      if (this.fanMenuOpenedAt && (Date.now() - this.fanMenuOpenedAt) < (TIMING.fanMenuOpenGraceMs ?? 400)) return;
+
+      const fanMenuElement = this.fanMenu.getElement();
       if (fanMenuElement && !fanMenuElement.contains(e.target)) {
-        logger.debug('Clicking outside fan menu, dismissing');
         this.hideFanMenu();
-      } else {
-        logger.debug('Click was inside fan menu, not dismissing');
       }
     };
-    
-    // Use a small delay to prevent immediate dismissal from the click that opened the menu
-    setTimeout(() => {
+
+    // Touchend outside to dismiss (mobile: immediate dismiss on finger lift, no waiting for synthetic click)
+    this.fanMenuDismissTouchHandler = (e) => {
+      if (!this.fanMenu?.getElement()?.classList.contains('visible')) return;
+      if (this.fanMenuOpenedAt && (Date.now() - this.fanMenuOpenedAt) < (TIMING.fanMenuOpenGraceMs ?? 400)) return;
+
+      const touch = e.changedTouches && e.changedTouches[0];
+      if (!touch) return;
+
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const fanMenuElement = this.fanMenu?.getElement();
+      if (fanMenuElement && el && !fanMenuElement.contains(el)) {
+        this.hideFanMenu();
+      }
+    };
+
+    const attach = () => {
       document.addEventListener('click', this.fanMenuDismissHandler);
-    }, 100);
+      document.addEventListener('touchend', this.fanMenuDismissTouchHandler);
+    };
+
+    setTimeout(attach, 100);
   }
-  
+
   cleanupFanMenuDismiss() {
     if (this.fanMenuDismissHandler) {
       document.removeEventListener('click', this.fanMenuDismissHandler);
       this.fanMenuDismissHandler = null;
+    }
+    if (this.fanMenuDismissTouchHandler) {
+      document.removeEventListener('touchend', this.fanMenuDismissTouchHandler);
+      this.fanMenuDismissTouchHandler = null;
     }
   }
   

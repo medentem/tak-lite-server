@@ -30,21 +30,27 @@ export class LongPressHandler {
   }
 
   /**
-   * Start listening for long press events
+   * Start listening for long press events (mouse and touch for mobile)
    */
   start() {
     if (this.isActive) {
       logger.warn('LongPressHandler is already active');
       return;
     }
-    
+
     this.isActive = true;
     this.map.on('mousedown', this.handleMouseDown);
     this.map.on('mouseup', this.handleMouseUp);
     this.map.on('mouseleave', this.handleMouseLeave);
     this.map.on('mousemove', this.handleMouseMove);
-    
-    logger.debug('LongPressHandler started');
+
+    // Touch support for mobile: tap-and-hold to open fan menu
+    this.map.on('touchstart', this.handleTouchStart);
+    this.map.on('touchend', this.handleTouchEnd);
+    this.map.on('touchcancel', this.handleTouchCancel);
+    this.map.on('touchmove', this.handleTouchMove);
+
+    logger.debug('LongPressHandler started (mouse + touch)');
   }
 
   /**
@@ -52,13 +58,18 @@ export class LongPressHandler {
    */
   stop() {
     if (!this.isActive) return;
-    
+
     this.cancelLongPress();
     this.map.off('mousedown', this.handleMouseDown);
     this.map.off('mouseup', this.handleMouseUp);
     this.map.off('mouseleave', this.handleMouseLeave);
     this.map.off('mousemove', this.handleMouseMove);
-    
+
+    this.map.off('touchstart', this.handleTouchStart);
+    this.map.off('touchend', this.handleTouchEnd);
+    this.map.off('touchcancel', this.handleTouchCancel);
+    this.map.off('touchmove', this.handleTouchMove);
+
     this.isActive = false;
     logger.debug('LongPressHandler stopped');
   }
@@ -126,10 +137,10 @@ export class LongPressHandler {
       const startPoint = this.longPressStartEvent.point;
       const currentPoint = e.point;
       const distance = Math.sqrt(
-        Math.pow(currentPoint.x - startPoint.x, 2) + 
+        Math.pow(currentPoint.x - startPoint.x, 2) +
         Math.pow(currentPoint.y - startPoint.y, 2)
       );
-      
+
       // Cancel if moved more than 10 pixels
       if (distance > 10) {
         logger.debug('Long press cancelled due to mouse movement');
@@ -139,13 +150,87 @@ export class LongPressHandler {
   }
 
   /**
-   * Trigger long press callback
-   * @param {maplibregl.MapMouseEvent} e - Mouse event
+   * Handle touch start (mobile) – same semantics as mousedown
+   * @param {maplibregl.MapTouchEvent} e - Touch event
+   */
+  handleTouchStart = (e) => {
+    // Only handle single-finger touch for long press
+    if (!e.points || e.points.length !== 1) {
+      if (this.longPressTimer) this.cancelLongPress();
+      return;
+    }
+    if (this.shouldIgnoreEvent(e)) {
+      return;
+    }
+
+    this.longPressTriggered = false;
+    this.longPressStartEvent = e;
+
+    this.longPressTimer = setTimeout(() => {
+      if (this.isActive) {
+        this.triggerLongPress(e);
+      }
+    }, this.threshold);
+
+    logger.debug('Long press timer started (touch)');
+  }
+
+  /**
+   * Handle touch end (mobile) – same semantics as mouseup
+   * @param {maplibregl.MapTouchEvent} e - Touch event
+   */
+  handleTouchEnd = (e) => {
+    if (this.longPressTimer) {
+      clearTimeout(this.longPressTimer);
+      this.longPressTimer = null;
+    }
+
+    if (this.longPressTriggered) {
+      logger.debug('Long press completed (touch), marking to avoid synthetic click');
+      if (e.originalEvent) {
+        e.originalEvent._longPressHandled = true;
+        e.originalEvent.preventDefault();
+      }
+      e._longPressHandled = true;
+      this.longPressTriggered = false;
+      this.longPressStartEvent = null;
+    }
+  }
+
+  /**
+   * Handle touch cancel (e.g. system gesture)
+   */
+  handleTouchCancel = () => {
+    this.cancelLongPress();
+  }
+
+  /**
+   * Handle touch move – cancel if finger moves too far
+   * @param {maplibregl.MapTouchEvent} e - Touch event
+   */
+  handleTouchMove = (e) => {
+    if (this.longPressStartEvent && this.longPressTimer && e.points && e.points.length === 1) {
+      const startPoint = this.longPressStartEvent.point;
+      const currentPoint = e.point;
+      const distance = Math.sqrt(
+        Math.pow(currentPoint.x - startPoint.x, 2) +
+        Math.pow(currentPoint.y - startPoint.y, 2)
+      );
+      if (distance > 10) {
+        logger.debug('Long press cancelled due to touch movement');
+        this.cancelLongPress();
+      }
+    }
+  }
+
+  /**
+   * Trigger long press callback (works for both mouse and touch events; both have .point and .lngLat)
+   * @param {maplibregl.MapMouseEvent|maplibregl.MapTouchEvent} e - Map event
    */
   triggerLongPress(e) {
     this.longPressTriggered = true;
     logger.debug('Long press detected at:', e.point);
-    
+
     if (this.onLongPress) {
       this.onLongPress(e);
     }
