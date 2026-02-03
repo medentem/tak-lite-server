@@ -1409,15 +1409,20 @@ body.dashboard-visible .container #dash {
     bottom: 0;
   }
 
-  /* Map controls below status bar so they don’t overlap the header */
+  /* Map controls below status bar (top bar 48px + status bar ~70px when wrapped) */
   body.dashboard-visible .map-controls-overlay {
-    top: 96px;
+    top: 130px;
     right: 8px;
     left: auto;
     padding: 0;
     margin: 0;
     background: transparent;
     border-radius: 0;
+  }
+
+  /* Status bar ⌘K is replaced by search icon in mobile top bar */
+  body.dashboard-visible #command-palette-toggle {
+    display: none !important;
   }
 
   /* Hide desktop HUD stack on mobile; use pills + bottom sheet instead */
