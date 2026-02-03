@@ -69,6 +69,7 @@ export class TimerPillOverlay {
     this.containerId = containerId;
     this.container = null;
     this.pills = new Map(); // annotationId -> HTMLElement
+    this._lastAnnotations = []; // stored so move/zoom/resize can re-run without annotations arg
     this._boundUpdate = this.update.bind(this);
   }
 
@@ -107,15 +108,19 @@ export class TimerPillOverlay {
 
   /**
    * Update pills from current annotations. Call after data load or every second when expiring.
-   * @param {Array} annotations - Full annotations array from AnnotationManager
+   * When called from map events (move/zoom/resize) no arg is passed; uses last stored annotations.
+   * @param {Array} [annotations] - Full annotations array from AnnotationManager
    */
-  update(annotations = []) {
+  update(annotations) {
     if (!this.container || !this.map) return;
+
+    if (Array.isArray(annotations)) this._lastAnnotations = annotations;
+    const list = this._lastAnnotations;
 
     const now = Date.now();
     const expiring = [];
 
-    for (const ann of annotations) {
+    for (const ann of list) {
       if (!ann?.data) continue;
       const data = typeof ann.data === 'string'
         ? (() => { try { return JSON.parse(ann.data); } catch { return {}; } })()
