@@ -21,6 +21,19 @@ const resetPasswordLimiter = rateLimit({
   message: 'Too many password reset attempts; try again later.'
 });
 
+const UUID_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolve a display name for the annotation creator. Never returns a raw GUID:
+ * uses DB user name, or 'Admin' for legacy admin, or 'Dashboard' for unknown UUIDs.
+ */
+function getCreatorDisplayName(userId: string, creatorUser: { name: string } | null | undefined): string {
+  if (creatorUser?.name) return creatorUser.name;
+  if (userId === 'admin') return 'Admin';
+  if (UUID_LIKE.test(userId)) return 'Dashboard';
+  return userId;
+}
+
 /** Return team IDs the user is a member of (for non-admin scoping). */
 async function getUserTeamIds(database: DatabaseService, userId: string): Promise<string[]> {
   const rows = await database.client('team_memberships').where('user_id', userId).select('team_id');
@@ -500,13 +513,16 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       
       const id = uuidv4();
       const userId = (req.user as any)?.sub || 'admin';
+      const creatorUser = await db.client('users').where({ id: userId }).first();
+      const creatorUsername = getCreatorDisplayName(userId, creatorUser);
+      const dataToStore = { ...data, creatorId: userId, creatorUsername };
       
       const row = {
         id,
         user_id: userId,
         team_id: teamId,
         type,
-        data: JSON.stringify(data),
+        data: JSON.stringify(dataToStore),
         created_at: db.client.fn.now(),
         updated_at: db.client.fn.now()
       };
@@ -520,9 +536,6 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         resourceId: id, 
         metadata: { teamId, type } 
       });
-      
-      const creatorUser = await db.client('users').where({ id: userId }).first();
-      const creatorUsername = creatorUser?.name ?? (userId === 'admin' ? 'Admin' : userId);
       
       // Emit real-time update to admin clients (createdBy = creator for popover)
       if (io) {
@@ -539,15 +552,13 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         });
         
         // Broadcast to regular clients (Android clients listen for this)
-        // Include all required fields for polymorphic deserialization
+        // Include all required fields for polymorphic deserialization (dataToStore already has creatorId/creatorUsername)
         const clientData = {
-          ...data,
-          type: type, // Add discriminator field for Kotlinx Serialization
-          id: id, // Ensure ID is in the data object
-          creatorId: userId, // Map userId to creatorId
-          creatorUsername,
-          source: 'server', // Set source to server
-          originalSource: 'server' // Set original source to server
+          ...dataToStore,
+          type: type,
+          id: id,
+          source: 'server',
+          originalSource: 'server'
         };
         
         if (teamId) {
@@ -628,7 +639,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       }
       
       const creatorUser = await db.client('users').where({ id: existing.user_id }).first();
-      const creatorUsername = creatorUser?.name ?? (existing.user_id === 'admin' ? 'Admin' : existing.user_id);
+      const creatorUsername = getCreatorDisplayName(existing.user_id, creatorUser);
       
       // Merge with existing data
       // Handle both string and object formats (some DB drivers auto-parse JSONB)
@@ -642,6 +653,8 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       // Bump timestamp so clients (e.g. Android HybridSyncManager) treat this as a new version
       // and do not skip as "duplicate annotation version" when only label/description changed
       mergedData.timestamp = Date.now();
+      mergedData.creatorId = existing.user_id;
+      mergedData.creatorUsername = creatorUsername;
 
       await db.client('annotations')
         .where({ id: annotationId })
