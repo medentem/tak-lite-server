@@ -148,11 +148,33 @@ export class Auth {
     const logoutBtn = q('#logout');
     const whoSpan = q('#who');
     const adminNav = q('#adminNav');
+    const mobileTopBar = q('#mobileTopBar');
+    const drawerWho = q('#drawer-who');
+    const drawerLogout = q('#drawer-logout');
 
     toggleVisibility(loginCard, !authenticated);
     toggleVisibility(logoutBtn, authenticated);
     toggleVisibility(whoSpan, authenticated);
     toggleVisibility(adminNav, authenticated);
+    if (mobileTopBar) {
+      if (authenticated) {
+        mobileTopBar.classList.remove('hidden');
+        mobileTopBar.setAttribute('aria-hidden', 'false');
+      } else {
+        mobileTopBar.classList.add('hidden');
+        mobileTopBar.setAttribute('aria-hidden', 'true');
+      }
+    }
+    if (authenticated) {
+      document.body.classList.add('authenticated');
+      if (drawerWho) drawerWho.textContent = displayName || '';
+      if (drawerLogout) {
+        drawerLogout.onclick = () => this.logout();
+      }
+    } else {
+      document.body.classList.remove('authenticated');
+      document.dispatchEvent(new CustomEvent('navDrawerClose'));
+    }
     if (!authenticated) {
       document.body.classList.remove('admin-page-visible', 'dashboard-visible');
     }

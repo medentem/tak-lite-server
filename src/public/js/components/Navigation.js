@@ -18,6 +18,9 @@ export class Navigation {
       ['threats', 'messages', 'settings', 'management'].forEach((page) => {
         const link = q(`#nav-${page}`);
         if (link) link.style.display = 'none';
+        document.querySelectorAll(`[data-nav-page="${page}"]`).forEach((el) => {
+          el.style.display = 'none';
+        });
       });
       const socialLink = q('#nav-social');
       if (socialLink) socialLink.style.display = 'none';
@@ -28,14 +31,15 @@ export class Navigation {
 
   setupNavigationLinks() {
     this.pages.forEach(page => {
-      const link = q(`#nav-${page}`);
-      if (link) {
+      const links = document.querySelectorAll(`[data-nav-page="${page}"]`);
+      links.forEach(link => {
         link.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
           this.navigate(page);
+          document.dispatchEvent(new CustomEvent('navDrawerClose'));
         });
-      }
+      });
     });
   }
 
@@ -92,19 +96,13 @@ export class Navigation {
       document.body.classList.remove('dashboard-visible');
     }
 
-    // Update navigation links
-    this.pages.forEach(p => {
-      const link = q(`#nav-${p}`);
-      if (link) {
-        if (p === page) {
-          link.style.color = 'var(--text)';
-          link.style.background = 'var(--accent)';
-          link.style.fontWeight = '500';
-        } else {
-          link.style.color = 'var(--muted)';
-          link.style.background = 'transparent';
-          link.style.fontWeight = 'normal';
-        }
+    // Update navigation links (desktop nav + mobile drawer)
+    document.querySelectorAll('[data-nav-page]').forEach((link) => {
+      const linkPage = link.getAttribute('data-nav-page');
+      if (linkPage === page) {
+        link.classList.add('nav-active');
+      } else {
+        link.classList.remove('nav-active');
       }
     });
 

@@ -57,6 +57,9 @@ class AdminApp {
           this.navigation.navigate(e.detail.page);
         }
       });
+
+      // Mobile: drawer open/close and command palette trigger
+      this.setupMobileDrawer();
     } catch (error) {
       console.error('Failed to initialize admin app:', error);
       // Show error to user
@@ -117,6 +120,57 @@ class AdminApp {
     } catch (error) {
       console.error('Failed to setup authenticated app:', error);
       showMessage('Some features may not be available', 'warning');
+    }
+  }
+
+  setupMobileDrawer() {
+    const overlay = q('#navDrawerOverlay');
+    const drawer = q('#navDrawer');
+    const menuBtn = q('#mobile-menu-btn');
+    const mobileCmdBtn = q('#mobile-command-palette-btn');
+    const cmdPaletteToggle = q('#command-palette-toggle');
+
+    const openDrawer = () => {
+      if (overlay) {
+        overlay.classList.remove('hidden');
+        overlay.classList.add('open');
+        overlay.setAttribute('aria-hidden', 'false');
+      }
+      if (drawer) {
+        drawer.classList.remove('hidden');
+        drawer.classList.add('open');
+        drawer.setAttribute('aria-hidden', 'false');
+      }
+    };
+    const closeDrawer = () => {
+      if (overlay) {
+        overlay.classList.add('hidden');
+        overlay.classList.remove('open');
+        overlay.setAttribute('aria-hidden', 'true');
+      }
+      if (drawer) {
+        drawer.classList.add('hidden');
+        drawer.classList.remove('open');
+        drawer.setAttribute('aria-hidden', 'true');
+      }
+    };
+
+    if (menuBtn) {
+      menuBtn.addEventListener('click', () => {
+        const isOpen = drawer && drawer.classList.contains('open');
+        if (isOpen) closeDrawer();
+        else openDrawer();
+      });
+    }
+    if (overlay) {
+      overlay.addEventListener('click', closeDrawer);
+    }
+    document.addEventListener('navDrawerClose', closeDrawer);
+
+    if (mobileCmdBtn && cmdPaletteToggle) {
+      mobileCmdBtn.addEventListener('click', () => {
+        cmdPaletteToggle.click();
+      });
     }
   }
 

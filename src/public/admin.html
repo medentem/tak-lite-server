@@ -26,16 +26,45 @@
       <!-- Navigation -->
       <nav id="adminNav" class="hidden" style="margin-bottom: 20px;">
         <div class="card" style="padding: 12px 16px;">
-          <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-            <a href="#" id="nav-dashboard" style="color: var(--text); text-decoration: none; padding: 8px 12px; border-radius: 6px; background: var(--accent); font-weight: 500; cursor: pointer;">Dashboard</a>
-            <a href="#" id="nav-threats" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; cursor: pointer;">Threat Review</a>
-            <a href="#" id="nav-messages" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; cursor: pointer;">Messages</a>
-            <a href="#" id="nav-settings" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; cursor: pointer;">Settings</a>
-            <a href="#" id="nav-management" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; cursor: pointer;">Management</a>
-            <a href="/social-media" id="nav-social" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Social Media</a>
+          <div class="nav-links" style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+            <a href="#" id="nav-dashboard" data-nav-page="dashboard" class="nav-link" style="color: var(--text); text-decoration: none; padding: 8px 12px; border-radius: 6px; background: var(--accent); font-weight: 500; cursor: pointer;">Dashboard</a>
+            <a href="#" id="nav-threats" data-nav-page="threats" class="nav-link" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; cursor: pointer;">Threat Review</a>
+            <a href="#" id="nav-messages" data-nav-page="messages" class="nav-link" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; cursor: pointer;">Messages</a>
+            <a href="#" id="nav-settings" data-nav-page="settings" class="nav-link" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; cursor: pointer;">Settings</a>
+            <a href="#" id="nav-management" data-nav-page="management" class="nav-link" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; cursor: pointer;">Management</a>
+            <a href="/social-media" id="nav-social" class="nav-link" style="color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; transition: all 0.2s;">Social Media</a>
           </div>
         </div>
       </nav>
+
+      <!-- Mobile: top bar (hamburger + brand + command palette) - visible only on small screens when authenticated -->
+      <div id="mobileTopBar" class="mobile-top-bar hidden" aria-hidden="true">
+        <button type="button" id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Open menu">☰</button>
+        <span id="mobile-brand" class="mobile-brand">TAK Lite</span>
+        <button type="button" id="mobile-command-palette-btn" class="mobile-command-palette-btn" title="Command Palette">⌘K</button>
+      </div>
+
+      <!-- Mobile: slide-out nav drawer -->
+      <div id="navDrawerOverlay" class="nav-drawer-overlay hidden" aria-hidden="true"></div>
+      <div id="navDrawer" class="nav-drawer hidden" aria-hidden="true">
+        <div class="nav-drawer-header">
+          <span id="drawer-who" class="drawer-who muted"></span>
+          <button type="button" id="drawer-logout" class="drawer-logout secondary">Logout</button>
+        </div>
+        <nav class="nav-drawer-links">
+          <a href="#" data-nav-page="dashboard" class="nav-drawer-link">Dashboard</a>
+          <a href="#" data-nav-page="threats" class="nav-drawer-link">Threat Review</a>
+          <a href="#" data-nav-page="messages" class="nav-drawer-link">Messages</a>
+          <a href="#" data-nav-page="settings" class="nav-drawer-link">Settings</a>
+          <a href="#" data-nav-page="management" class="nav-drawer-link">Management</a>
+          <a href="/social-media" class="nav-drawer-link">Social Media</a>
+        </nav>
+        <div class="nav-drawer-status">
+          <div class="drawer-status-row"><span class="muted">Users:</span><span id="drawer-k-users">-</span></div>
+          <div class="drawer-status-row"><span class="muted">Teams:</span><span id="drawer-k-teams">-</span></div>
+          <div class="drawer-status-row"><span class="muted">Sync:</span><span id="drawer-k-sync">-</span></div>
+        </div>
+      </div>
 
       <div id="loginCard" class="card hidden">
         <h2>Sign in</h2>

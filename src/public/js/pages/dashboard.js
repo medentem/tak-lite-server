@@ -147,6 +147,18 @@ export class DashboardPage {
       syncStatusEl.style.color = syncStatus === 'active' ? '#22c55e' : '#8b97a7';
     }
 
+    // Sync mobile drawer status
+    const drawerUsers = q('#drawer-k-users');
+    if (drawerUsers) {
+      const connected = sockets.authenticatedConnections;
+      const total = db.users;
+      drawerUsers.textContent = connected !== undefined ? connected : (stats.users?.active ?? stats.users?.total ?? total ?? 0);
+    }
+    const drawerTeams = q('#drawer-k-teams');
+    if (drawerTeams) drawerTeams.textContent = db.teams ?? stats.teams?.total ?? 0;
+    const drawerSync = q('#drawer-k-sync');
+    if (drawerSync) drawerSync.textContent = stats.sync?.status || 'unknown';
+
     // Update threat badge
     const threatBadge = q('#k_active_threats');
     if (threatBadge) {
