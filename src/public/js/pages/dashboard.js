@@ -30,10 +30,110 @@ export class DashboardPage {
     
     // Setup click handlers for status badges
     this.setupStatusBadges();
+
+    // Mobile: activity sheet (pills + bottom sheet)
+    this.setupMobileActivitySheet();
     
     // Refresh data
     this.refresh();
     this.initialized = true;
+  }
+
+  setupMobileActivitySheet() {
+    const sheet = q('#mobileActivitySheet');
+    const overlay = q('#mobileActivitySheetOverlay');
+    const pillThreats = q('#mobile-pill-threats');
+    const pillMessages = q('#mobile-pill-messages');
+    const closeBtn = q('#mobile-activity-sheet-close');
+    const tabThreats = q('#mobile-sheet-tab-threats');
+    const tabMessages = q('#mobile-sheet-tab-messages');
+    const paneThreats = q('#mobile-sheet-threats-wrap');
+    const paneMessages = q('#mobile-sheet-messages-wrap');
+    const viewAllThreats = q('#mobile-sheet-view-all-threats');
+    const viewAllMessages = q('#mobile-sheet-view-all-messages');
+    const threatsContent = q('#threats-hud-content');
+    const messagesContent = q('#messages-hud-content');
+    const threatsPanel = q('#threats-hud-panel');
+    const messagesPanel = q('#messages-hud-panel');
+    const threatsSlot = q('#mobile-sheet-threats-slot');
+    const messagesSlot = q('#mobile-sheet-messages-slot');
+
+    if (!sheet || !threatsContent || !messagesContent || !threatsPanel || !messagesPanel) return;
+
+    const openSheet = (tab) => {
+      // Return the other pane’s content to its panel before showing the active one
+      if (threatsContent.parentElement === threatsSlot) {
+        threatsPanel.appendChild(threatsContent);
+      }
+      if (messagesContent.parentElement === messagesSlot) {
+        messagesPanel.appendChild(messagesContent);
+      }
+      if (tab === 'threats') {
+        threatsSlot.appendChild(threatsContent);
+        paneThreats.classList.remove('hidden');
+        paneMessages.classList.add('hidden');
+        tabThreats.classList.add('active');
+        tabMessages.classList.remove('active');
+      } else {
+        messagesSlot.appendChild(messagesContent);
+        paneThreats.classList.add('hidden');
+        paneMessages.classList.remove('hidden');
+        tabThreats.classList.remove('active');
+        tabMessages.classList.add('active');
+      }
+      sheet.classList.remove('hidden');
+      sheet.classList.add('open');
+      sheet.setAttribute('aria-hidden', 'false');
+      if (overlay) {
+        overlay.classList.remove('hidden');
+        overlay.classList.add('open');
+      }
+    };
+
+    const closeSheet = () => {
+      threatsPanel.appendChild(threatsContent);
+      messagesPanel.appendChild(messagesContent);
+      sheet.classList.add('hidden');
+      sheet.classList.remove('open');
+      sheet.setAttribute('aria-hidden', 'true');
+      if (overlay) {
+        overlay.classList.add('hidden');
+        overlay.classList.remove('open');
+      }
+    };
+
+    if (pillThreats) {
+      pillThreats.addEventListener('click', () => openSheet('threats'));
+    }
+    if (pillMessages) {
+      pillMessages.addEventListener('click', () => openSheet('messages'));
+    }
+    if (closeBtn) {
+      closeBtn.addEventListener('click', closeSheet);
+    }
+    if (overlay) {
+      overlay.addEventListener('click', closeSheet);
+    }
+    if (tabThreats) {
+      tabThreats.addEventListener('click', () => openSheet('threats'));
+    }
+    if (tabMessages) {
+      tabMessages.addEventListener('click', () => openSheet('messages'));
+    }
+    if (viewAllThreats) {
+      viewAllThreats.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeSheet();
+        document.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'threats' } }));
+      });
+    }
+    if (viewAllMessages) {
+      viewAllMessages.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeSheet();
+        document.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'messages' } }));
+      });
+    }
   }
 
   initHUDPanels() {
@@ -160,24 +260,20 @@ export class DashboardPage {
     if (drawerSync) drawerSync.textContent = stats.sync?.status || 'unknown';
 
     // Update threat badge
+    const threatCount = stats.threats?.active || 0;
     const threatBadge = q('#k_active_threats');
-    if (threatBadge) {
-      const threatCount = stats.threats?.active || 0;
-      threatBadge.textContent = threatCount;
-      if (this.threatsPanel) {
-        this.threatsPanel.updateBadge(threatCount);
-      }
-    }
+    if (threatBadge) threatBadge.textContent = threatCount;
+    if (this.threatsPanel) this.threatsPanel.updateBadge(threatCount);
+    const mobilePillThreatsCount = q('#mobile-pill-threats-count');
+    if (mobilePillThreatsCount) mobilePillThreatsCount.textContent = threatCount;
 
     // Update message badge
+    const messageCount = stats.messages?.recent || 0;
     const messageBadge = q('#k_recent_messages');
-    if (messageBadge) {
-      const messageCount = stats.messages?.recent || 0;
-      messageBadge.textContent = messageCount;
-      if (this.messagesPanel) {
-        this.messagesPanel.updateBadge(messageCount);
-      }
-    }
+    if (messageBadge) messageBadge.textContent = messageCount;
+    if (this.messagesPanel) this.messagesPanel.updateBadge(messageCount);
+    const mobilePillMessagesCount = q('#mobile-pill-messages-count');
+    if (mobilePillMessagesCount) mobilePillMessagesCount.textContent = messageCount;
   }
 
   updateConnectionsDisplay(data) {

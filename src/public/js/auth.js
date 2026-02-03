@@ -149,6 +149,7 @@ export class Auth {
     const whoSpan = q('#who');
     const adminNav = q('#adminNav');
     const mobileTopBar = q('#mobileTopBar');
+    const mobileHudPills = q('#mobileHudPills');
     const drawerWho = q('#drawer-who');
     const drawerLogout = q('#drawer-logout');
 
@@ -163,6 +164,13 @@ export class Auth {
       } else {
         mobileTopBar.classList.add('hidden');
         mobileTopBar.setAttribute('aria-hidden', 'true');
+      }
+    }
+    if (mobileHudPills) {
+      if (authenticated) {
+        mobileHudPills.classList.remove('hidden');
+      } else {
+        mobileHudPills.classList.add('hidden');
       }
     }
     if (authenticated) {

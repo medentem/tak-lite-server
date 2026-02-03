@@ -41,7 +41,7 @@
       <div id="mobileTopBar" class="mobile-top-bar hidden" aria-hidden="true">
         <button type="button" id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Open menu">☰</button>
         <span id="mobile-brand" class="mobile-brand">TAK Lite</span>
-        <button type="button" id="mobile-command-palette-btn" class="mobile-command-palette-btn" title="Command Palette">⌘K</button>
+        <button type="button" id="mobile-command-palette-btn" class="mobile-command-palette-btn" title="Search" aria-label="Search">🔍</button>
       </div>
 
       <!-- Mobile: slide-out nav drawer -->
@@ -343,7 +343,42 @@
             </div>
           </div>
 
-          <!-- Left HUD stack: threats on top, messages directly below; both expand and push each other -->
+          <!-- Mobile: compact pills that open a bottom sheet (only visible on small screens) -->
+          <div id="mobileHudPills" class="mobile-hud-pills hidden">
+            <button type="button" id="mobile-pill-threats" class="mobile-hud-pill mobile-hud-pill-threats" aria-label="Threat Intelligence">
+              <span class="mobile-hud-pill-icon">⚠️</span>
+              <span class="mobile-hud-pill-count" id="mobile-pill-threats-count">0</span>
+            </button>
+            <button type="button" id="mobile-pill-messages" class="mobile-hud-pill mobile-hud-pill-messages" aria-label="Communication Hub">
+              <span class="mobile-hud-pill-icon">💬</span>
+              <span class="mobile-hud-pill-count" id="mobile-pill-messages-count">0</span>
+            </button>
+          </div>
+          <!-- Mobile: overlay when activity sheet is open -->
+          <div id="mobileActivitySheetOverlay" class="mobile-activity-sheet-overlay hidden" aria-hidden="true"></div>
+          <!-- Mobile: bottom sheet for Threats / Messages (content moved here when open) -->
+          <div id="mobileActivitySheet" class="mobile-activity-sheet hidden" aria-hidden="true">
+            <div class="mobile-activity-sheet-handle" aria-hidden="true"></div>
+            <div class="mobile-activity-sheet-header">
+              <div class="mobile-activity-sheet-tabs">
+                <button type="button" id="mobile-sheet-tab-threats" class="mobile-sheet-tab active" data-tab="threats">Threats</button>
+                <button type="button" id="mobile-sheet-tab-messages" class="mobile-sheet-tab" data-tab="messages">Messages</button>
+              </div>
+              <button type="button" id="mobile-activity-sheet-close" class="mobile-activity-sheet-close" aria-label="Close">✕</button>
+            </div>
+            <div class="mobile-activity-sheet-content">
+              <div id="mobile-sheet-threats-wrap" class="mobile-sheet-pane" data-pane="threats">
+                <a href="#" id="mobile-sheet-view-all-threats" class="mobile-sheet-view-all">View all →</a>
+                <div id="mobile-sheet-threats-slot" class="mobile-sheet-slot"></div>
+              </div>
+              <div id="mobile-sheet-messages-wrap" class="mobile-sheet-pane hidden" data-pane="messages">
+                <a href="#" id="mobile-sheet-view-all-messages" class="mobile-sheet-view-all">View all →</a>
+                <div id="mobile-sheet-messages-slot" class="mobile-sheet-slot"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Left HUD stack: threats on top, messages directly below; both expand and push each other (desktop) -->
           <div class="hud-panels-stack">
             <!-- Floating HUD Panel: Threats -->
             <div id="threats-hud-panel" class="hud-panel hud-panel-left">
