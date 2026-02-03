@@ -298,15 +298,16 @@ export const websocketService = new WebSocketService();
 
 // Setup cleanup handlers (only if in browser environment)
 if (typeof window !== 'undefined') {
-  // Cleanup on page unload
+  // Cleanup on page unload (full navigation or tab close)
   window.addEventListener('beforeunload', () => {
     websocketService.disconnect();
   });
 
-  // Disconnect when page is hidden, reconnect when visible
+  // Keep connection alive when tab is in background so real-time data is still received.
+  // When user returns, reconnect if we were disconnected (e.g. network blip, server restart).
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      websocketService.disconnect();
+      // Do not disconnect: connection persists and data is received in background
     } else {
       if (getToken() && !websocketService.isConnected()) {
         websocketService.connect().catch(console.error);
