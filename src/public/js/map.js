@@ -2239,10 +2239,10 @@ class AdminMap {
         this.popupManager.setAnnotations(this.annotationManager.getAnnotations());
       }
 
-      // Start expiration tick (refresh map every 1s when any annotation is expiring)
+      // Start expiration tick (refresh map every 1s when any annotation is expiring or just expired, so they disappear)
       if (!this.expirationTickInterval) {
         this.expirationTickInterval = setInterval(() => {
-          if (this.annotationManager?.hasExpiringAnnotations()) {
+          if (this.annotationManager?.hasExpiringAnnotations() || this.annotationManager?.hasExpiredAnnotations()) {
             this.updateMapData();
           }
         }, 1000);
@@ -2270,7 +2270,7 @@ class AdminMap {
     } else {
       if (!this.expirationTickInterval && this.annotationManager) {
         this.expirationTickInterval = setInterval(() => {
-          if (this.annotationManager?.hasExpiringAnnotations()) {
+          if (this.annotationManager?.hasExpiringAnnotations() || this.annotationManager?.hasExpiredAnnotations()) {
             this.updateMapData();
           }
         }, 1000);

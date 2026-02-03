@@ -171,6 +171,10 @@ export class TimerPillOverlay {
       if (item.isCritical) el.classList.add('timer-pill-critical');
       else if (item.isWarning) el.classList.add('timer-pill-warning');
 
+      // Scale pill by zoom so it shrinks when zoomed out and doesn't dominate the map
+      const zoom = this.map.getZoom();
+      const scale = Math.min(1.1, Math.max(0.5, 0.5 + zoom * 0.04));
+
       // Position via map.project (mapbox uses [lng, lat])
       try {
         const point = this.map.project(item.position);
@@ -178,7 +182,8 @@ export class TimerPillOverlay {
         const offsetY = 28;
         el.style.left = `${point.x}px`;
         el.style.top = `${point.y + offsetY}px`;
-        el.style.transform = 'translate(-50%, 0)';
+        el.style.transformOrigin = '50% 0';
+        el.style.transform = `translate(-50%, 0) scale(${scale})`;
       } catch (e) {
         // Point may be off visible area during load
         el.style.left = '-9999px';

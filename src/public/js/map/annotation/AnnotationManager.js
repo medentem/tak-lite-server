@@ -531,6 +531,9 @@ export class AnnotationManager {
     
     // Force map to repaint to ensure icon changes are visible
     this.map.triggerRepaint();
+
+    // Remove expired annotations from in-memory list so they stay off the map and we stop the expiration tick
+    this.removeExpiredAnnotations();
     
     logger.info(`[UPDATEMAP] Updated map with ${poiFeatures.length} POIs, ${lineFeatures.length} lines, ${areaFeatures.length} areas, ${polygonFeatures.length} polygons`);
   }
@@ -555,6 +558,39 @@ export class AnnotationManager {
       const exp = data.expirationTime != null ? Number(data.expirationTime) : null;
       return exp != null && exp > now;
     });
+  }
+
+  /**
+   * Whether any annotation has an expiration time in the past (expired; need one more map update to remove)
+   * @returns {boolean}
+   */
+  hasExpiredAnnotations() {
+    const now = Date.now();
+    return this.annotations.some((a) => {
+      if (!a?.data) return false;
+      const data = typeof a.data === 'string' ? (() => { try { return JSON.parse(a.data); } catch { return {}; } })() : a.data;
+      const exp = data.expirationTime != null ? Number(data.expirationTime) : null;
+      return exp != null && exp <= now;
+    });
+  }
+
+  /**
+   * Remove annotations that have passed their expiration time (so they disappear from map and we stop ticking).
+   */
+  removeExpiredAnnotations() {
+    const now = Date.now();
+    const before = this.annotations.length;
+    this.annotations = this.annotations.filter((a) => {
+      if (!a?.data) return true;
+      const data = typeof a.data === 'string' ? (() => { try { return JSON.parse(a.data); } catch { return {}; } })() : a.data;
+      const exp = data.expirationTime != null ? Number(data.expirationTime) : null;
+      if (exp == null) return true;
+      return exp > now;
+    });
+    const removed = before - this.annotations.length;
+    if (removed > 0) {
+      logger.debug(`[ANNOTATIONS] Removed ${removed} expired annotation(s) from map`);
+    }
   }
 
   /**
