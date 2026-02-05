@@ -3,7 +3,7 @@
  */
 
 import { q, showMessage, showError, showSuccess } from '../utils/dom.js';
-import { get, post, put } from '../utils/api.js';
+import { get, post, put, del } from '../utils/api.js';
 import { websocketService } from '../services/websocket.js';
 
 let threatsList = [];
@@ -506,10 +506,14 @@ export class ThreatsPage {
 
   async deleteThreat(threatId) {
     if (!confirm('Are you sure you want to delete this threat?')) return;
-    
+
     try {
-      // Implementation will use api.del()
-      showMessage('Delete threat functionality coming soon', 'info');
+      await del(`/api/admin/threats/${threatId}`);
+      showMessage('Threat deleted', 'success');
+      await this.loadThreats();
+      if (window.adminMap && window.adminMap.threatManager) {
+        await window.adminMap.threatManager.refresh();
+      }
     } catch (error) {
       showError(`Failed to delete threat: ${error.message}`);
     }

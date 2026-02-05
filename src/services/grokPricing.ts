@@ -14,6 +14,12 @@ export const GROK_MODEL_PRICING: Record<string, { inputPerM: number; outputPerM:
 /** Default pricing when model is not in map (e.g. new aliases). */
 const DEFAULT_PRICING = { inputPerM: 0.20, outputPerM: 0.50 };
 
+/**
+ * X Search tool invocation cost (Responses API). xAI charges $5 per 1,000 calls.
+ * See https://docs.x.ai/developers/models — Tools Pricing.
+ */
+export const X_SEARCH_COST_PER_CALL_USD = 5 / 1000;
+
 export interface UsageFromResponse {
   prompt_tokens?: number;
   completion_tokens?: number;

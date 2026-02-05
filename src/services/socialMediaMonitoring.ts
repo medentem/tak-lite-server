@@ -3,6 +3,7 @@ import { DatabaseService } from './database';
 import { GrokService, GeographicalSearch, ThreatAnalysis as GrokThreatAnalysis } from './grokService';
 import { SyncService } from './sync';
 import { SocialMediaConfigService } from './socialMediaConfig';
+import { X_SEARCH_COST_PER_CALL_USD } from './grokPricing';
 import { logger } from '../utils/logger';
 
 // Legacy interfaces removed - now using GeographicalSearch from GrokService
@@ -524,7 +525,7 @@ export class SocialMediaMonitoringService {
    */
   async getAIUsageSummary(): Promise<{
     today: { cost_usd: number; prompt_tokens: number; completion_tokens: number; total_tokens: number; api_calls: number; search_calls: number };
-    month: { cost_usd: number; prompt_tokens: number; completion_tokens: number; total_tokens: number; api_calls: number };
+    month: { cost_usd: number; prompt_tokens: number; completion_tokens: number; total_tokens: number; api_calls: number; search_calls: number };
     last_24h: { cost_usd: number; search_calls: number };
     forecast: {
       cost_today_remaining_usd: number;
@@ -540,7 +541,7 @@ export class SocialMediaMonitoringService {
 
     const defaultSummary = {
       today: { cost_usd: 0, prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, api_calls: 0, search_calls: 0 },
-      month: { cost_usd: 0, prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, api_calls: 0 },
+      month: { cost_usd: 0, prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, api_calls: 0, search_calls: 0 },
       last_24h: { cost_usd: 0, search_calls: 0 },
       forecast: {
         cost_today_remaining_usd: 0,
@@ -573,7 +574,8 @@ export class SocialMediaMonitoringService {
           this.db.client.raw('COALESCE(SUM(prompt_tokens), 0) as prompt_tokens'),
           this.db.client.raw('COALESCE(SUM(completion_tokens), 0) as completion_tokens'),
           this.db.client.raw('COALESCE(SUM(total_tokens), 0) as total_tokens'),
-          this.db.client.raw('COUNT(*)::int as api_calls')
+          this.db.client.raw('COUNT(*)::int as api_calls'),
+          this.db.client.raw("COUNT(*) FILTER (WHERE call_type = 'search')::int as search_calls")
         )
         .first();
 
@@ -585,26 +587,30 @@ export class SocialMediaMonitoringService {
         )
         .first();
 
+      const todaySearchCalls = Number(todayRows?.search_calls ?? 0);
       const today = {
-        cost_usd: Number(todayRows?.cost_usd ?? 0),
+        cost_usd: Number(todayRows?.cost_usd ?? 0) + todaySearchCalls * X_SEARCH_COST_PER_CALL_USD,
         prompt_tokens: Number(todayRows?.prompt_tokens ?? 0),
         completion_tokens: Number(todayRows?.completion_tokens ?? 0),
         total_tokens: Number(todayRows?.total_tokens ?? 0),
         api_calls: Number(todayRows?.api_calls ?? 0),
-        search_calls: Number(todayRows?.search_calls ?? 0),
+        search_calls: todaySearchCalls,
       };
 
+      const monthSearchCalls = Number(monthRows?.search_calls ?? 0);
       const month = {
-        cost_usd: Number(monthRows?.cost_usd ?? 0),
+        cost_usd: Number(monthRows?.cost_usd ?? 0) + monthSearchCalls * X_SEARCH_COST_PER_CALL_USD,
         prompt_tokens: Number(monthRows?.prompt_tokens ?? 0),
         completion_tokens: Number(monthRows?.completion_tokens ?? 0),
         total_tokens: Number(monthRows?.total_tokens ?? 0),
         api_calls: Number(monthRows?.api_calls ?? 0),
+        search_calls: monthSearchCalls,
       };
 
+      const last24hSearchCalls = Number(last24hRows?.search_calls ?? 0);
       const last_24h = {
-        cost_usd: Number(last24hRows?.cost_usd ?? 0),
-        search_calls: Number(last24hRows?.search_calls ?? 0),
+        cost_usd: Number(last24hRows?.cost_usd ?? 0) + last24hSearchCalls * X_SEARCH_COST_PER_CALL_USD,
+        search_calls: last24hSearchCalls,
       };
 
       // Forecast: use active (is_active) monitors and their intervals
