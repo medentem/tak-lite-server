@@ -23,7 +23,10 @@ import { logger } from '../utils/logger';
 export interface GrokConfiguration {
   id: string;
   api_key_encrypted: string;
+  /** Model used for AI threat search (geographical real-time search). */
   model: string;
+  /** Model used for AI threat deduplication. When null/empty, falls back to model. */
+  deduplication_model?: string | null;
   search_enabled: boolean;
   is_active: boolean;
   created_by?: string;
@@ -162,6 +165,7 @@ export class GrokService {
         id,
         api_key_encrypted: encryptedApiKey,
         model: configData.model || 'grok-4-1-fast-reasoning',
+        deduplication_model: configData.deduplication_model ?? null,
         search_enabled: configData.search_enabled !== false,
         is_active: configData.is_active !== false,
         created_by: createdBy,
@@ -185,14 +189,22 @@ export class GrokService {
   }
 
   async updateGrokConfiguration(configId: string, updates: Partial<GrokConfiguration>): Promise<GrokConfiguration> {
-    const updateData = {
+    const updateData: Record<string, any> = {
       ...updates,
       updated_at: new Date()
     };
 
-    // Encrypt API key if it's being updated
-    if (updateData.api_key_encrypted) {
-      updateData.api_key_encrypted = await this.securityService.encryptApiKey(updateData.api_key_encrypted);
+    // Encrypt API key only if it's being updated with a new value (not masked or empty)
+    const keyVal = updateData.api_key_encrypted;
+    if (keyVal && keyVal !== '***' && keyVal.trim() !== '') {
+      updateData.api_key_encrypted = await this.securityService.encryptApiKey(keyVal);
+    } else {
+      delete updateData.api_key_encrypted;
+    }
+
+    // Normalize deduplication_model empty string to null
+    if (updateData.deduplication_model === '') {
+      updateData.deduplication_model = null;
     }
 
     await this.db.client('grok_configurations')
@@ -822,19 +834,43 @@ Return results as a JSON array of threat analyses with complete citations. ONLY 
         .where('threat_level', analysis.threat_level)
         .where('threat_type', analysis.threat_type)
         .where('created_at', '>', twentyFourHoursAgo)
-        .select(['id', 'ai_summary', 'extracted_locations']);
+        .select(['id', 'threat_level', 'threat_type', 'ai_summary', 'extracted_locations', 'keywords']);
 
-      // Check for similar content and location proximity
+      const newSummaryNorm = this.normalizeSummaryForMatch(analysis.summary);
+      const newKeywords = this.normalizeKeywords(analysis.keywords);
+      const newHash = this.generateSemanticHash(analysis);
+
       for (const existing of existingThreats) {
-        // Simple content similarity check (first 50 characters)
-        const existingSummary = existing.ai_summary?.substring(0, 50) || '';
-        const newSummary = analysis.summary?.substring(0, 50) || '';
-        
-        if (existingSummary === newSummary) {
-          return true; // Exact content match
+        // 1. Semantic hash match (same level, type, summary core, location)
+        const existingHash = this.generateSemanticHashFromStored(existing);
+        if (existingHash && newHash === existingHash) {
+          return true;
         }
 
-        // Check location proximity (within 1km)
+        // 2. Summary: exact prefix match or one contains the other (normalized, first 80 chars)
+        const existingSummaryNorm = this.normalizeSummaryForMatch(existing.ai_summary);
+        if (existingSummaryNorm && newSummaryNorm) {
+          const prefixLen = 80;
+          const existingPrefix = existingSummaryNorm.slice(0, prefixLen);
+          const newPrefix = newSummaryNorm.slice(0, prefixLen);
+          if (existingPrefix === newPrefix ||
+              (existingPrefix.length >= 30 && newPrefix.includes(existingPrefix)) ||
+              (newPrefix.length >= 30 && existingPrefix.includes(newPrefix))) {
+            return true;
+          }
+        }
+
+        // 3. Keyword overlap: same type/level and at least 2 shared keywords (or 1 if small set)
+        const existingKeywords = this.normalizeKeywords(existing.keywords);
+        if (newKeywords.length > 0 && existingKeywords.length > 0) {
+          const shared = newKeywords.filter((k: string) => existingKeywords.includes(k));
+          const threshold = Math.min(2, Math.min(newKeywords.length, existingKeywords.length));
+          if (shared.length >= threshold) {
+            return true;
+          }
+        }
+
+        // 4. Location proximity (within 1km)
         const existingLocations = existing.extracted_locations || [];
         for (const existingLoc of existingLocations) {
           for (const newLoc of locations) {
@@ -842,7 +878,7 @@ Return results as a JSON array of threat analyses with complete citations. ONLY 
               existingLoc.lat, existingLoc.lng,
               newLoc.lat, newLoc.lng
             );
-            if (distance < 1.0) { // Within 1km
+            if (distance < 1.0) {
               return true;
             }
           }
@@ -930,7 +966,26 @@ Return results as a JSON array of threat analyses with complete citations. ONLY 
   }
 
   /**
-   * Generate semantic hash for quick similarity detection
+   * Normalize summary for rule-based duplicate matching (lowercase, collapse whitespace).
+   */
+  private normalizeSummaryForMatch(summary: string | null | undefined): string {
+    if (summary == null || typeof summary !== 'string') return '';
+    return summary.toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  /**
+   * Normalize keywords for overlap check (lowercase, trimmed, non-empty).
+   */
+  private normalizeKeywords(keywords: string[] | null | undefined): string[] {
+    if (!Array.isArray(keywords)) return [];
+    return keywords
+      .filter((k): k is string => typeof k === 'string')
+      .map((k) => k.toLowerCase().trim())
+      .filter((k) => k.length > 0);
+  }
+
+  /**
+   * Generate semantic hash for quick similarity detection (from analysis object).
    */
   private generateSemanticHash(threat: any): string {
     const hashInput = [
@@ -941,6 +996,26 @@ Return results as a JSON array of threat analyses with complete citations. ONLY 
       threat.locations?.map((loc: any) => `${loc.lat.toFixed(2)},${loc.lng.toFixed(2)}`).join('|')
     ].filter(Boolean).join('|');
     
+    return crypto.createHash('sha256').update(hashInput).digest('hex').substring(0, 16);
+  }
+
+  /**
+   * Generate same semantic hash from a stored threat row (ai_summary, extracted_locations, etc.).
+   */
+  private generateSemanticHashFromStored(row: { threat_level?: string; threat_type?: string; ai_summary?: string; keywords?: string[]; extracted_locations?: any[] }): string {
+    const summary = row.ai_summary?.substring(0, 100);
+    const locations = (row.extracted_locations || []).map((loc: any) => {
+      const lat = typeof loc.lat === 'number' && !isNaN(loc.lat) ? loc.lat : 0;
+      const lng = typeof loc.lng === 'number' && !isNaN(loc.lng) ? loc.lng : 0;
+      return `${lat.toFixed(2)},${lng.toFixed(2)}`;
+    }).join('|');
+    const hashInput = [
+      row.threat_level,
+      row.threat_type,
+      summary,
+      Array.isArray(row.keywords) ? row.keywords.join(',') : '',
+      locations
+    ].filter(Boolean).join('|');
     return crypto.createHash('sha256').update(hashInput).digest('hex').substring(0, 16);
   }
 
@@ -983,10 +1058,14 @@ Return results as a JSON array of threat analyses with complete citations. ONLY 
       throw new Error('No active Grok configuration found');
     }
 
+    const dedupModel = (grokConfig.deduplication_model && grokConfig.deduplication_model.trim() !== '')
+      ? grokConfig.deduplication_model.trim()
+      : grokConfig.model;
+
     const prompt = this.buildContextualAnalysisPrompt(newAnalysis, existingThreats, geographicalArea);
     
     const requestBody = {
-      model: grokConfig.model,
+      model: dedupModel,
       messages: [
         { role: 'system', content: this.getContextualThreatSystemPrompt() },
         { role: 'user', content: prompt },
@@ -1010,9 +1089,9 @@ Return results as a JSON array of threat analyses with complete citations. ONLY 
 
     const analysisText = response.data.choices[0].message.content;
 
-    // Log token usage for deduplication calls
+    // Log token usage for deduplication calls (use actual model used for accurate cost)
     if (response.data?.usage) {
-      this.logUsage(grokConfig.model, response.data.usage, geographicalSearchId ?? null, 'deduplication').catch(err => logger.warn('Failed to log AI usage', { error: err }));
+      this.logUsage(response.data.model || dedupModel, response.data.usage, geographicalSearchId ?? null, 'deduplication').catch(err => logger.warn('Failed to log AI usage', { error: err }));
     }
     
     try {

@@ -17,10 +17,20 @@ export function createSocialMediaRouter(
   // Validation schemas
   // Legacy monitor schemas removed - use geographical monitoring instead
 
-  const aiConfigSchema = Joi.object({
+  const MODEL_VALUES = ['grok-4-1-fast-non-reasoning', 'grok-4-1-fast-reasoning', 'grok-4-fast-non-reasoning', 'grok-4-fast-reasoning', 'grok-3', 'grok-3-mini'];
+
+  const aiConfigCreateSchema = Joi.object({
     api_key_encrypted: Joi.string().required(),
-    model: Joi.string().valid('grok-4-1-fast-non-reasoning', 'grok-4-1-fast-reasoning', 'grok-4-fast-non-reasoning', 'grok-4-fast-reasoning', 'grok-3', 'grok-3-mini').default('grok-4-1-fast-reasoning'),
+    model: Joi.string().valid(...MODEL_VALUES).default('grok-4-1-fast-reasoning'),
+    deduplication_model: Joi.string().valid('', ...MODEL_VALUES).allow('').default(''),
     is_active: Joi.boolean().default(true)
+  });
+
+  const aiConfigUpdateSchema = Joi.object({
+    api_key_encrypted: Joi.string().allow('***').optional(),
+    model: Joi.string().valid(...MODEL_VALUES).optional(),
+    deduplication_model: Joi.string().valid('', ...MODEL_VALUES).allow('').optional(),
+    is_active: Joi.boolean().optional()
   });
 
   const geographicalSearchSchema = Joi.object({
@@ -60,7 +70,7 @@ export function createSocialMediaRouter(
       const teamId = (req as any).user.teamId;
       const userId = (req as any).user.id;
       
-      const { error, value } = aiConfigSchema.validate(req.body);
+      const { error, value } = aiConfigCreateSchema.validate(req.body);
       if (error) {
         return res.status(400).json({ error: error.details[0].message });
       }
@@ -84,7 +94,7 @@ export function createSocialMediaRouter(
       const { id } = req.params;
       const teamId = (req as any).user.teamId;
       
-      const { error, value } = aiConfigSchema.validate(req.body);
+      const { error, value } = aiConfigUpdateSchema.validate(req.body);
       if (error) {
         return res.status(400).json({ error: error.details[0].message });
       }

@@ -533,7 +533,7 @@
           </div>
           
           <div class="form-group">
-            <label>Model</label>
+            <label>AI Threat Search model</label>
             <select name="model">
               <option value="grok-4-1-fast-reasoning">Grok-4.1 Fast Reasoning (Recommended)</option>
               <option value="grok-4-1-fast-non-reasoning">Grok-4.1 Fast</option>
@@ -542,6 +542,20 @@
               <option value="grok-3">Grok-3</option>
               <option value="grok-3-mini">Grok-3 Mini</option>
             </select>
+            <div class="help-text">Model used for real-time geographical threat search. Use a capable model for best results.</div>
+          </div>
+          <div class="form-group">
+            <label>AI Threat Deduplication model</label>
+            <select name="deduplication_model">
+              <option value="">Same as Search model</option>
+              <option value="grok-4-1-fast-reasoning">Grok-4.1 Fast Reasoning</option>
+              <option value="grok-4-1-fast-non-reasoning">Grok-4.1 Fast</option>
+              <option value="grok-4-fast-reasoning">Grok-4 Fast Reasoning</option>
+              <option value="grok-4-fast-non-reasoning">Grok-4 Fast</option>
+              <option value="grok-3">Grok-3</option>
+              <option value="grok-3-mini">Grok-3 Mini (cheaper)</option>
+            </select>
+            <div class="help-text">Model used to decide if a threat is new or a duplicate. A cheaper/faster model can reduce cost.</div>
           </div>
           
           <div class="form-actions">
@@ -1051,12 +1065,13 @@
       function renderAIConfig() {
         if (!aiConfig) return;
         
+        const dedupLabel = aiConfig.deduplication_model ? aiConfig.deduplication_model : aiConfig.model + ' (same)';
         document.getElementById('ai-config-status').innerHTML = `
           <div style="display:flex; justify-content:space-between; align-items:center; padding:16px; background:#0d1b34; border-radius:8px; border:1px solid #223056;">
             <div>
               <div style="font-weight:600; margin-bottom:4px;">AI Configuration Active</div>
               <div style="font-size:12px; color:var(--muted);">
-                Model: ${aiConfig.model}
+                Search: ${aiConfig.model} · Dedup: ${dedupLabel}
               </div>
             </div>
             <button onclick="showAIConfigModal()" class="secondary">Edit</button>
@@ -1091,6 +1106,8 @@
         document.getElementById('ai-config-form').reset();
         if (aiConfig) {
           document.getElementById('ai-config-form').querySelector('[name="model"]').value = aiConfig.model;
+          const dedupSelect = document.getElementById('ai-config-form').querySelector('[name="deduplication_model"]');
+          if (dedupSelect) dedupSelect.value = aiConfig.deduplication_model || '';
         }
         document.getElementById('ai-config-modal').classList.remove('hidden');
       }
