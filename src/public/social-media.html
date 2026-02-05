@@ -973,6 +973,14 @@
         }
       }
 
+      // Cost per search (tokens + X Search) for monitor estimates; uses last 24h when available
+      function getCostPerSearch() {
+        if (aiUsageSummary?.last_24h?.search_calls > 0 && aiUsageSummary?.last_24h?.cost_usd != null) {
+          return aiUsageSummary.last_24h.cost_usd / aiUsageSummary.last_24h.search_calls;
+        }
+        return 0.01;
+      }
+
       // Render geographical monitors
       function renderGeographicalMonitors() {
         const grid = document.getElementById('geographical-monitors-grid');
@@ -981,6 +989,8 @@
           grid.innerHTML = '<div style="text-align:center; color:var(--muted); padding:40px;">No geographical monitors configured</div>';
           return;
         }
+
+        const costPerSearch = getCostPerSearch();
 
         grid.innerHTML = geographicalMonitors.map(monitor => {
           // Determine status
@@ -1016,6 +1026,13 @@
             ? 'Service must be enabled to start this monitor'
             : (monitor.is_running ? 'Stop this monitor' : 'Start this monitor');
 
+          // Est. cost from interval (one search per tick) + tokens + X Search
+          const intervalSec = Math.max(60, Number(monitor.monitoring_interval) || 300);
+          const callsPerHour = 3600 / intervalSec;
+          const callsPerDay = 86400 / intervalSec;
+          const estCostPerHour = callsPerHour * costPerSearch;
+          const estCostPerDay = callsPerDay * costPerSearch;
+
           return `
           <div class="card" style="padding:16px; ${isBlocked ? 'opacity: 0.7;' : ''}">
             <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:12px;">
@@ -1034,9 +1051,12 @@
               </div>
             ` : ''}
             
-            <div style="font-size:12px; color:var(--muted); margin-bottom:12px;">
+            <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">
               ⏱️ Interval: ${monitor.monitoring_interval}s
               ${monitor.last_searched_at ? `| Last: ${new Date(monitor.last_searched_at).toLocaleString()}` : '| Never searched'}
+            </div>
+            <div style="font-size:12px; color:var(--muted); margin-bottom:12px;">
+              💵 Est. ~$${estCostPerHour.toFixed(2)}/hr · ~$${estCostPerDay.toFixed(2)}/day
             </div>
             
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -1112,11 +1132,11 @@
         const sec = parseInt(input.value, 10) || 300;
         const interval = Math.max(60, Math.min(3600, sec));
         const callsPerDay = Math.floor(86400 / interval);
-        const avgCostPerSearch = (aiUsageSummary?.last_24h?.search_calls > 0 && aiUsageSummary?.last_24h?.cost_usd != null)
-          ? aiUsageSummary.last_24h.cost_usd / aiUsageSummary.last_24h.search_calls
-          : 0.01;
-        const estCostPerDay = callsPerDay * avgCostPerSearch;
-        el.textContent = `~${callsPerDay.toLocaleString()} requests/day • est. ~$${estCostPerDay.toFixed(2)}/day`;
+        const callsPerHour = Math.floor(3600 / interval);
+        const costPerSearch = getCostPerSearch();
+        const estCostPerDay = callsPerDay * costPerSearch;
+        const estCostPerHour = callsPerHour * costPerSearch;
+        el.textContent = `~${callsPerDay.toLocaleString()} requests/day • est. ~$${estCostPerHour.toFixed(2)}/hr · ~$${estCostPerDay.toFixed(2)}/day`;
       }
 
       function showAIConfigModal() {
