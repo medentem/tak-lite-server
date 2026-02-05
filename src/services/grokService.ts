@@ -350,58 +350,85 @@ export class GrokService {
     // Retry logic for API calls
     const maxRetries = 3;
     let lastError: any;
-    
+    let skipStructuredOutput = false; // set true on 400 so next attempt uses plain text
+    const isGrok4 = /^grok-4/i.test(grokConfig.model);
+
     const systemPrompt = this.getGeographicalThreatSystemPrompt();
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const startTime = Date.now();
 
-        const requestBody = {
-            model: grokConfig.model,
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: prompt },
-            ],
-            search_parameters: { mode: 'auto' },
-            stream: false,
-            temperature: 0,
-            max_tokens: 8192, // Cap completion to control cost and avoid runaway output
+        // Build x_search tool; optionally constrain by date range (ISO8601 YYYY-MM-DD) for relevance
+        const xSearchTool: { type: string; from_date?: string; to_date?: string } = { type: 'x_search' };
+        if (lastSearchTime) {
+          const fromDate = new Date(lastSearchTime);
+          const toDate = new Date();
+          xSearchTool.from_date = fromDate.toISOString().slice(0, 10); // YYYY-MM-DD
+          xSearchTool.to_date = toDate.toISOString().slice(0, 10);
+        }
+
+        const useStructuredOutput = isGrok4 && !skipStructuredOutput;
+        const textFormat: Record<string, unknown> = { type: 'text' };
+        if (useStructuredOutput) {
+          textFormat.type = 'json_schema';
+          (textFormat as Record<string, unknown>).schema = this.getThreatArrayJsonSchema();
+        }
+
+        const requestBody: Record<string, unknown> = {
+          model: grokConfig.model,
+          input: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt },
+          ],
+          tools: [xSearchTool],
+          tool_choice: 'auto',
+          store: false,
+          text: { format: textFormat },
         };
 
-        logger.debug('Grok geographical threat search', { area: geographicalArea, promptLen: prompt.length });
+        logger.debug('Grok geographical threat search (Responses API + x_search)', {
+          area: geographicalArea,
+          promptLen: prompt.length,
+          from_date: xSearchTool.from_date,
+          to_date: xSearchTool.to_date,
+          structuredOutput: useStructuredOutput,
+        });
 
         const decryptedApiKey = await this.securityService.decryptApiKey(grokConfig.api_key_encrypted);
-        
-        // Clean the API key to remove any potential formatting issues
         const cleanApiKey = decryptedApiKey.trim().replace(/[\r\n\t]/g, '');
-        
         const authHeader = `Bearer ${cleanApiKey}`;
-        
-        const response = await axios.post('https://api.x.ai/v1/chat/completions', requestBody, {
+
+        const response = await axios.post('https://api.x.ai/v1/responses', requestBody, {
           headers: {
             'Authorization': authHeader,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
-          timeout: 240000 // 240 second timeout for complex searches
+          timeout: 240000, // 240 second timeout for complex searches
         });
 
         const processingTime = Date.now() - startTime;
 
-        // Log token usage and cost for monitoring/forecasting
+        // Log token usage (Responses API uses same usage shape)
         if (response.data?.usage) {
           this.logUsage(response.data.model || grokConfig.model, response.data.usage, geographicalSearchId ?? null, 'search').catch(err => logger.warn('Failed to log AI usage', { error: err }));
         }
-        
-        const analysisText = response.data.choices[0].message.content;
+
+        const analysisText = this.extractTextFromResponsesOutput(response.data?.output);
         logger.debug('Grok search response', {
           attempt,
           durationMs: processingTime,
-          usage: response.data.usage,
+          usage: response.data?.usage,
           contentLen: analysisText?.length ?? 0,
         });
         
         // Parse the JSON response from Grok
+        if (analysisText == null || analysisText.trim() === '') {
+          logger.warn('Grok search returned no text content', { attempt, outputLen: response.data?.output?.length });
+          if (attempt === maxRetries) return [];
+          continue;
+        }
+
         let analyses;
         try {
           analyses = JSON.parse(analysisText);
@@ -409,19 +436,15 @@ export class GrokService {
           if (!Array.isArray(analyses)) {
             analyses = [analyses];
           }
-          
           logger.debug('Grok analysis parsed', { analysesCount: analyses.length });
         } catch (parseError) {
-          logger.error('Failed to parse Grok analysis response', { 
-            error: parseError, 
-            response: analysisText,
-            attempt
+          logger.error('Failed to parse Grok analysis response', {
+            error: parseError,
+            response: analysisText?.slice(0, 500),
+            attempt,
           });
-          
-          if (attempt === maxRetries) {
-            return [];
-          }
-          continue; // Retry on parse error
+          if (attempt === maxRetries) return [];
+          continue;
         }
 
         // Validate and process each analysis with AI-enhanced deduplication (or fast paths)
@@ -509,12 +532,14 @@ export class GrokService {
         });
 
         if (geographicalSearchId) {
+          const citations = Array.isArray(response.data?.citations) ? response.data.citations : undefined;
           this.saveMonitorRunLog(
             geographicalSearchId,
             systemPrompt ?? '',
             prompt ?? '',
             analysisText != null ? String(analysisText) : '',
-            validAnalyses.length
+            validAnalyses.length,
+            citations
           ).catch(err =>
             logger.warn('Failed to save monitor run log', { geographicalSearchId, error: err })
           );
@@ -542,7 +567,12 @@ export class GrokService {
           logger.error('Authentication error, not retrying', { status: error.response.status });
           break;
         }
-        
+        // On 400 (e.g. schema not supported), retry without structured output
+        if (error.response?.status === 400 && isGrok4) {
+          skipStructuredOutput = true;
+          logger.debug('Retrying without structured output after 400');
+        }
+
         // Wait before retry (exponential backoff)
         if (attempt < maxRetries) {
           const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
@@ -560,6 +590,76 @@ export class GrokService {
     });
     
     return [];
+  }
+
+  /**
+   * JSON schema for threat array (used with Grok 4 structured output when supported by API).
+   */
+  private getThreatArrayJsonSchema(): object {
+    return {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          threat_level: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] },
+          threat_type: { type: 'string', enum: ['VIOLENCE', 'TERRORISM', 'NATURAL_DISASTER', 'CIVIL_UNREST', 'INFRASTRUCTURE', 'CYBER', 'HEALTH_EMERGENCY'] },
+          confidence_score: { type: 'number' },
+          summary: { type: 'string' },
+          locations: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                lat: { type: 'number' },
+                lng: { type: 'number' },
+                name: { type: 'string' },
+                confidence: { type: 'number' },
+                source: { type: 'string' },
+                radius_km: { type: 'number' },
+                area_description: { type: 'string' },
+              },
+            },
+          },
+          keywords: { type: 'array', items: { type: 'string' } },
+          reasoning: { type: 'string' },
+          citations: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                platform: { type: 'string' },
+                url: { type: 'string' },
+                title: { type: 'string' },
+                author: { type: 'string' },
+                content_preview: { type: 'string' },
+                relevance_score: { type: 'number' },
+              },
+            },
+          },
+        },
+        required: ['threat_level', 'confidence_score', 'summary'],
+      },
+    };
+  }
+
+  /**
+   * Extract concatenated assistant text from Responses API output array.
+   * output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "..." }] }, ...]
+   */
+  private extractTextFromResponsesOutput(output: any): string | null {
+    if (!Array.isArray(output)) return null;
+    const parts: string[] = [];
+    for (const item of output) {
+      if (item?.type === 'message' && item?.role === 'assistant' && Array.isArray(item.content)) {
+        for (const block of item.content) {
+          if (block?.type === 'output_text' && typeof block.text === 'string') {
+            parts.push(block.text);
+          }
+        }
+      }
+    }
+    return parts.length > 0 ? parts.join('') : null;
   }
 
   private getGeographicalThreatSystemPrompt(): string {
@@ -820,14 +920,15 @@ Return results as a JSON array of threat analyses with complete citations. ONLY 
   }
 
   /**
-   * Persist one run log for a geographical monitor (request + raw response) and trim to last 10.
+   * Persist one run log for a geographical monitor (request + raw response + optional citations) and trim to last 10.
    */
   async saveMonitorRunLog(
     geographicalSearchId: string,
     systemPrompt: string,
     userPrompt: string,
     responseRaw: string,
-    threatsFound: number
+    threatsFound: number,
+    citations?: string[]
   ): Promise<void> {
     const hasTable = await this.db.client.schema.hasTable('geographical_monitor_run_logs');
     if (!hasTable) {
@@ -836,14 +937,19 @@ Return results as a JSON array of threat analyses with complete citations. ONLY 
     }
 
     const safe = (s: string) => (s != null && typeof s === 'string' ? s : '');
-    await this.db.client('geographical_monitor_run_logs').insert({
+    const insertRow: Record<string, unknown> = {
       geographical_search_id: geographicalSearchId,
       run_at: new Date(),
       system_prompt: safe(systemPrompt),
       user_prompt: safe(userPrompt),
       response_raw: safe(responseRaw),
       threats_found: Number(threatsFound) || 0,
-    });
+    };
+    const hasCitationsCol = await this.db.client.schema.hasColumn('geographical_monitor_run_logs', 'citations');
+    if (hasCitationsCol && Array.isArray(citations) && citations.length > 0) {
+      insertRow.citations = citations;
+    }
+    await this.db.client('geographical_monitor_run_logs').insert(insertRow);
 
     const rowsToKeep = await this.db.client('geographical_monitor_run_logs')
       .where('geographical_search_id', geographicalSearchId)
@@ -870,15 +976,21 @@ Return results as a JSON array of threat analyses with complete citations. ONLY 
     user_prompt: string;
     response_raw: string;
     threats_found: number;
+    citations?: string[];
   }>> {
     const hasTable = await this.db.client.schema.hasTable('geographical_monitor_run_logs');
     if (!hasTable) return [];
+
+    const hasCitationsCol = await this.db.client.schema.hasColumn('geographical_monitor_run_logs', 'citations');
+    const selectCols = hasCitationsCol
+      ? ['id', 'run_at', 'system_prompt', 'user_prompt', 'response_raw', 'threats_found', 'citations']
+      : ['id', 'run_at', 'system_prompt', 'user_prompt', 'response_raw', 'threats_found'];
 
     const rows = await this.db.client('geographical_monitor_run_logs')
       .where('geographical_search_id', geographicalSearchId)
       .orderBy('run_at', 'desc')
       .limit(10)
-      .select('id', 'run_at', 'system_prompt', 'user_prompt', 'response_raw', 'threats_found');
+      .select(selectCols);
 
     return rows.map((r: any) => ({
       id: r.id,
@@ -887,6 +999,7 @@ Return results as a JSON array of threat analyses with complete citations. ONLY 
       user_prompt: r.user_prompt,
       response_raw: r.response_raw,
       threats_found: r.threats_found ?? 0,
+      ...(hasCitationsCol && r.citations != null && { citations: Array.isArray(r.citations) ? r.citations : (typeof r.citations === 'string' ? JSON.parse(r.citations || '[]') : []) }),
     }));
   }
 
@@ -1155,7 +1268,6 @@ Return results as a JSON array of threat analyses with complete citations. ONLY 
         { role: 'system', content: this.getContextualThreatSystemPrompt() },
         { role: 'user', content: prompt },
       ],
-      search_parameters: { mode: 'auto' },
       stream: false,
       temperature: 0.1,
       max_tokens: 1024, // Dedup decision is short; cap to reduce cost
