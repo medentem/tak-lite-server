@@ -2466,11 +2466,24 @@ class AdminMap {
   }
 
   /**
-   * Pan to threat location
+   * Pan to threat location by threat id (uses threat manager's loaded threats).
    */
   panToThreat(threatId) {
     if (this.threatManager) {
       this.threatManager.panToThreat(threatId);
+    }
+  }
+
+  /**
+   * Fly map to a location (for "Show on Map" when threat may not be in map's threat list).
+   */
+  flyToLocation(lng, lat) {
+    if (this.map && typeof this.map.flyTo === 'function') {
+      this.map.flyTo({
+        center: [lng, lat],
+        zoom: Math.max(this.map.getZoom(), 14),
+        duration: 1000
+      });
     }
   }
 

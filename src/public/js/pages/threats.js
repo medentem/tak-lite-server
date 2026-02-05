@@ -159,11 +159,12 @@ export class ThreatsPage {
       ? `${locations.length} location(s): ${locations.map(loc => loc.name || `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`).join(', ')}`
       : 'No location data';
     const loc = locations.length > 0 ? locations[0] : null;
+    const minimapSize = 120;
     const minimapFull = loc
       ? (() => {
           const { url, fx, fy } = getOsmTileUrlAndFraction(loc.lat, loc.lng, 10);
           return `
-            <div class="threat-minimap-wrap" style="width: 100%; height: 120px; border-radius: 6px; overflow: hidden; background: #0d1b34; margin-top: 8px; position: relative; pointer-events: none; border: 1px solid #1f2a44;">
+            <div class="threat-minimap-wrap" style="width: ${minimapSize}px; height: ${minimapSize}px; flex-shrink: 0; border-radius: 6px; overflow: hidden; background: #0d1b34; position: relative; pointer-events: none; border: 1px solid #1f2a44;">
               <img src="${url}" alt="Map" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy" />
               <span style="position: absolute; left: ${fx * 100}%; top: ${fy * 100}%; transform: translate(-50%, -50%); width: 14px; height: 14px; background: #ef4444; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 4px rgba(0,0,0,0.5);"></span>
             </div>`;
@@ -172,8 +173,8 @@ export class ThreatsPage {
 
     return `
       <div style="border-bottom: 1px solid #1f2a44; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-          <div style="flex: 1;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;">
+          <div style="flex: 1; min-width: 0;">
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
               <span style="background: ${color}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
                 ${threat.threat_level}
@@ -191,7 +192,7 @@ export class ThreatsPage {
             <div style="color: var(--text); margin-bottom: 8px; line-height: 1.4;">
               ${threat.ai_summary || 'No summary available'}
             </div>
-            <div style="color: var(--muted); font-size: 12px; margin-bottom: 8px;">
+            <div style="color: var(--muted); font-size: 12px;">
               <strong>Area:</strong> ${threat.geographical_area || 'Unknown'}<br>
               <strong>Locations:</strong> ${locationText}<br>
               <strong>Keywords:</strong> ${(threat.keywords || []).join(', ') || 'None'}<br>
@@ -200,9 +201,9 @@ export class ThreatsPage {
                 <strong>Sources:</strong> ${threat.citations.length} citation${threat.citations.length !== 1 ? 's' : ''} available
               ` : ''}
             </div>
-            ${minimapFull}
           </div>
-          <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 16px;">
+          ${minimapFull}
+          <div style="display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;">
             ${status === 'pending' ? `
               <button onclick="window.threatsPage.reviewThreat('${threat.id}', 'approved')" style="background: #22c55e; color: white; padding: 6px 12px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
                 Approve & Create Annotation
@@ -278,11 +279,12 @@ export class ThreatsPage {
     const status = threat.admin_status || 'pending';
     const hasLocation = threat.extracted_locations && threat.extracted_locations.length > 0;
     const loc = hasLocation ? threat.extracted_locations[0] : null;
+    const minimapSizeCompact = 64;
     const minimapCompact = loc
       ? (() => {
           const { url, fx, fy } = getOsmTileUrlAndFraction(loc.lat, loc.lng, 10);
           return `
-        <div class="threat-minimap-wrap" style="width: 100%; height: 72px; border-radius: 4px; overflow: hidden; background: #0d1b34; margin-bottom: 8px; position: relative; pointer-events: none; border: 1px solid #1f2a44;">
+        <div class="threat-minimap-wrap" style="width: ${minimapSizeCompact}px; height: ${minimapSizeCompact}px; flex-shrink: 0; border-radius: 4px; overflow: hidden; background: #0d1b34; position: relative; pointer-events: none; border: 1px solid #1f2a44;">
           <img src="${url}" alt="Map" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy" />
           <span style="position: absolute; left: ${fx * 100}%; top: ${fy * 100}%; transform: translate(-50%, -50%); width: 10px; height: 10px; background: #ef4444; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 2px rgba(0,0,0,0.5);"></span>
         </div>`;
@@ -290,33 +292,35 @@ export class ThreatsPage {
       : '';
 
     return `
-      <div class="threat-card-compact" data-threat-id="${threat.id}" style="border-bottom: 1px solid #1f2a44; padding: 12px; margin-bottom: 8px; background: #0d1b34; border-radius: 6px; cursor: pointer; transition: background-color 0.2s ease;" 
+      <div class="threat-card-compact" data-threat-id="${threat.id}" style="border-bottom: 1px solid #1f2a44; padding: 12px; margin-bottom: 8px; background: #0d1b34; border-radius: 6px; cursor: pointer; transition: background-color 0.2s ease; display: flex; align-items: stretch; gap: 12px;" 
            onmouseover="this.style.background='#0f1f3a'" 
            onmouseout="this.style.background='#0d1b34'"
            onclick="window.threatsPage?.panToThreatOnMap('${threat.id}')">
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-          <span style="background: ${color}; color: white; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">
-            ${threat.threat_level}
-          </span>
-          <span style="color: var(--text); font-weight: 600; font-size: 12px; flex: 1;">
-            ${threat.threat_type || 'Unknown'}
-          </span>
-          ${hasLocation ? '<span style="color: var(--muted); font-size: 10px;">📍</span>' : ''}
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+            <span style="background: ${color}; color: white; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+              ${threat.threat_level}
+            </span>
+            <span style="color: var(--text); font-weight: 600; font-size: 12px;">
+              ${threat.threat_type || 'Unknown'}
+            </span>
+            ${hasLocation ? '<span style="color: var(--muted); font-size: 10px;">📍</span>' : ''}
+          </div>
+          <div style="color: var(--muted); font-size: 11px; line-height: 1.4;">
+            ${(threat.ai_summary || 'No summary').substring(0, 100)}${threat.ai_summary && threat.ai_summary.length > 100 ? '...' : ''}
+          </div>
         </div>
         ${minimapCompact}
-        <div style="color: var(--muted); font-size: 11px; line-height: 1.4; margin-bottom: 8px;">
-          ${(threat.ai_summary || 'No summary').substring(0, 100)}${threat.ai_summary && threat.ai_summary.length > 100 ? '...' : ''}
-        </div>
-        <div style="display: flex; gap: 6px;" onclick="event.stopPropagation()">
+        <div style="display: flex; flex-direction: column; gap: 6px; justify-content: center; flex-shrink: 0;" onclick="event.stopPropagation()">
           ${status === 'pending' ? `
-            <button onclick="window.threatsPage.reviewThreat('${threat.id}', 'approved')" style="background: #22c55e; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; flex: 1;">
+            <button onclick="window.threatsPage.reviewThreat('${threat.id}', 'approved')" style="background: #22c55e; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">
               Approve
             </button>
-            <button onclick="window.threatsPage.reviewThreat('${threat.id}', 'dismissed')" style="background: #6b7280; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; flex: 1;">
+            <button onclick="window.threatsPage.reviewThreat('${threat.id}', 'dismissed')" style="background: #6b7280; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">
               Dismiss
             </button>
           ` : `
-            <button onclick="window.threatsPage.showThreatDetails('${threat.id}')" style="background: #3b82f6; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; width: 100%;">
+            <button onclick="window.threatsPage.showThreatDetails('${threat.id}')" style="background: #3b82f6; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">
               View Details
             </button>
           `}
@@ -536,8 +540,24 @@ export class ThreatsPage {
     const locationText = locations.length > 0
       ? locations.map(loc => loc.name || `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`).join('; ')
       : 'No location data';
+    const citationUrl = (c) => {
+      if (!c) return null;
+      if (typeof c === 'string' && c.startsWith('http')) return c;
+      const u = c.url || c.link || c.source_url;
+      if (u && (u.startsWith('http') || u.startsWith('//'))) return u.startsWith('//') ? 'https:' + u : u;
+      const author = c.author || c.username;
+      const postId = c.post_id || c.id;
+      if (author && postId && String(postId).match(/^\d+$/)) return `https://x.com/${encodeURIComponent(author)}/status/${postId}`;
+      return u || null;
+    };
+    const citationLabel = (c) => {
+      if (!c) return 'Source';
+      if (typeof c === 'string') return c.length > 80 ? c.substring(0, 80) + '…' : c;
+      return (c.title || c.content_preview || c.url || c.link || 'Source').substring(0, 80) + ((c.title || c.content_preview || c.url || c.link || '').length > 80 ? '…' : '');
+    };
+    const escapeAttr = (s) => (s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
     const citationsHtml = (threat.citations && threat.citations.length > 0)
-      ? `<div style="margin-top: 8px;"><strong>Sources:</strong><ul style="margin: 4px 0 0 16px; padding: 0;">${threat.citations.slice(0, 10).map(c => `<li><a href="${c.url || '#'}" target="_blank" rel="noopener" style="color: var(--accent);">${(c.title || c.url || 'Link').substring(0, 80)}</a></li>`).join('')}</ul></div>`
+      ? `<div style="margin-top: 8px;"><strong>Sources:</strong><ul style="margin: 4px 0 0 16px; padding: 0;">${threat.citations.slice(0, 10).map(c => { const href = citationUrl(c); const label = citationLabel(c); return `<li><a href="${escapeAttr(href || '#')}" target="_blank" rel="noopener" style="color: var(--accent);">${escapeAttr(label || 'Source').substring(0, 80)}</a></li>`; }).join('')}</ul></div>`
       : '';
 
     const modalHtml = `
@@ -592,7 +612,24 @@ export class ThreatsPage {
     if (panBtn) {
       panBtn.addEventListener('click', () => {
         closeModal();
-        this.panToThreatOnMap(threatId);
+        document.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'dashboard' } }));
+        const loc = threat.extracted_locations && threat.extracted_locations[0];
+        setTimeout(() => {
+          if (!window.adminMap) {
+            showMessage('Map is loading. Try "Show on Map" again in a moment.', 'info');
+            return;
+          }
+          if (loc && loc.lat != null && loc.lng != null && typeof window.adminMap.flyToLocation === 'function') {
+            window.adminMap.flyToLocation(loc.lng, loc.lat);
+            if (typeof window.adminMap.panToThreat === 'function') {
+              window.adminMap.panToThreat(threatId);
+            }
+          } else if (typeof window.adminMap.panToThreat === 'function') {
+            window.adminMap.panToThreat(threatId);
+          } else {
+            showMessage('No location for this threat.', 'info');
+          }
+        }, 500);
       });
     }
 
