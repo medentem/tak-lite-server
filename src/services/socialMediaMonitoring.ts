@@ -211,8 +211,7 @@ export class SocialMediaMonitoringService {
     // Update database flag to active before starting
     await this.grokService.updateGeographicalSearch(monitorId, { is_active: true });
 
-    // Start new monitoring interval
-    const interval = setInterval(async () => {
+    const runSearch = async (): Promise<void> => {
       try {
         const serviceEnabled = await this.configService.isServiceEnabled();
         if (!serviceEnabled) {
@@ -221,7 +220,6 @@ export class SocialMediaMonitoringService {
           return;
         }
 
-        // Refresh search data in case it was updated
         const currentSearches = await this.grokService.getGeographicalSearches();
         const currentSearch = currentSearches.find(s => s.id === monitorId);
         if (currentSearch) {
@@ -230,7 +228,12 @@ export class SocialMediaMonitoringService {
       } catch (error) {
         logger.error('Error in geographical monitoring interval', { monitorId, error });
       }
-    }, search.monitoring_interval * 1000);
+    };
+
+    // Run first search immediately; then repeat at interval
+    runSearch().catch((err) => logger.error('Error on initial geographical search', { monitorId, error: err }));
+
+    const interval = setInterval(runSearch, search.monitoring_interval * 1000);
 
     this.activeGeographicalSearches.set(monitorId, interval);
     logger.info('Started geographical monitoring', { monitorId, interval: search.monitoring_interval });
