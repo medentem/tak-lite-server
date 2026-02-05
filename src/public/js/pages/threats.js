@@ -12,6 +12,22 @@ let threatLevelFilter = '';
 let threatAutoRefresh = true;
 let threatRefreshInterval = null;
 
+/** OSM tile URL for a given zoom; returns tile containing (lat, lng) and fraction of point within tile for marker positioning */
+function getOsmTileUrlAndFraction(lat, lng, zoom = 10) {
+  const n = Math.pow(2, zoom);
+  const latRad = (lat * Math.PI) / 180;
+  const x = Math.floor(((lng + 180) / 360) * n);
+  const y = Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n);
+  const tileLngMin = (x / n) * 360 - 180;
+  const tileLngMax = ((x + 1) / n) * 360 - 180;
+  const tileLatMax = (180 / Math.PI) * (2 * Math.atan(Math.exp(Math.PI * (1 - (2 * y) / n))) - 90);
+  const tileLatMin = (180 / Math.PI) * (2 * Math.atan(Math.exp(Math.PI * (1 - (2 * (y + 1)) / n))) - 90;
+  const fx = (lng - tileLngMin) / (tileLngMax - tileLngMin);
+  const fy = (lat - tileLatMin) / (tileLatMax - tileLatMin);
+  const url = `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`;
+  return { url, fx: Math.max(0, Math.min(1, fx)), fy: Math.max(0, Math.min(1, 1 - fy)) };
+}
+
 export class ThreatsPage {
   constructor() {
     this.initialized = false;
@@ -142,6 +158,17 @@ export class ThreatsPage {
     const locationText = locations.length > 0
       ? `${locations.length} location(s): ${locations.map(loc => loc.name || `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`).join(', ')}`
       : 'No location data';
+    const loc = locations.length > 0 ? locations[0] : null;
+    const minimapFull = loc
+      ? (() => {
+          const { url, fx, fy } = getOsmTileUrlAndFraction(loc.lat, loc.lng, 10);
+          return `
+            <div class="threat-minimap-wrap" style="width: 100%; height: 120px; border-radius: 6px; overflow: hidden; background: #0d1b34; margin-top: 8px; position: relative; pointer-events: none; border: 1px solid #1f2a44;">
+              <img src="${url}" alt="Map" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy" />
+              <span style="position: absolute; left: ${fx * 100}%; top: ${fy * 100}%; transform: translate(-50%, -50%); width: 14px; height: 14px; background: #ef4444; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 4px rgba(0,0,0,0.5);"></span>
+            </div>`;
+        })()
+      : '';
 
     return `
       <div style="border-bottom: 1px solid #1f2a44; padding: 16px;">
@@ -173,6 +200,7 @@ export class ThreatsPage {
                 <strong>Sources:</strong> ${threat.citations.length} citation${threat.citations.length !== 1 ? 's' : ''} available
               ` : ''}
             </div>
+            ${minimapFull}
           </div>
           <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 16px;">
             ${status === 'pending' ? `
@@ -204,9 +232,8 @@ export class ThreatsPage {
     const hudPanelEl = q('#threats-hud-content');
     const hudBadgeEl = q('#threats-hud-badge');
 
-    // Filter for CRITICAL and HIGH threats that are pending or reviewed
+    // All pending and reviewed threats (for review in HUD and panels)
     const activeThreats = threatsList.filter(t =>
-      (t.threat_level === 'CRITICAL' || t.threat_level === 'HIGH') &&
       (t.admin_status === 'pending' || t.admin_status === 'reviewed')
     );
 
@@ -250,6 +277,17 @@ export class ThreatsPage {
     const color = threatLevelColors[threat.threat_level] || '#8b97a7';
     const status = threat.admin_status || 'pending';
     const hasLocation = threat.extracted_locations && threat.extracted_locations.length > 0;
+    const loc = hasLocation ? threat.extracted_locations[0] : null;
+    const minimapCompact = loc
+      ? (() => {
+          const { url, fx, fy } = getOsmTileUrlAndFraction(loc.lat, loc.lng, 10);
+          return `
+        <div class="threat-minimap-wrap" style="width: 100%; height: 72px; border-radius: 4px; overflow: hidden; background: #0d1b34; margin-bottom: 8px; position: relative; pointer-events: none; border: 1px solid #1f2a44;">
+          <img src="${url}" alt="Map" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy" />
+          <span style="position: absolute; left: ${fx * 100}%; top: ${fy * 100}%; transform: translate(-50%, -50%); width: 10px; height: 10px; background: #ef4444; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 2px rgba(0,0,0,0.5);"></span>
+        </div>`;
+        })()
+      : '';
 
     return `
       <div class="threat-card-compact" data-threat-id="${threat.id}" style="border-bottom: 1px solid #1f2a44; padding: 12px; margin-bottom: 8px; background: #0d1b34; border-radius: 6px; cursor: pointer; transition: background-color 0.2s ease;" 
@@ -265,6 +303,7 @@ export class ThreatsPage {
           </span>
           ${hasLocation ? '<span style="color: var(--muted); font-size: 10px;">📍</span>' : ''}
         </div>
+        ${minimapCompact}
         <div style="color: var(--muted); font-size: 11px; line-height: 1.4; margin-bottom: 8px;">
           ${(threat.ai_summary || 'No summary').substring(0, 100)}${threat.ai_summary && threat.ai_summary.length > 100 ? '...' : ''}
         </div>
@@ -478,9 +517,95 @@ export class ThreatsPage {
       showError('Threat not found');
       return;
     }
-    
-    // Show threat details in a modal or expand view
-    showMessage(`Viewing details for threat: ${threat.threat_type}`, 'info');
+
+    const threatLevelColors = {
+      'LOW': '#22c55e',
+      'MEDIUM': '#f59e0b',
+      'HIGH': '#ef4444',
+      'CRITICAL': '#dc2626'
+    };
+    const statusColors = {
+      'pending': '#f59e0b',
+      'reviewed': '#3b82f6',
+      'approved': '#22c55e',
+      'dismissed': '#6b7280'
+    };
+    const color = threatLevelColors[threat.threat_level] || '#8b97a7';
+    const status = threat.admin_status || 'pending';
+    const locations = threat.extracted_locations || [];
+    const locationText = locations.length > 0
+      ? locations.map(loc => loc.name || `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`).join('; ')
+      : 'No location data';
+    const citationsHtml = (threat.citations && threat.citations.length > 0)
+      ? `<div style="margin-top: 8px;"><strong>Sources:</strong><ul style="margin: 4px 0 0 16px; padding: 0;">${threat.citations.slice(0, 10).map(c => `<li><a href="${c.url || '#'}" target="_blank" rel="noopener" style="color: var(--accent);">${(c.title || c.url || 'Link').substring(0, 80)}</a></li>`).join('')}</ul></div>`
+      : '';
+
+    const modalHtml = `
+      <div id="threat-details-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px;">
+        <div style="background: var(--panel); border: 1px solid #1f2a44; border-radius: 12px; padding: 24px; max-width: 560px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+            <h3 style="margin: 0; color: var(--text);">Threat Details</h3>
+            <button id="threat-details-close" type="button" style="background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; padding: 0 4px;" aria-label="Close">×</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+            <span style="background: ${color}; color: white; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 600;">${threat.threat_level}</span>
+            <span style="background: ${statusColors[status]}; color: white; padding: 4px 10px; border-radius: 4px; font-size: 12px;">${status.toUpperCase()}</span>
+            <span style="color: var(--muted); font-size: 12px;">${(threat.confidence_score * 100).toFixed(1)}% confidence</span>
+          </div>
+          <div style="font-weight: 600; margin-bottom: 6px; color: var(--text);">${threat.threat_type || 'Unknown Threat Type'}</div>
+          <div style="color: var(--text); margin-bottom: 12px; line-height: 1.5;">${threat.ai_summary || 'No summary available'}</div>
+          <div style="color: var(--muted); font-size: 13px; line-height: 1.6;">
+            <p style="margin: 4px 0;"><strong>Area:</strong> ${threat.geographical_area || 'Unknown'}</p>
+            <p style="margin: 4px 0;"><strong>Locations:</strong> ${locationText}</p>
+            <p style="margin: 4px 0;"><strong>Keywords:</strong> ${(threat.keywords || []).join(', ') || 'None'}</p>
+            <p style="margin: 4px 0;"><strong>Detected:</strong> ${new Date(threat.created_at).toLocaleString()}</p>
+            ${citationsHtml}
+          </div>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; padding-top: 16px; border-top: 1px solid #1f2a44;">
+            ${status === 'pending' ? `
+              <button type="button" id="threat-details-approve" style="background: #22c55e; color: white; padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 500;">Approve & Create Annotation</button>
+              <button type="button" id="threat-details-dismiss" style="background: #6b7280; color: white; padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer;">Dismiss</button>
+            ` : ''}
+            <button type="button" id="threat-details-pan" style="background: #3b82f6; color: white; padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer;">Show on Map</button>
+            <button type="button" id="threat-details-close-btn" style="background: #0c1527; color: var(--text); padding: 8px 16px; border: 1px solid #233153; border-radius: 6px; font-size: 13px; cursor: pointer;">Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const existingModal = document.getElementById('threat-details-modal');
+    if (existingModal) existingModal.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    const modal = document.getElementById('threat-details-modal');
+    const closeModal = () => {
+      if (modal) modal.remove();
+    };
+
+    modal.querySelector('#threat-details-close').addEventListener('click', closeModal);
+    modal.querySelector('#threat-details-close-btn').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    const panBtn = document.getElementById('threat-details-pan');
+    if (panBtn) {
+      panBtn.addEventListener('click', () => {
+        closeModal();
+        this.panToThreatOnMap(threatId);
+      });
+    }
+
+    if (status === 'pending') {
+      document.getElementById('threat-details-approve').addEventListener('click', () => {
+        closeModal();
+        this.showThreatApprovalModal(threat);
+      });
+      document.getElementById('threat-details-dismiss').addEventListener('click', async () => {
+        closeModal();
+        await this.reviewThreat(threatId, 'dismissed');
+      });
+    }
   }
 
   handleNewThreatDetected(data) {

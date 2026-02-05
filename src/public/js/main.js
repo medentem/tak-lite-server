@@ -192,6 +192,10 @@ class AdminApp {
       if (this.pages.dashboard.refresh) {
         this.pages.dashboard.refresh().catch(console.error);
       }
+      // Load threats so the HUD panel shows pending threats for review when viewing dashboard
+      if (this.pages.threats.loadThreats) {
+        this.pages.threats.loadThreats().catch(console.error);
+      }
       // Ensure map WebSocket listeners are connected when dashboard is shown (handles socket
       // connecting before map was created, so client->server annotations appear in real time)
       if (window.adminMap && typeof window.adminMap.ensureMapWebSocketConnected === 'function') {
