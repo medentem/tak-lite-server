@@ -331,7 +331,7 @@ export class GrokService {
       throw new Error('No active Grok configuration found');
     }
 
-    const prompt = this.buildGeographicalThreatSearchPrompt(geographicalArea, searchQuery, lastSearchTime);
+    const prompt = this.buildGeographicalThreatSearchPrompt(geographicalArea, searchQuery);
     
     // Log the time window being used
     if (lastSearchTime) {
@@ -359,10 +359,12 @@ export class GrokService {
       try {
         const startTime = Date.now();
 
-        // Build x_search tool; optionally constrain by date range (ISO8601 YYYY-MM-DD) for relevance
+        // Build x_search tool; optionally constrain by date range (ISO8601 YYYY-MM-DD) for relevance.
+        // Start 5 minutes before last search to allow a small overlap and avoid missing boundary posts.
         const xSearchTool: { type: string; from_date?: string; to_date?: string } = { type: 'x_search' };
         if (lastSearchTime) {
-          const fromDate = new Date(lastSearchTime);
+          const lookbackBufferMs = 5 * 60 * 1000; // 5 minutes
+          const fromDate = new Date(lastSearchTime.getTime() - lookbackBufferMs);
           const toDate = new Date();
           xSearchTool.from_date = fromDate.toISOString().slice(0, 10); // YYYY-MM-DD
           xSearchTool.to_date = toDate.toISOString().slice(0, 10);
@@ -759,34 +761,12 @@ Always respond with valid JSON array in this exact format:
 ]`;
   }
 
-  private buildGeographicalThreatSearchPrompt(geographicalArea: string, searchQuery?: string, lastSearchTime?: Date): string {
-    // Calculate the time window for the search
-    const now = new Date();
-    let timeConstraint: string;
-    
-    if (lastSearchTime) {
-      const timeDiffMs = now.getTime() - lastSearchTime.getTime();
-      const timeDiffMinutes = Math.floor(timeDiffMs / (1000 * 60));
-      const timeDiffHours = Math.floor(timeDiffMinutes / 60);
-      
-      if (timeDiffMinutes < 60) {
-        timeConstraint = `Only search for posts from the last ${timeDiffMinutes} minutes (since ${lastSearchTime.toISOString()}) to find NEW threats since the last search.`;
-      } else if (timeDiffHours < 24) {
-        timeConstraint = `Only search for posts from the last ${timeDiffHours} hours (since ${lastSearchTime.toISOString()}) to find NEW threats since the last search.`;
-      } else {
-        timeConstraint = `Only search for posts from the last 24 hours to ensure relevance (last search was ${timeDiffHours} hours ago).`;
-      }
-    } else {
-      timeConstraint = `Only search for posts from the last hour to ensure maximum relevance and urgency.`;
-    }
-
+  private buildGeographicalThreatSearchPrompt(geographicalArea: string, searchQuery?: string): string {
     return `
 Search for REAL-TIME SPECIFIC INCIDENTS from X (Twitter) posts in the specified geographical area.
 
 GEOGRAPHICAL AREA: "${geographicalArea}"
 ${searchQuery ? `SEARCH FOCUS: "${searchQuery}"` : ''}
-
-CRITICAL TIME CONSTRAINT: ${timeConstraint}
 
 IMPORTANT: ONLY search for SPECIFIC, ACTIONABLE INCIDENTS that are happening NOW or very recently. IGNORE general discussions, statistics, or commentary.
 
