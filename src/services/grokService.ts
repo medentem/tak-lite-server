@@ -351,6 +351,8 @@ export class GrokService {
     const maxRetries = 3;
     let lastError: any;
     
+    const systemPrompt = this.getGeographicalThreatSystemPrompt();
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const startTime = Date.now();
@@ -358,7 +360,7 @@ export class GrokService {
         const requestBody = {
             model: grokConfig.model,
             messages: [
-                { role: 'system', content: this.getGeographicalThreatSystemPrompt() },
+                { role: 'system', content: systemPrompt },
                 { role: 'user', content: prompt },
             ],
             search_parameters: { mode: 'auto' },
@@ -505,6 +507,12 @@ export class GrokService {
           attempt,
           lastSearchTime: lastSearchTime?.toISOString()
         });
+
+        if (geographicalSearchId) {
+          this.saveMonitorRunLog(geographicalSearchId, systemPrompt, prompt, analysisText, validAnalyses.length).catch(err =>
+            logger.warn('Failed to save monitor run log', { geographicalSearchId, error: err })
+          );
+        }
 
         return validAnalyses;
 
@@ -803,6 +811,71 @@ Return results as a JSON array of threat analyses with complete citations. ONLY 
       });
     
     logger.info('Updated last search time', { searchId });
+  }
+
+  /**
+   * Persist one run log for a geographical monitor (request + raw response) and trim to last 10.
+   */
+  async saveMonitorRunLog(
+    geographicalSearchId: string,
+    systemPrompt: string,
+    userPrompt: string,
+    responseRaw: string,
+    threatsFound: number
+  ): Promise<void> {
+    const hasTable = await this.db.client.schema.hasTable('geographical_monitor_run_logs');
+    if (!hasTable) return;
+
+    await this.db.client('geographical_monitor_run_logs').insert({
+      geographical_search_id: geographicalSearchId,
+      run_at: new Date(),
+      system_prompt: systemPrompt,
+      user_prompt: userPrompt,
+      response_raw: responseRaw,
+      threats_found: threatsFound,
+    });
+
+    await this.db.client.raw(
+      `DELETE FROM geographical_monitor_run_logs
+       WHERE geographical_search_id = ?
+       AND id NOT IN (
+         SELECT id FROM geographical_monitor_run_logs
+         WHERE geographical_search_id = ?
+         ORDER BY run_at DESC
+         LIMIT 10
+       )`,
+      [geographicalSearchId, geographicalSearchId]
+    );
+  }
+
+  /**
+   * Get the last 10 run logs for a geographical monitor (for debugging / conversation inspection).
+   */
+  async getMonitorRunLogs(geographicalSearchId: string): Promise<Array<{
+    id: string;
+    run_at: string;
+    system_prompt: string;
+    user_prompt: string;
+    response_raw: string;
+    threats_found: number;
+  }>> {
+    const hasTable = await this.db.client.schema.hasTable('geographical_monitor_run_logs');
+    if (!hasTable) return [];
+
+    const rows = await this.db.client('geographical_monitor_run_logs')
+      .where('geographical_search_id', geographicalSearchId)
+      .orderBy('run_at', 'desc')
+      .limit(10)
+      .select('id', 'run_at', 'system_prompt', 'user_prompt', 'response_raw', 'threats_found');
+
+    return rows.map((r: any) => ({
+      id: r.id,
+      run_at: r.run_at,
+      system_prompt: r.system_prompt,
+      user_prompt: r.user_prompt,
+      response_raw: r.response_raw,
+      threats_found: r.threats_found ?? 0,
+    }));
   }
 
   // Test method to verify dynamic time window calculation

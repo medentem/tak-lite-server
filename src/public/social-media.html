@@ -655,6 +655,22 @@
       </div>
     </div>
 
+    <!-- Monitor Run Logs Modal (AI conversation debug) -->
+    <div id="run-logs-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 900px; max-height: 90vh; display: flex; flex-direction: column;">
+        <div class="modal-header">
+          <h3 id="run-logs-modal-title">Run logs</h3>
+          <button class="close" onclick="closeModal()">&times;</button>
+        </div>
+        <div id="run-logs-content" style="overflow: auto; flex: 1; padding: 0 16px 16px;">
+          <!-- Last 10 runs with conversation + response loaded here -->
+        </div>
+        <div class="form-actions">
+          <button onclick="closeModal()" class="secondary">Close</button>
+        </div>
+      </div>
+    </div>
+
     <script>
       // Global state
       let geographicalMonitors = [];
@@ -1023,15 +1039,16 @@
               ${monitor.last_searched_at ? `| Last: ${new Date(monitor.last_searched_at).toLocaleString()}` : '| Never searched'}
             </div>
             
-            <div style="display:flex; gap:8px;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
               <button 
                 onclick="toggleGeographicalMonitor('${monitor.id}', ${monitor.is_running})" 
                 class="${buttonClass}" 
-                style="flex:1;"
+                style="flex:1; min-width:80px;"
                 ${buttonDisabled ? 'disabled title="' + tooltip + '"' : `title="${tooltip}"`}
                 ${buttonDisabled ? 'opacity: 0.5; cursor: not-allowed;' : ''}>
                 ${buttonText}
               </button>
+              <button onclick="showMonitorRunLogs('${monitor.id}')" class="secondary" title="View last 10 AI conversation logs">Run logs</button>
               <button onclick="deleteGeographicalMonitor('${monitor.id}')" class="danger" title="Delete this monitor">Delete</button>
             </div>
           </div>
@@ -1234,6 +1251,61 @@
         } catch (error) {
           showError('Failed to delete geographical monitor: ' + error.message);
         }
+      }
+
+      async function showMonitorRunLogs(monitorId) {
+        const monitor = geographicalMonitors.find(m => m.id === monitorId);
+        const areaName = monitor ? monitor.geographical_area : monitorId;
+        document.getElementById('run-logs-modal-title').textContent = `Run logs: ${areaName}`;
+        const content = document.getElementById('run-logs-content');
+        content.innerHTML = '<p style="color:var(--muted);">Loading…</p>';
+        document.getElementById('run-logs-modal').classList.remove('hidden');
+
+        try {
+          const data = await apiCall(`/api/social-media/geographical-monitors/${monitorId}/run-logs`);
+          const logs = data.logs || [];
+          if (logs.length === 0) {
+            content.innerHTML = '<p style="color:var(--muted);">No run logs yet. Start the monitor and wait for at least one run.</p>';
+            return;
+          }
+          content.innerHTML = logs.map((log, idx) => {
+            const runAt = new Date(log.run_at).toLocaleString();
+            const escapedSystem = escapeHtml(log.system_prompt || '');
+            const escapedUser = escapeHtml(log.user_prompt || '');
+            const escapedResponse = escapeHtml(log.response_raw || '');
+            const expandId = 'run-log-' + idx;
+            return `
+              <div class="card" style="margin-bottom:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                  <strong>Run ${logs.length - idx}</strong>
+                  <span style="font-size:12px; color:var(--muted);">${runAt}</span>
+                </div>
+                <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Threats found: ${log.threats_found ?? 0}</div>
+                <details style="margin-top:8px;" id="${expandId}">
+                  <summary style="cursor:pointer; color:var(--accent);">Conversation (sent to Grok)</summary>
+                  <div style="margin-top:8px; font-size:13px;">
+                    <div style="margin-bottom:8px;"><strong>System:</strong></div>
+                    <pre style="white-space:pre-wrap; word-break:break-word; background:#0d1b34; padding:12px; border-radius:8px; overflow:auto; max-height:200px; font-size:12px;">${escapedSystem}</pre>
+                    <div style="margin:8px 0;"><strong>User:</strong></div>
+                    <pre style="white-space:pre-wrap; word-break:break-word; background:#0d1b34; padding:12px; border-radius:8px; overflow:auto; max-height:200px; font-size:12px;">${escapedUser}</pre>
+                  </div>
+                </details>
+                <details style="margin-top:8px;">
+                  <summary style="cursor:pointer; color:var(--accent);">Response (raw from Grok)</summary>
+                  <pre style="white-space:pre-wrap; word-break:break-word; background:#0d1b34; padding:12px; border-radius:8px; overflow:auto; max-height:300px; font-size:12px; margin-top:8px;">${escapedResponse}</pre>
+                </details>
+              </div>
+            `;
+          }).join('');
+        } catch (error) {
+          content.innerHTML = '<p style="color:var(--bad);">Failed to load run logs: ' + escapeHtml(error.message) + '</p>';
+        }
+      }
+
+      function escapeHtml(s) {
+        const div = document.createElement('div');
+        div.textContent = s;
+        return div.innerHTML;
       }
 
       // Legacy monitor actions removed - use geographical monitoring instead

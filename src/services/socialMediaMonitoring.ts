@@ -192,6 +192,17 @@ export class SocialMediaMonitoringService {
     await this.grokService.deleteGeographicalSearch(monitorId);
   }
 
+  async getMonitorRunLogs(monitorId: string): Promise<Array<{
+    id: string;
+    run_at: string;
+    system_prompt: string;
+    user_prompt: string;
+    response_raw: string;
+    threats_found: number;
+  }>> {
+    return await this.grokService.getMonitorRunLogs(monitorId);
+  }
+
   async startGeographicalMonitoring(monitorId: string): Promise<void> {
     const serviceEnabled = await this.configService.isServiceEnabled();
     if (!serviceEnabled) {

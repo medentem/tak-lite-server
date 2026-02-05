@@ -272,6 +272,16 @@ export function createSocialMediaRouter(
     }
   });
 
+  router.get('/geographical-monitors/:id/run-logs', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const logs = await socialMediaService.getMonitorRunLogs(id);
+      res.json({ logs });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // Direct geographical threat search endpoint
   router.post('/search-threats', async (req: Request, res: Response, next: NextFunction) => {
     try {
