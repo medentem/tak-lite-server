@@ -191,11 +191,13 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
   })(req, res, next);
 });
 
-// Rate limiting
+// Rate limiting: 100 requests per IP per 15-minute window. Lockout lasts until the window resets.
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
+  max: 100,
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,  // X-RateLimit-Limit, X-RateLimit-Remaining
+  legacyHeaders: false,
 });
 app.use('/api/', limiter);
 

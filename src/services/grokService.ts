@@ -509,7 +509,13 @@ export class GrokService {
         });
 
         if (geographicalSearchId) {
-          this.saveMonitorRunLog(geographicalSearchId, systemPrompt, prompt, analysisText, validAnalyses.length).catch(err =>
+          this.saveMonitorRunLog(
+            geographicalSearchId,
+            systemPrompt ?? '',
+            prompt ?? '',
+            analysisText != null ? String(analysisText) : '',
+            validAnalyses.length
+          ).catch(err =>
             logger.warn('Failed to save monitor run log', { geographicalSearchId, error: err })
           );
         }
@@ -824,28 +830,34 @@ Return results as a JSON array of threat analyses with complete citations. ONLY 
     threatsFound: number
   ): Promise<void> {
     const hasTable = await this.db.client.schema.hasTable('geographical_monitor_run_logs');
-    if (!hasTable) return;
+    if (!hasTable) {
+      logger.debug('geographical_monitor_run_logs table missing; run migrations to enable run log storage');
+      return;
+    }
 
+    const safe = (s: string) => (s != null && typeof s === 'string' ? s : '');
     await this.db.client('geographical_monitor_run_logs').insert({
       geographical_search_id: geographicalSearchId,
       run_at: new Date(),
-      system_prompt: systemPrompt,
-      user_prompt: userPrompt,
-      response_raw: responseRaw,
-      threats_found: threatsFound,
+      system_prompt: safe(systemPrompt),
+      user_prompt: safe(userPrompt),
+      response_raw: safe(responseRaw),
+      threats_found: Number(threatsFound) || 0,
     });
 
-    await this.db.client.raw(
-      `DELETE FROM geographical_monitor_run_logs
-       WHERE geographical_search_id = ?
-       AND id NOT IN (
-         SELECT id FROM geographical_monitor_run_logs
-         WHERE geographical_search_id = ?
-         ORDER BY run_at DESC
-         LIMIT 10
-       )`,
-      [geographicalSearchId, geographicalSearchId]
-    );
+    const rowsToKeep = await this.db.client('geographical_monitor_run_logs')
+      .where('geographical_search_id', geographicalSearchId)
+      .orderBy('run_at', 'desc')
+      .limit(10)
+      .select('id');
+    const idsToKeep = rowsToKeep.map((r: { id: string }) => r.id);
+
+    if (idsToKeep.length > 0) {
+      await this.db.client('geographical_monitor_run_logs')
+        .where('geographical_search_id', geographicalSearchId)
+        .whereNotIn('id', idsToKeep)
+        .del();
+    }
   }
 
   /**
