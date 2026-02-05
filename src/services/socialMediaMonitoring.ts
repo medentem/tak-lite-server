@@ -7,8 +7,16 @@ import { logger } from '../utils/logger';
 
 // Legacy interfaces removed - now using GeographicalSearch from GrokService
 
+/** Max concurrent Grok geographical searches to avoid API bursts and rate limits. */
+const MAX_CONCURRENT_GEOGRAPHICAL_SEARCHES = 2;
+/** Stagger window for first run when starting a single monitor (seconds). */
+const STAGGER_FIRST_RUN_WINDOW_SEC = 90;
+/** Delay between starting each monitor when starting all (ms), so first runs don't burst. */
+const START_ALL_STAGGER_MS = 15_000;
+
 export class SocialMediaMonitoringService {
-  private activeGeographicalSearches = new Map<string, NodeJS.Timeout>();
+  private activeGeographicalSearches = new Map<string, { interval?: NodeJS.Timeout; initialTimeout?: NodeJS.Timeout }>();
+  private concurrentSearches = 0;
   private healthCheckInterval: NodeJS.Timeout | null = null;
   private recoveryInterval: NodeJS.Timeout | null = null;
   private grokService: GrokService;
@@ -203,7 +211,20 @@ export class SocialMediaMonitoringService {
     return await this.grokService.getMonitorRunLogs(monitorId);
   }
 
-  async startGeographicalMonitoring(monitorId: string): Promise<void> {
+  /**
+   * Stagger delay for first run (ms) from monitor id so multiple monitors don't all fire at once.
+   */
+  private staggerDelayMs(monitorId: string): number {
+    const hash = Math.abs(
+      monitorId.split('').reduce((acc, c) => ((acc << 5) - acc) + c.charCodeAt(0), 0)
+    );
+    return (hash % STAGGER_FIRST_RUN_WINDOW_SEC) * 1000;
+  }
+
+  /**
+   * @param optionalFirstRunDelayMs - When starting all monitors, pass index * START_ALL_STAGGER_MS to spread first runs.
+   */
+  async startGeographicalMonitoring(monitorId: string, optionalFirstRunDelayMs?: number): Promise<void> {
     const serviceEnabled = await this.configService.isServiceEnabled();
     if (!serviceEnabled) {
       throw new Error('Social media monitoring service is disabled globally');
@@ -216,11 +237,13 @@ export class SocialMediaMonitoringService {
       throw new Error('Geographical search not found');
     }
 
-    // Clear existing interval if any (this will also update DB flag to false)
+    // Clear existing interval/timeout if any (this will also update DB flag to false)
     await this.stopGeographicalMonitoring(monitorId);
 
     // Update database flag to active before starting
     await this.grokService.updateGeographicalSearch(monitorId, { is_active: true });
+
+    const intervalMs = search.monitoring_interval * 1000;
 
     const runSearch = async (): Promise<void> => {
       try {
@@ -230,30 +253,48 @@ export class SocialMediaMonitoringService {
           await this.stopGeographicalMonitoring(monitorId);
           return;
         }
-
+        if (this.concurrentSearches >= MAX_CONCURRENT_GEOGRAPHICAL_SEARCHES) {
+          logger.debug('Skipping geographical search (concurrency limit)', { monitorId });
+          return;
+        }
         const currentSearches = await this.grokService.getGeographicalSearches();
         const currentSearch = currentSearches.find(s => s.id === monitorId);
-        if (currentSearch) {
+        if (!currentSearch) return;
+        this.concurrentSearches++;
+        try {
           await this.performGeographicalSearch(currentSearch);
+        } finally {
+          this.concurrentSearches--;
         }
       } catch (error) {
         logger.error('Error in geographical monitoring interval', { monitorId, error });
       }
     };
 
-    // Run first search immediately; then repeat at interval
-    runSearch().catch((err) => logger.error('Error on initial geographical search', { monitorId, error: err }));
+    const firstRunDelayMs = optionalFirstRunDelayMs ?? this.staggerDelayMs(monitorId);
+    const initialTimeout = setTimeout(() => {
+      runSearch().catch((err) => logger.error('Error on initial geographical search', { monitorId, error: err }));
+      const interval = setInterval(runSearch, intervalMs);
+      const entry = this.activeGeographicalSearches.get(monitorId);
+      if (entry) {
+        entry.interval = interval;
+        entry.initialTimeout = undefined;
+      }
+    }, firstRunDelayMs);
 
-    const interval = setInterval(runSearch, search.monitoring_interval * 1000);
-
-    this.activeGeographicalSearches.set(monitorId, interval);
-    logger.info('Started geographical monitoring', { monitorId, interval: search.monitoring_interval });
+    this.activeGeographicalSearches.set(monitorId, { initialTimeout });
+    logger.info('Started geographical monitoring', {
+      monitorId,
+      interval: search.monitoring_interval,
+      firstRunDelayMs,
+    });
   }
 
   async stopGeographicalMonitoring(monitorId: string): Promise<void> {
-    const interval = this.activeGeographicalSearches.get(monitorId);
-    if (interval) {
-      clearInterval(interval);
+    const entry = this.activeGeographicalSearches.get(monitorId);
+    if (entry) {
+      if (entry.initialTimeout) clearTimeout(entry.initialTimeout);
+      if (entry.interval) clearInterval(entry.interval);
       this.activeGeographicalSearches.delete(monitorId);
       logger.info('Stopped geographical monitoring', { monitorId });
     }
@@ -416,9 +457,11 @@ export class SocialMediaMonitoringService {
     let failed = 0;
     const errors: string[] = [];
 
-    for (const search of activeSearches) {
+    for (let index = 0; index < activeSearches.length; index++) {
+      const search = activeSearches[index];
       try {
-        await this.startGeographicalMonitoring(search.id);
+        const firstRunDelayMs = index * START_ALL_STAGGER_MS;
+        await this.startGeographicalMonitoring(search.id, firstRunDelayMs);
         started++;
       } catch (error: any) {
         failed++;
@@ -437,8 +480,9 @@ export class SocialMediaMonitoringService {
     const runningMonitorIds = Array.from(this.activeGeographicalSearches.keys());
     
     // Stop geographical monitors
-    for (const [monitorId, interval] of this.activeGeographicalSearches.entries()) {
-      clearInterval(interval);
+    for (const [monitorId, entry] of this.activeGeographicalSearches.entries()) {
+      if (entry.initialTimeout) clearTimeout(entry.initialTimeout);
+      if (entry.interval) clearInterval(entry.interval);
       logger.info('Stopped geographical monitoring', { monitorId });
       stopped++;
     }
@@ -680,8 +724,9 @@ export class SocialMediaMonitoringService {
     this.stopRecoveryMonitoring();
     
     // Stop geographical monitors
-    for (const [monitorId, interval] of this.activeGeographicalSearches.entries()) {
-      clearInterval(interval);
+    for (const [monitorId, entry] of this.activeGeographicalSearches.entries()) {
+      if (entry.initialTimeout) clearTimeout(entry.initialTimeout);
+      if (entry.interval) clearInterval(entry.interval);
       logger.info('Stopped geographical monitoring during shutdown', { monitorId });
     }
     this.activeGeographicalSearches.clear();
