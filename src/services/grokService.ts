@@ -720,14 +720,31 @@ export class GrokService {
    * Per xAI docs, not every URL is necessarily referenced in the model output; we attach
    * all collected source URLs to each threat so users get full traceability and can open
    * the original X posts.
+   * Keeps only citations that have a resolvable URL (so links are reliably clickable).
    */
   private enrichAnalysisCitations(analysis: any, apiCitationUrls: string[]): void {
-    if (!apiCitationUrls.length) return;
-    const citations = Array.isArray(analysis.citations) ? [...analysis.citations] : [];
+    const resolvableUrl = (c: any): string | null => {
+      if (!c || typeof c !== 'object') return null;
+      const u = c.url ?? c.link ?? c.source_url ?? c.uri ?? c.href ?? c.web_citation?.url ?? c.x_citation?.url;
+      if (typeof u === 'string' && (u.startsWith('http') || u.startsWith('//'))) return u.startsWith('//') ? 'https:' + u : u;
+      const author = c.author ?? c.username;
+      const postId = c.post_id ?? c.status_id ?? c.tweet_id ?? c.id;
+      const postIdStr = postId != null ? String(postId) : '';
+      if (author && /^\d{1,20}$/.test(postIdStr)) return `https://x.com/${encodeURIComponent(author)}/status/${postIdStr}`;
+      return null;
+    };
+    const citations: any[] = [];
     const seen = new Set<string>();
-    for (const c of citations) {
-      const u = c?.url || c?.link || c?.source_url || c?.uri || c?.href;
-      if (typeof u === 'string' && u.startsWith('http')) seen.add(u);
+    if (Array.isArray(analysis.citations)) {
+      for (const c of analysis.citations) {
+        const url = resolvableUrl(c);
+        if (url && !seen.has(url)) {
+          seen.add(url);
+          citations.push(typeof c === 'object' && c !== null && (c.url || c.link || c.title)
+            ? { ...c, url: url }
+            : { id: c?.id ?? `citation_${citations.length}`, url, title: c?.title ?? 'Source', platform: c?.platform ?? 'other' });
+        }
+      }
     }
     for (let i = 0; i < apiCitationUrls.length; i++) {
       const url = apiCitationUrls[i];

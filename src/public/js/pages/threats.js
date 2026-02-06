@@ -543,7 +543,8 @@ export class ThreatsPage {
     const citationUrl = (c) => {
       if (!c) return null;
       if (typeof c === 'string' && c.startsWith('http')) return c;
-      const u = c.url || c.link || c.source_url || c.uri || c.href;
+      const u = c.url || c.link || c.source_url || c.uri || c.href ||
+        (c.web_citation && c.web_citation.url) || (c.x_citation && c.x_citation.url);
       if (u && typeof u === 'string' && (u.startsWith('http') || u.startsWith('//'))) return u.startsWith('//') ? 'https:' + u : u;
       const author = c.author || c.username;
       const postId = c.post_id || c.status_id || c.tweet_id || c.id;
@@ -552,14 +553,22 @@ export class ThreatsPage {
       if (author && isNumericId) return `https://x.com/${encodeURIComponent(author)}/status/${postIdStr}`;
       return u && typeof u === 'string' ? u : null;
     };
+    const normalizeCitations = (raw) => {
+      if (Array.isArray(raw)) return raw;
+      if (typeof raw === 'string') {
+        try { return JSON.parse(raw || '[]'); } catch (_) { return []; }
+      }
+      return [];
+    };
+    const citationsList = normalizeCitations(threat.citations);
     const citationLabel = (c) => {
       if (!c) return 'Source';
       if (typeof c === 'string') return c.length > 80 ? c.substring(0, 80) + '…' : c;
       return (c.title || c.content_preview || c.url || c.link || c.uri || 'Source').substring(0, 80) + ((c.title || c.content_preview || c.url || c.link || c.uri || '').length > 80 ? '…' : '');
     };
     const escapeAttr = (s) => (s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
-    const citationsHtml = (threat.citations && threat.citations.length > 0)
-      ? `<div style="margin-top: 8px;"><strong>Sources:</strong><ul style="margin: 4px 0 0 16px; padding: 0;">${threat.citations.slice(0, 10).map(c => {
+    const citationsHtml = citationsList.length > 0
+      ? `<div style="margin-top: 8px;"><strong>Sources:</strong><ul style="margin: 4px 0 0 16px; padding: 0;">${citationsList.slice(0, 10).map(c => {
         const href = citationUrl(c);
         const label = citationLabel(c);
         const safeLabel = escapeAttr(label || 'Source').substring(0, 80);

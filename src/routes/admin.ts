@@ -23,6 +23,15 @@ const resetPasswordLimiter = rateLimit({
 
 const UUID_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Ensure citations is always an array (JSONB can sometimes be string from driver/legacy). */
+function normalizeThreatCitations(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw || '[]'); } catch { return []; }
+  }
+  return [];
+}
+
 /**
  * Resolve a display name for the annotation creator. Never returns a raw GUID:
  * uses DB user name, or 'Admin' for legacy admin, or 'Dashboard' for unknown UUIDs.
@@ -1169,7 +1178,11 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       }
       
       const threats = await query;
-      res.json(threats);
+      const normalized = threats.map((t: any) => ({
+        ...t,
+        citations: normalizeThreatCitations(t.citations),
+      }));
+      res.json(normalized);
     } catch (err) { next(err); }
   });
 
@@ -1190,8 +1203,10 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       if (!threat) {
         return res.status(404).json({ error: 'Threat not found' });
       }
-      
-      res.json(threat);
+      res.json({
+        ...threat,
+        citations: normalizeThreatCitations(threat.citations),
+      });
     } catch (err) { next(err); }
   });
 
