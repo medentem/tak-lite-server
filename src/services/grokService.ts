@@ -449,6 +449,9 @@ export class GrokService {
           continue;
         }
 
+        // Citations from x_search are returned at top level; attach to each threat so users can open original X posts
+        const apiCitationUrls = this.normalizeApiCitations(response.data?.citations);
+
         // Validate and process each analysis with AI-enhanced deduplication (or fast paths)
         const validAnalyses: ThreatAnalysis[] = [];
         
@@ -458,6 +461,7 @@ export class GrokService {
 
         for (const analysis of analyses) {
           if (!this.validateThreatAnalysis(analysis)) continue;
+          this.enrichAnalysisCitations(analysis, apiCitationUrls);
 
           let aiDecision: AIThreatDecision;
 
@@ -664,6 +668,55 @@ export class GrokService {
     return parts.length > 0 ? parts.join('') : null;
   }
 
+  /**
+   * Normalize API citations from Responses API (x_search) to an array of URL strings.
+   * API returns citations "by default" - list of all source URLs the agent encountered.
+   */
+  private normalizeApiCitations(raw: any): string[] {
+    if (!Array.isArray(raw) || raw.length === 0) return [];
+    const urls: string[] = [];
+    for (const item of raw) {
+      if (typeof item === 'string' && (item.startsWith('http') || item.startsWith('//'))) {
+        urls.push(item.startsWith('//') ? 'https:' + item : item);
+      } else if (item && typeof item === 'object' && (item.url || item.href)) {
+        const u = item.url || item.href;
+        if (typeof u === 'string' && (u.startsWith('http') || u.startsWith('//'))) {
+          urls.push(u.startsWith('//') ? 'https:' + u : u);
+        }
+      }
+    }
+    return urls;
+  }
+
+  /**
+   * Enrich an analysis' citations with real URLs from the Responses API (x_search).
+   * The API returns a flat list of all source URLs; we append these so every threat
+   * includes clickable links to the original X posts for user review.
+   */
+  private enrichAnalysisCitations(analysis: any, apiCitationUrls: string[]): void {
+    if (!apiCitationUrls.length) return;
+    const citations = Array.isArray(analysis.citations) ? [...analysis.citations] : [];
+    const seen = new Set<string>();
+    for (const c of citations) {
+      const u = c?.url || c?.link || c?.source_url || c?.uri || c?.href;
+      if (typeof u === 'string' && u.startsWith('http')) seen.add(u);
+    }
+    for (let i = 0; i < apiCitationUrls.length; i++) {
+      const url = apiCitationUrls[i];
+      if (seen.has(url)) continue;
+      seen.add(url);
+      const isX = /^https?:\/\/(www\.)?(x\.com|twitter\.com)\//i.test(url);
+      citations.push({
+        id: `api_citation_${i}`,
+        platform: isX ? 'x_posts' : 'other',
+        url,
+        title: isX ? 'X post from search' : 'Source from search',
+        relevance_score: 0.9,
+      });
+    }
+    analysis.citations = citations;
+  }
+
   private getGeographicalThreatSystemPrompt(): string {
     return `You are a specialized threat detection AI for emergency services and security teams. You have access to real-time X (Twitter) posts and can search for current threats and emergency situations in specific geographical areas.
 
@@ -719,11 +772,12 @@ LOCATION EXTRACTION REQUIREMENTS:
 - Specify source of location information
 - Add area_description for human-readable area reference
 
-CITATION REQUIREMENTS:
-- Include ALL sources that led to this threat assessment
-- Provide clickable URLs for X posts, news articles, etc.
-- Include content previews for context
-- Rate relevance of each citation (0.0 to 1.0)
+CITATION REQUIREMENTS (CRITICAL - users must be able to open the original X post):
+- For EVERY threat you report, include ALL X post sources that led to it
+- Each citation MUST include the exact URL of the X post in "url" format: https://x.com/username/status/POST_ID
+- Use the actual URL from the search results for each post you cite - do not omit or guess URLs
+- Include "author" (X username) and "url" for every X post so users can verify the source
+- Add content_preview (first ~100 chars of the post) and relevance_score (0.0 to 1.0)
 
 Always respond with valid JSON array in this exact format:
 [
@@ -775,7 +829,7 @@ Use your real-time search capabilities to find recent X posts about SPECIFIC INC
 For each SPECIFIC INCIDENT found, provide:
 1. The specific location with coordinates AND radius if it's an area-based threat
 2. Threat level assessment based on immediate danger
-3. Complete source citations with clickable URLs
+3. Complete source citations: for every X post you use, include its exact URL (https://x.com/username/status/ID) so users can open and review the original post
 4. Confidence in the threat assessment
 5. Detailed geographic information for mapping
 

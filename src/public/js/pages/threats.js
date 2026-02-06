@@ -547,21 +547,31 @@ export class ThreatsPage {
     const citationUrl = (c) => {
       if (!c) return null;
       if (typeof c === 'string' && c.startsWith('http')) return c;
-      const u = c.url || c.link || c.source_url;
-      if (u && (u.startsWith('http') || u.startsWith('//'))) return u.startsWith('//') ? 'https:' + u : u;
+      const u = c.url || c.link || c.source_url || c.uri || c.href;
+      if (u && typeof u === 'string' && (u.startsWith('http') || u.startsWith('//'))) return u.startsWith('//') ? 'https:' + u : u;
       const author = c.author || c.username;
-      const postId = c.post_id || c.id;
-      if (author && postId && String(postId).match(/^\d+$/)) return `https://x.com/${encodeURIComponent(author)}/status/${postId}`;
-      return u || null;
+      const postId = c.post_id || c.status_id || c.tweet_id || c.id;
+      const postIdStr = postId != null ? String(postId) : '';
+      const isNumericId = /^\d{1,20}$/.test(postIdStr);
+      if (author && isNumericId) return `https://x.com/${encodeURIComponent(author)}/status/${postIdStr}`;
+      return u && typeof u === 'string' ? u : null;
     };
     const citationLabel = (c) => {
       if (!c) return 'Source';
       if (typeof c === 'string') return c.length > 80 ? c.substring(0, 80) + '…' : c;
-      return (c.title || c.content_preview || c.url || c.link || 'Source').substring(0, 80) + ((c.title || c.content_preview || c.url || c.link || '').length > 80 ? '…' : '');
+      return (c.title || c.content_preview || c.url || c.link || c.uri || 'Source').substring(0, 80) + ((c.title || c.content_preview || c.url || c.link || c.uri || '').length > 80 ? '…' : '');
     };
     const escapeAttr = (s) => (s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
     const citationsHtml = (threat.citations && threat.citations.length > 0)
-      ? `<div style="margin-top: 8px;"><strong>Sources:</strong><ul style="margin: 4px 0 0 16px; padding: 0;">${threat.citations.slice(0, 10).map(c => { const href = citationUrl(c); const label = citationLabel(c); return `<li><a href="${escapeAttr(href || '#')}" target="_blank" rel="noopener" style="color: var(--accent);">${escapeAttr(label || 'Source').substring(0, 80)}</a></li>`; }).join('')}</ul></div>`
+      ? `<div style="margin-top: 8px;"><strong>Sources:</strong><ul style="margin: 4px 0 0 16px; padding: 0;">${threat.citations.slice(0, 10).map(c => {
+        const href = citationUrl(c);
+        const label = citationLabel(c);
+        const safeLabel = escapeAttr(label || 'Source').substring(0, 80);
+        if (href) {
+          return `<li><a href="${escapeAttr(href)}" target="_blank" rel="noopener" style="color: var(--accent);">${safeLabel}</a></li>`;
+        }
+        return `<li><span style="color: var(--muted);">${safeLabel}</span></li>`;
+      }).join('')}</ul></div>`
       : '';
 
     const modalHtml = `
