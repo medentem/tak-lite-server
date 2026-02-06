@@ -1241,13 +1241,15 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       if (!db) return res.status(500).json({ error: 'Database not initialized' });
       
       const schema = Joi.object({
-        teamId: Joi.string().uuid().required(),
+        teamId: Joi.string().uuid().allow(null, '').optional(),
         annotationType: Joi.string().valid('poi', 'area').default('poi'),
         customLabel: Joi.string().max(100).allow('').optional(),
         customColor: Joi.string().valid('green', 'yellow', 'red', 'black', 'white').optional()
       });
       
-      const { teamId, annotationType, customLabel, customColor } = await schema.validateAsync(req.body);
+      const body = await schema.validateAsync(req.body);
+      const teamId = body.teamId && String(body.teamId).trim() ? body.teamId : null;
+      const { annotationType, customLabel, customColor } = body;
       const userId = (req.user as any)?.sub || 'admin';
       
       // Get the threat analysis
@@ -1259,10 +1261,12 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         return res.status(404).json({ error: 'Threat not found' });
       }
       
-      // Verify team exists
-      const team = await db.client('teams').where({ id: teamId }).first();
-      if (!team) {
-        return res.status(404).json({ error: 'Team not found' });
+      // Verify team exists only when sending to a specific team
+      if (teamId) {
+        const team = await db.client('teams').where({ id: teamId }).first();
+        if (!team) {
+          return res.status(404).json({ error: 'Team not found' });
+        }
       }
       
       // Extract location data from threat
@@ -1488,7 +1492,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
         // Emit sync activity for admin dashboard
         io.emit('admin:sync_activity', {
           type: 'annotation_update',
-          details: `System created threat annotation ${annotationId} for team ${teamId} from approved threat ${req.params.threatId}`
+          details: `System created threat annotation ${annotationId} for ${teamId ? `team ${teamId}` : 'all teams'} from approved threat ${req.params.threatId}`
         });
       }
       

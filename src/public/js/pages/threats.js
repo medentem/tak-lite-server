@@ -396,10 +396,10 @@ export class ThreatsPage {
 
           <div style="margin-bottom: 16px;">
             <label style="display: block; margin-bottom: 8px; color: var(--text); font-weight: 500;">
-              Select Team to Send Threat:
+              Send threat to:
             </label>
             <select id="threat-approval-team" style="width: 100%; padding: 8px 12px; border: 1px solid #233153; border-radius: 6px; background: #0c1527; color: var(--text); font-size: 14px;">
-              <option value="">-- Select Team --</option>
+              <option value="" selected>All teams</option>
               ${teams.map(team => `<option value="${team.id}">${team.name}</option>`).join('')}
             </select>
           </div>
@@ -458,14 +458,10 @@ export class ThreatsPage {
     });
 
     submitBtn.addEventListener('click', async () => {
-      const teamId = document.getElementById('threat-approval-team').value;
+      const teamSelect = document.getElementById('threat-approval-team');
+      const teamId = teamSelect.value.trim() || null;
       const annotationType = document.getElementById('threat-approval-type').value;
       const customLabel = document.getElementById('threat-approval-label').value.trim();
-
-      if (!teamId) {
-        showError('Please select a team');
-        return;
-      }
 
       try {
         submitBtn.disabled = true;
@@ -478,7 +474,7 @@ export class ThreatsPage {
         });
 
         if (response.success) {
-          showMessage('Threat approved and sent to field team!', 'success');
+          showMessage(teamId ? 'Threat approved and sent to field team!' : 'Threat approved and sent to all teams!', 'success');
           closeModal();
           await this.loadThreats();
           
