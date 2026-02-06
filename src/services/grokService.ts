@@ -772,12 +772,12 @@ LOCATION EXTRACTION REQUIREMENTS:
 - Specify source of location information
 - Add area_description for human-readable area reference
 
-CITATION REQUIREMENTS (CRITICAL - users must be able to open the original X post):
-- For EVERY threat you report, include ALL X post sources that led to it
-- Each citation MUST include the exact URL of the X post in "url" format: https://x.com/username/status/POST_ID
-- Use the actual URL from the search results for each post you cite - do not omit or guess URLs
-- Include "author" (X username) and "url" for every X post so users can verify the source
-- Add content_preview (first ~100 chars of the post) and relevance_score (0.0 to 1.0)
+CITATION REQUIREMENTS (CRITICAL - users must be able to open the original source):
+- For EVERY threat you report, include ALL sources (X posts, etc.) that led to it
+- Each citation MUST include the "url" field with the link to the source as provided by your search/tools
+- Use the actual link URL from the search results for each source you cite - do not omit or invent URLs
+- Include "author" where applicable and "url" for every citation so users can verify and open the source
+- Add content_preview (first ~100 chars where relevant) and relevance_score (0.0 to 1.0)
 
 Always respond with valid JSON array in this exact format:
 [
@@ -806,7 +806,7 @@ Always respond with valid JSON array in this exact format:
         "title": "Post title or first 50 chars",
         "author": "actual_x_username",
         "timestamp": "2024-01-15T14:30:00Z",
-        "url": "https://x.com/username/status/1234567890",
+        "url": "<link URL for this source from your search results>",
         "content_preview": "First 100 characters of the post content...",
         "relevance_score": 0.95
       }
@@ -829,7 +829,7 @@ Use your real-time search capabilities to find recent X posts about SPECIFIC INC
 For each SPECIFIC INCIDENT found, provide:
 1. The specific location with coordinates AND radius if it's an area-based threat
 2. Threat level assessment based on immediate danger
-3. Complete source citations: for every X post you use, include its exact URL (https://x.com/username/status/ID) so users can open and review the original post
+3. Complete source citations: for every source you use, include its link URL in the citation so users can open and review the original post (use the URL format returned by your search/tools)
 4. Confidence in the threat assessment
 5. Detailed geographic information for mapping
 
