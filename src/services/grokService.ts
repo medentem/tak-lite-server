@@ -387,6 +387,8 @@ export class GrokService {
           tool_choice: 'auto',
           store: false,
           text: { format: textFormat },
+          // Request inline citations per docs: https://docs.x.ai/developers/tools/citations
+          include: ['inline_citations'],
         };
 
         logger.debug('Grok geographical threat search (Responses API + x_search)', {
@@ -449,8 +451,9 @@ export class GrokService {
           continue;
         }
 
-        // Citations from x_search are returned at top level; attach to each threat so users can open original X posts
-        const apiCitationUrls = this.normalizeApiCitations(response.data?.citations);
+        // Per xAI docs (https://docs.x.ai/developers/tools/citations): use "All Citations" (response.citations)
+        // and optionally inline_citations for full traceability. Attach to each threat so users can open sources.
+        const apiCitationUrls = this.collectCitationUrlsFromResponse(response.data);
 
         // Validate and process each analysis with AI-enhanced deduplication (or fast paths)
         const validAnalyses: ThreatAnalysis[] = [];
@@ -669,29 +672,54 @@ export class GrokService {
   }
 
   /**
-   * Normalize API citations from Responses API (x_search) to an array of URL strings.
-   * API returns citations "by default" - list of all source URLs the agent encountered.
+   * Collect all citation URLs from a Responses API response, following xAI citation best practices.
+   * @see https://docs.x.ai/developers/tools/citations
+   *
+   * - "All Citations": response.citations is the full list of source URLs (returned by default).
+   * - Inline citations: response.inline_citations (when requested) has structured entries with url.
+   * We merge both and dedupe so we have full traceability even if the API returns only one shape.
    */
-  private normalizeApiCitations(raw: any): string[] {
-    if (!Array.isArray(raw) || raw.length === 0) return [];
+  private collectCitationUrlsFromResponse(responseData: any): string[] {
     const urls: string[] = [];
-    for (const item of raw) {
-      if (typeof item === 'string' && (item.startsWith('http') || item.startsWith('//'))) {
-        urls.push(item.startsWith('//') ? 'https:' + item : item);
-      } else if (item && typeof item === 'object' && (item.url || item.href)) {
-        const u = item.url || item.href;
-        if (typeof u === 'string' && (u.startsWith('http') || u.startsWith('//'))) {
-          urls.push(u.startsWith('//') ? 'https:' + u : u);
+    const seen = new Set<string>();
+    const add = (u: string) => {
+      if (!u || !(u.startsWith('http') || u.startsWith('//'))) return;
+      const url = u.startsWith('//') ? 'https:' + u : u;
+      if (seen.has(url)) return;
+      seen.add(url);
+      urls.push(url);
+    };
+
+    // Primary: top-level citations (list of URLs or objects with url)
+    const top = responseData?.citations;
+    if (Array.isArray(top)) {
+      for (const item of top) {
+        if (typeof item === 'string') add(item);
+        else if (item && typeof item === 'object') {
+          const u = item.url ?? item.href ?? item.web_citation?.url ?? item.x_citation?.url;
+          if (typeof u === 'string') add(u);
         }
       }
     }
+
+    // Fallback: inline_citations (structured entries with url / web_citation / x_citation)
+    const inline = responseData?.inline_citations;
+    if (Array.isArray(inline)) {
+      for (const item of inline) {
+        if (!item || typeof item !== 'object') continue;
+        const u = item.url ?? item.href ?? item.web_citation?.url ?? item.x_citation?.url;
+        if (typeof u === 'string') add(u);
+      }
+    }
+
     return urls;
   }
 
   /**
    * Enrich an analysis' citations with real URLs from the Responses API (x_search).
-   * The API returns a flat list of all source URLs; we append these so every threat
-   * includes clickable links to the original X posts for user review.
+   * Per xAI docs, not every URL is necessarily referenced in the model output; we attach
+   * all collected source URLs to each threat so users get full traceability and can open
+   * the original X posts.
    */
   private enrichAnalysisCitations(analysis: any, apiCitationUrls: string[]): void {
     if (!apiCitationUrls.length) return;
