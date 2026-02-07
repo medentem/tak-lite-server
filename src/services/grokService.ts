@@ -387,8 +387,7 @@ export class GrokService {
           tool_choice: 'auto',
           store: false,
           text: { format: textFormat },
-          // Request inline citations per docs: https://docs.x.ai/developers/tools/citations
-          include: ['inline_citations'],
+          // Note: REST API does not support "include"; response.citations (all URLs) is returned by default per docs.
         };
 
         logger.debug('Grok geographical threat search (Responses API + x_search)', {
