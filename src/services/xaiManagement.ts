@@ -111,7 +111,10 @@ export class XaiManagementService {
     }
   }
 
-  /** Fetch prepaid balance from xAI Management API. Returns null if not configured or request fails. */
+  /**
+   * Fetch prepaid balance from xAI Management API. Returns null if not configured or request fails.
+   * 501/404: endpoint not implemented or not enabled for this account — we log at debug only.
+   */
   async fetchBalance(): Promise<XaiPrepaidBalance | null> {
     const config = await this.getConfig();
     if (!config?.management_key_encrypted || !config?.team_id) return null;
@@ -125,10 +128,13 @@ export class XaiManagementService {
       });
       return (res.data ?? {}) as XaiPrepaidBalance;
     } catch (err: any) {
-      logger.warn('xAI Management API balance fetch failed', {
-        status: err.response?.status,
-        message: err.message,
-      });
+      const status = err.response?.status;
+      const notAvailable = status === 501 || status === 404;
+      if (notAvailable) {
+        logger.debug('xAI Management API balance not available (endpoint may not be enabled)', { status });
+      } else {
+        logger.warn('xAI Management API balance fetch failed', { status, message: err.message });
+      }
       return null;
     }
   }
@@ -136,6 +142,7 @@ export class XaiManagementService {
   /**
    * Fetch historical usage from xAI Management API.
    * Returns null if not configured or request fails.
+   * 501/404: endpoint not implemented or not enabled for this account — we log at debug only.
    */
   async fetchUsage(): Promise<XaiUsageResponse | null> {
     const config = await this.getConfig();
@@ -150,10 +157,13 @@ export class XaiManagementService {
       });
       return (res.data ?? {}) as XaiUsageResponse;
     } catch (err: any) {
-      logger.warn('xAI Management API usage fetch failed', {
-        status: err.response?.status,
-        message: err.message,
-      });
+      const status = err.response?.status;
+      const notAvailable = status === 501 || status === 404;
+      if (notAvailable) {
+        logger.debug('xAI Management API usage not available (endpoint may not be enabled)', { status });
+      } else {
+        logger.warn('xAI Management API usage fetch failed', { status, message: err.message });
+      }
       return null;
     }
   }
