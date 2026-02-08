@@ -354,7 +354,7 @@ export class SocialMediaMonitoringService {
       position: { lt: threat.locations[0]?.lat || 0, lng: threat.locations[0]?.lng || 0 },
       shape: shape,
       color: color,
-      label: this.generateThreatLabel(threat),
+      label: this.generateThreatLabel({ ...threat, ai_summary: threat.summary }),
       description: threat.summary || 'Geographical threat detected',
       timestamp: Date.now(),
       metadata: {
@@ -390,6 +390,144 @@ export class SocialMediaMonitoringService {
       threatType: threat.threat_type,
       color,
       shape
+    });
+
+    // If auto-create annotations is enabled, also create the map annotation and mark threat approved (bypass review)
+    const config = await this.configService.getServiceConfig();
+    if (config.auto_create_annotations && Array.isArray(threat.locations) && threat.locations.length > 0) {
+      await this.createMapAnnotationFromThreat(threat);
+    }
+  }
+
+  /**
+   * Creates a map annotation (annotations table) from a threat and marks the threat as approved.
+   * Used when "Automatically Create Annotations" is enabled to bypass the admin review flow.
+   */
+  private async createMapAnnotationFromThreat(threat: GrokThreatAnalysis): Promise<void> {
+    const primaryLocation = threat.locations[0];
+    if (!primaryLocation || typeof primaryLocation.lat !== 'number' || typeof primaryLocation.lng !== 'number' ||
+        isNaN(primaryLocation.lat) || isNaN(primaryLocation.lng) ||
+        !isFinite(primaryLocation.lat) || !isFinite(primaryLocation.lng)) {
+      logger.warn('Skipping auto-create map annotation: invalid threat location', { threatId: threat.id });
+      return;
+    }
+
+    const determineAnnotationType = (location: any): 'poi' | 'area' => {
+      const hasRadius = location.radius_km && location.radius_km > 0;
+      const lowConfidence = (location.confidence ?? 0) < 0.7;
+      const isInferred = location.source === 'inferred';
+      const hasSpecificLocation = location.name && String(location.name).trim().length > 0;
+      if (hasRadius || lowConfidence || isInferred || !hasSpecificLocation) return 'area';
+      return 'poi';
+    };
+
+    const threatLevelColors: Record<string, string> = {
+      LOW: 'green',
+      MEDIUM: 'yellow',
+      HIGH: 'red',
+      CRITICAL: 'black'
+    };
+    const color = threatLevelColors[threat.threat_level] || 'red';
+    const label = `${threat.threat_level} Threat: ${threat.threat_type || 'Unknown'}`;
+    const smartAnnotationType = determineAnnotationType(primaryLocation);
+
+    const annotationData: any = {
+      color,
+      shape: 'exclamation',
+      label,
+      description: threat.summary || '',
+      timestamp: Date.now(),
+      threatInfo: {
+        threatId: threat.id,
+        threatLevel: threat.threat_level,
+        threatType: threat.threat_type,
+        confidenceScore: threat.confidence_score,
+        summary: threat.summary,
+        source: 'AI Threat Detection (Auto)',
+        locationConfidence: primaryLocation.confidence,
+        locationSource: primaryLocation.source
+      }
+    };
+    if (smartAnnotationType === 'area') {
+      annotationData.center = { lng: primaryLocation.lng, lt: primaryLocation.lat };
+      annotationData.radius = primaryLocation.radius_km ?? 1.0;
+    } else {
+      annotationData.position = { lng: primaryLocation.lng, lt: primaryLocation.lat };
+    }
+
+    const annotationId = uuidv4();
+    const userId = 'system';
+    const teamId: string | null = null;
+
+    await this.db.client('annotations').insert({
+      id: annotationId,
+      user_id: userId,
+      team_id: teamId,
+      type: smartAnnotationType,
+      data: annotationData,
+      created_at: this.db.client.fn.now(),
+      updated_at: this.db.client.fn.now()
+    });
+
+    await this.db.client('threat_analyses')
+      .where('id', threat.id)
+      .update({
+        admin_status: 'approved',
+        annotation_id: annotationId,
+        reviewed_by: null,
+        reviewed_at: new Date()
+      });
+
+    if (this.io) {
+      this.io.emit('admin:threat_annotation_created', {
+        threatId: threat.id,
+        annotationId,
+        teamId,
+        threatLevel: threat.threat_level,
+        threatType: threat.threat_type,
+        location: primaryLocation
+      });
+      this.io.emit('admin:annotation_update', {
+        id: annotationId,
+        teamId,
+        type: smartAnnotationType,
+        data: annotationData,
+        userId,
+        userName: 'System (Threat Detection)',
+        userEmail: 'system@threat-detection',
+        timestamp: new Date().toISOString(),
+        source: 'threat_approval'
+      });
+      const clientData = {
+        ...annotationData,
+        type: smartAnnotationType,
+        id: annotationId,
+        creatorId: userId,
+        creatorUsername: 'System (Threat Detection)',
+        source: 'server',
+        originalSource: 'server'
+      };
+      this.io.to('global').emit('annotation:update', {
+        id: annotationId,
+        teamId,
+        type: smartAnnotationType,
+        data: JSON.stringify(clientData),
+        userId,
+        userName: 'System (Threat Detection)',
+        userEmail: 'system@threat-detection',
+        timestamp: new Date().toISOString(),
+        source: 'threat_approval'
+      });
+      this.io.emit('admin:sync_activity', {
+        type: 'annotation_update',
+        details: `System auto-created threat annotation ${annotationId} from threat ${threat.id} (Automatically Create Annotations enabled)`
+      });
+    }
+
+    logger.info('Auto-created map annotation from threat (bypassing review)', {
+      threatId: threat.id,
+      annotationId,
+      threatLevel: threat.threat_level
     });
   }
 

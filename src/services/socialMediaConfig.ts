@@ -5,6 +5,8 @@ export interface SocialMediaServiceConfig {
   id: string;
   service_enabled: boolean;
   auto_start_monitors: boolean;
+  /** When true, threat annotations are created as map annotations immediately without admin review. */
+  auto_create_annotations: boolean;
   max_monitors_per_team: number;
   default_monitoring_interval: number;
   service_settings: {
@@ -155,6 +157,7 @@ export class SocialMediaConfigService {
         id: require('uuid').v4(),
         service_enabled: false,
         auto_start_monitors: false,
+        auto_create_annotations: false,
         max_monitors_per_team: 5,
         default_monitoring_interval: 300,
         service_settings: {

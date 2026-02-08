@@ -478,6 +478,7 @@ export function createSocialMediaRouter(
     try {
       const { 
         auto_start_monitors, 
+        auto_create_annotations,
         max_monitors_per_team, 
         default_monitoring_interval,
         max_posts_per_hour
@@ -486,6 +487,7 @@ export function createSocialMediaRouter(
       const updates: any = {};
       
       if (auto_start_monitors !== undefined) updates.auto_start_monitors = auto_start_monitors;
+      if (auto_create_annotations !== undefined) updates.auto_create_annotations = auto_create_annotations;
       if (max_monitors_per_team !== undefined) updates.max_monitors_per_team = max_monitors_per_team;
       if (default_monitoring_interval !== undefined) updates.default_monitoring_interval = default_monitoring_interval;
 

@@ -583,6 +583,14 @@
           </div>
           
           <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" name="auto_create_annotations" style="width: auto; margin: 0;">
+              <span>Automatically Create Annotations</span>
+            </label>
+            <div class="help-text">When on, threat annotations are created on the map immediately without admin review. When off, threats must be reviewed and approved in the Admin Dashboard before annotations are created.</div>
+          </div>
+          
+          <div class="form-group">
             <label>Max Geographical Monitors</label>
             <input type="number" name="max_monitors_per_team" value="10" min="1" max="50">
             <div class="help-text">Maximum number of geographical monitors that can be active simultaneously</div>
@@ -1466,6 +1474,8 @@
         
         const form = document.getElementById('service-config-form');
         form.querySelector('[name="auto_start_monitors"]').checked = serviceConfig.auto_start_monitors;
+        const autoCreateEl = form.querySelector('[name="auto_create_annotations"]');
+        if (autoCreateEl) autoCreateEl.checked = !!serviceConfig.auto_create_annotations;
         form.querySelector('[name="max_monitors_per_team"]').value = serviceConfig.max_monitors_per_team;
         form.querySelector('[name="default_monitoring_interval"]').value = serviceConfig.default_monitoring_interval;
         form.querySelector('[name="max_posts_per_hour"]').value = serviceConfig.service_settings?.max_posts_per_hour || 100;
@@ -1576,6 +1586,7 @@
         
         // Convert checkbox values to booleans
         data.auto_start_monitors = data.auto_start_monitors === 'on';
+        data.auto_create_annotations = data.auto_create_annotations === 'on';
         
         // Convert numeric values
         data.max_monitors_per_team = parseInt(data.max_monitors_per_team);

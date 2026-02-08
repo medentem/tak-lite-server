@@ -450,9 +450,8 @@ export class GrokService {
           continue;
         }
 
-        // Per xAI docs (https://docs.x.ai/developers/tools/citations): use "All Citations" (response.citations)
-        // and optionally inline_citations for full traceability. Attach to each threat so users can open sources.
-        const apiCitationUrls = this.collectCitationUrlsFromResponse(response.data);
+        // Per xAI docs: response.citations is a full list of source URLs (returned by default). Use directly.
+        const apiCitationUrls: string[] = Array.isArray(response.data?.citations) ? response.data.citations : [];
 
         // Validate and process each analysis with AI-enhanced deduplication (or fast paths)
         const validAnalyses: ThreatAnalysis[] = [];
@@ -671,94 +670,11 @@ export class GrokService {
   }
 
   /**
-   * Collect all citation URLs from a Responses API response, following xAI citation best practices.
-   * @see https://docs.x.ai/developers/tools/citations
-   *
-   * - "All Citations": response.citations is the full list of source URLs (returned by default).
-   * - Inline citations: response.inline_citations (when requested) has structured entries with url.
-   * We merge both and dedupe so we have full traceability even if the API returns only one shape.
-   */
-  private collectCitationUrlsFromResponse(responseData: any): string[] {
-    const urls: string[] = [];
-    const seen = new Set<string>();
-    const add = (u: string) => {
-      if (!u || !(u.startsWith('http') || u.startsWith('//'))) return;
-      const url = u.startsWith('//') ? 'https:' + u : u;
-      if (seen.has(url)) return;
-      seen.add(url);
-      urls.push(url);
-    };
-
-    // Primary: top-level citations (list of URLs or objects with url)
-    const top = responseData?.citations;
-    if (Array.isArray(top)) {
-      for (const item of top) {
-        if (typeof item === 'string') add(item);
-        else if (item && typeof item === 'object') {
-          const u = item.url ?? item.href ?? item.web_citation?.url ?? item.x_citation?.url;
-          if (typeof u === 'string') add(u);
-        }
-      }
-    }
-
-    // Fallback: inline_citations (structured entries with url / web_citation / x_citation)
-    const inline = responseData?.inline_citations;
-    if (Array.isArray(inline)) {
-      for (const item of inline) {
-        if (!item || typeof item !== 'object') continue;
-        const u = item.url ?? item.href ?? item.web_citation?.url ?? item.x_citation?.url;
-        if (typeof u === 'string') add(u);
-      }
-    }
-
-    return urls;
-  }
-
-  /**
-   * Enrich an analysis' citations with real URLs from the Responses API (x_search).
-   * Per xAI docs, not every URL is necessarily referenced in the model output; we attach
-   * all collected source URLs to each threat so users get full traceability and can open
-   * the original X posts.
-   * Keeps only citations that have a resolvable URL (so links are reliably clickable).
+   * Attach citation URLs from the Responses API (response.citations) to an analysis.
+   * Citations are taken directly from the response object; no parsing or inline citations.
    */
   private enrichAnalysisCitations(analysis: any, apiCitationUrls: string[]): void {
-    const resolvableUrl = (c: any): string | null => {
-      if (!c || typeof c !== 'object') return null;
-      const u = c.url ?? c.link ?? c.source_url ?? c.uri ?? c.href ?? c.web_citation?.url ?? c.x_citation?.url;
-      if (typeof u === 'string' && (u.startsWith('http') || u.startsWith('//'))) return u.startsWith('//') ? 'https:' + u : u;
-      const author = c.author ?? c.username;
-      const postId = c.post_id ?? c.status_id ?? c.tweet_id ?? c.id;
-      const postIdStr = postId != null ? String(postId) : '';
-      if (author && /^\d{1,20}$/.test(postIdStr)) return `https://x.com/${encodeURIComponent(author)}/status/${postIdStr}`;
-      return null;
-    };
-    const citations: any[] = [];
-    const seen = new Set<string>();
-    if (Array.isArray(analysis.citations)) {
-      for (const c of analysis.citations) {
-        const url = resolvableUrl(c);
-        if (url && !seen.has(url)) {
-          seen.add(url);
-          citations.push(typeof c === 'object' && c !== null && (c.url || c.link || c.title)
-            ? { ...c, url: url }
-            : { id: c?.id ?? `citation_${citations.length}`, url, title: c?.title ?? 'Source', platform: c?.platform ?? 'other' });
-        }
-      }
-    }
-    for (let i = 0; i < apiCitationUrls.length; i++) {
-      const url = apiCitationUrls[i];
-      if (seen.has(url)) continue;
-      seen.add(url);
-      const isX = /^https?:\/\/(www\.)?(x\.com|twitter\.com)\//i.test(url);
-      citations.push({
-        id: `api_citation_${i}`,
-        platform: isX ? 'x_posts' : 'other',
-        url,
-        title: isX ? 'X post from search' : 'Source from search',
-        relevance_score: 0.9,
-      });
-    }
-    analysis.citations = citations;
+    analysis.citations = apiCitationUrls;
   }
 
   private getGeographicalThreatSystemPrompt(): string {
@@ -773,8 +689,7 @@ CRITICAL INSTRUCTIONS - FOCUS ON SPECIFIC INCIDENTS ONLY:
 6. Extract PRECISE location information from X posts when available
 7. For general area references, provide center point AND radius in kilometers
 8. Always respond with valid JSON in the exact format specified
-9. Include detailed citations with clickable URLs for all sources
-10. Prioritize recency - only include information from within the specified time window
+9. Prioritize recency - only include information from within the specified time window
 
 WHAT TO INCLUDE (Specific Incidents):
 - "Active shooter at [specific location] - police responding"
@@ -816,13 +731,6 @@ LOCATION EXTRACTION REQUIREMENTS:
 - Specify source of location information
 - Add area_description for human-readable area reference
 
-CITATION REQUIREMENTS (CRITICAL - users must be able to open the original source):
-- For EVERY threat you report, include ALL sources (X posts, etc.) that led to it
-- Each citation MUST include the "url" field with the link to the source as provided by your search/tools
-- Use the actual link URL from the search results for each source you cite - do not omit or invent URLs
-- Include "author" where applicable and "url" for every citation so users can verify and open the source
-- Add content_preview (first ~100 chars where relevant) and relevance_score (0.0 to 1.0)
-
 Always respond with valid JSON array in this exact format:
 [
   {
@@ -842,19 +750,7 @@ Always respond with valid JSON array in this exact format:
       }
     ],
     "keywords": ["keyword1", "keyword2"],
-    "reasoning": "Explanation of why this specific incident was classified as a threat",
-    "citations": [
-      {
-        "id": "citation_1",
-        "platform": "x_posts",
-        "title": "Post title or first 50 chars",
-        "author": "actual_x_username",
-        "timestamp": "2024-01-15T14:30:00Z",
-        "url": "<link URL for this source from your search results>",
-        "content_preview": "First 100 characters of the post content...",
-        "relevance_score": 0.95
-      }
-    ]
+    "reasoning": "Explanation of why this specific incident was classified as a threat"
   }
 ]`;
   }
@@ -873,9 +769,8 @@ Use your real-time search capabilities to find recent X posts about SPECIFIC INC
 For each SPECIFIC INCIDENT found, provide:
 1. The specific location with coordinates AND radius if it's an area-based threat
 2. Threat level assessment based on immediate danger
-3. Complete source citations: for every source you use, include its link URL in the citation so users can open and review the original post (use the URL format returned by your search/tools)
-4. Confidence in the threat assessment
-5. Detailed geographic information for mapping
+3. Confidence in the threat assessment
+4. Detailed geographic information for mapping
 
 GEOGRAPHIC REQUIREMENTS:
 - For specific locations: provide exact lat/lng coordinates
@@ -883,7 +778,7 @@ GEOGRAPHIC REQUIREMENTS:
 - Include area_description for human reference
 - Ensure all location data is actionable for emergency response
 
-Return results as a JSON array of threat analyses with complete citations. ONLY include specific incidents, not general discussions.`;
+Return results as a JSON array of threat analyses. ONLY include specific incidents, not general discussions.`;
   }
 
   private validateThreatAnalysis(analysis: any): boolean {
