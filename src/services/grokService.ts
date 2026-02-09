@@ -892,8 +892,15 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
     logger.info('Updated last search time', { searchId });
   }
 
+  /** Run logs older than this (hours) are always removed. */
+  private static readonly RUN_LOG_RETENTION_HOURS = 6;
+  /** Max run logs per monitor within the retention window; excess is trimmed by least interesting first. */
+  private static readonly RUN_LOG_MAX_COUNT = 100;
+
   /**
-   * Persist one run log for a geographical monitor (request + raw response + optional citations) and trim to last 10.
+   * Persist one run log for a geographical monitor (request + raw response + optional citations).
+   * Retention: time-based (drop older than RUN_LOG_RETENTION_HOURS) then cap at RUN_LOG_MAX_COUNT
+   * per monitor, deleting least "interesting" runs first (no threats, empty/short response, oldest).
    */
   async saveMonitorRunLog(
     geographicalSearchId: string,
@@ -924,23 +931,39 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
     }
     await this.db.client('geographical_monitor_run_logs').insert(insertRow);
 
-    const rowsToKeep = await this.db.client('geographical_monitor_run_logs')
-      .where('geographical_search_id', geographicalSearchId)
-      .orderBy('run_at', 'desc')
-      .limit(10)
-      .select('id');
-    const idsToKeep = rowsToKeep.map((r: { id: string }) => r.id);
+    const retentionCutoff = new Date(Date.now() - GrokService.RUN_LOG_RETENTION_HOURS * 60 * 60 * 1000);
 
-    if (idsToKeep.length > 0) {
-      await this.db.client('geographical_monitor_run_logs')
+    // 1. Time-based: remove runs outside the retention window
+    await this.db.client('geographical_monitor_run_logs')
+      .where('geographical_search_id', geographicalSearchId)
+      .where('run_at', '<', retentionCutoff)
+      .del();
+
+    // 2. If still over cap, trim least interesting first (no threats, short/empty response, oldest)
+    const countResult = await this.db.client('geographical_monitor_run_logs')
+      .where('geographical_search_id', geographicalSearchId)
+      .count('id as n')
+      .first();
+    const count = Number((countResult as { n: string | number })?.n ?? 0);
+    if (count > GrokService.RUN_LOG_MAX_COUNT) {
+      const idsToKeep = await this.db.client('geographical_monitor_run_logs')
         .where('geographical_search_id', geographicalSearchId)
-        .whereNotIn('id', idsToKeep)
-        .del();
+        .orderByRaw('(threats_found > 0) DESC, length(response_raw) DESC, run_at DESC')
+        .limit(GrokService.RUN_LOG_MAX_COUNT)
+        .select('id');
+      const keepIds = idsToKeep.map((r: { id: string }) => r.id);
+      if (keepIds.length > 0) {
+        await this.db.client('geographical_monitor_run_logs')
+          .where('geographical_search_id', geographicalSearchId)
+          .whereNotIn('id', keepIds)
+          .del();
+      }
     }
   }
 
   /**
-   * Get the last 10 run logs for a geographical monitor (for debugging / conversation inspection).
+   * Get run logs for a geographical monitor (for debugging / conversation inspection).
+   * Returns logs within the retention window, newest first, up to RUN_LOG_MAX_COUNT.
    */
   async getMonitorRunLogs(geographicalSearchId: string): Promise<Array<{
     id: string;
@@ -959,10 +982,13 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
       ? ['id', 'run_at', 'system_prompt', 'user_prompt', 'response_raw', 'threats_found', 'citations']
       : ['id', 'run_at', 'system_prompt', 'user_prompt', 'response_raw', 'threats_found'];
 
+    const retentionCutoff = new Date(Date.now() - GrokService.RUN_LOG_RETENTION_HOURS * 60 * 60 * 1000);
+
     const rows = await this.db.client('geographical_monitor_run_logs')
       .where('geographical_search_id', geographicalSearchId)
+      .where('run_at', '>=', retentionCutoff)
       .orderBy('run_at', 'desc')
-      .limit(10)
+      .limit(GrokService.RUN_LOG_MAX_COUNT)
       .select(selectCols);
 
     return rows.map((r: any) => ({
