@@ -567,7 +567,12 @@ export class ThreatsPage {
       }
       return [];
     };
-    const citationsList = normalizeCitations(threat.citations);
+    // Use top-level citations first; fallback to grok_analysis.citations (full analysis stored at save time)
+    let citationsList = normalizeCitations(threat.citations);
+    if (citationsList.length === 0 && threat.grok_analysis) {
+      const grok = typeof threat.grok_analysis === 'string' ? (() => { try { return JSON.parse(threat.grok_analysis); } catch (_) { return null; } })() : threat.grok_analysis;
+      if (grok && Array.isArray(grok.citations)) citationsList = grok.citations;
+    }
     const citationLabel = (c) => {
       if (!c) return 'Source';
       if (typeof c === 'string') return c.length > 80 ? c.substring(0, 80) + '…' : c;

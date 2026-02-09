@@ -1192,9 +1192,9 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       
       const threat = await db.client('threat_analyses')
         .select([
-          'id', 'threat_level', 'threat_type', 'confidence_score', 
+          'id', 'threat_level', 'threat_type', 'confidence_score',
           'ai_summary', 'extracted_locations', 'keywords', 'reasoning',
-          'search_query', 'geographical_area', 'created_at',
+          'search_query', 'geographical_area', 'created_at', 'admin_status',
           'processing_metadata', 'grok_analysis', 'citations'
         ])
         .where('id', req.params.threatId)
@@ -1203,9 +1203,14 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       if (!threat) {
         return res.status(404).json({ error: 'Threat not found' });
       }
+      let citations = normalizeThreatCitations(threat.citations);
+      if (citations.length === 0 && threat.grok_analysis) {
+        const grok = typeof threat.grok_analysis === 'string' ? (() => { try { return JSON.parse(threat.grok_analysis as string); } catch { return null; } })() : threat.grok_analysis;
+        if (grok && Array.isArray((grok as any).citations)) citations = normalizeThreatCitations((grok as any).citations);
+      }
       res.json({
         ...threat,
-        citations: normalizeThreatCitations(threat.citations) as string[],
+        citations: citations as string[],
       });
     } catch (err) { next(err); }
   });
