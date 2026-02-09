@@ -515,8 +515,15 @@ export class ThreatsPage {
     }
   }
 
-  showThreatDetails(threatId) {
-    const threat = threatsList.find(t => t.id === threatId);
+  async showThreatDetails(threatId) {
+    // Fetch full threat by ID so we always have citations and latest data from the API
+    let threat = threatsList.find(t => t.id === threatId);
+    try {
+      const fetched = await get(`/api/admin/threats/${threatId}`);
+      if (fetched && fetched.id) threat = fetched;
+    } catch (_) {
+      // Use list threat if fetch fails
+    }
     if (!threat) {
       showError('Threat not found');
       return;

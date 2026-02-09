@@ -1149,9 +1149,9 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       
       let query = db.client('threat_analyses')
         .select([
-          'id', 'threat_level', 'threat_type', 'confidence_score', 
+          'id', 'threat_level', 'threat_type', 'confidence_score',
           'ai_summary', 'extracted_locations', 'keywords', 'reasoning',
-          'search_query', 'geographical_area', 'created_at',
+          'search_query', 'geographical_area', 'created_at', 'admin_status',
           'processing_metadata', 'grok_analysis', 'citations'
         ])
         .orderBy('created_at', 'desc')
@@ -1180,7 +1180,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       const threats = await query;
       const normalized = threats.map((t: any) => ({
         ...t,
-        citations: normalizeThreatCitations(t.citations),
+        citations: normalizeThreatCitations(t.citations) as string[],
       }));
       res.json(normalized);
     } catch (err) { next(err); }
@@ -1205,7 +1205,7 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       }
       res.json({
         ...threat,
-        citations: normalizeThreatCitations(threat.citations),
+        citations: normalizeThreatCitations(threat.citations) as string[],
       });
     } catch (err) { next(err); }
   });
