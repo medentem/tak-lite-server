@@ -32,6 +32,16 @@ function normalizeThreatCitations(raw: unknown): unknown[] {
   return [];
 }
 
+/** Extract clickable citation URLs from normalized citations (strings or objects with .url). */
+function citationUrlsFromThreat(citations: unknown[]): string[] {
+  const urls: string[] = [];
+  for (const c of citations) {
+    if (typeof c === 'string' && c.trim()) urls.push(c.trim());
+    else if (c && typeof c === 'object' && typeof (c as { url?: string }).url === 'string') urls.push((c as { url: string }).url.trim());
+  }
+  return urls;
+}
+
 /**
  * Resolve a display name for the annotation creator. Never returns a raw GUID:
  * uses DB user name, or 'Admin' for legacy admin, or 'Dashboard' for unknown UUIDs.
@@ -1379,6 +1389,12 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       const color = customColor || threatLevelColors[threat.threat_level as keyof typeof threatLevelColors] || 'red';
       const label = customLabel || `${threat.threat_level} Threat: ${threat.threat_type || 'Unknown'}`;
       
+      // Resolve citation URLs for clients (e.g. Android "Open source" link)
+      const rawCitations = normalizeThreatCitations(threat.citations);
+      const grok = threat.grok_analysis && (typeof threat.grok_analysis === 'string' ? (() => { try { return JSON.parse(threat.grok_analysis); } catch { return null; } })() : threat.grok_analysis);
+      const citationsList = rawCitations.length > 0 ? rawCitations : (grok && Array.isArray((grok as any).citations) ? (grok as any).citations : []);
+      const citationUrls = citationUrlsFromThreat(citationsList as unknown[]);
+
       // Create annotation data based on type
       const annotationData: any = {
         color: color,
@@ -1394,7 +1410,8 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           summary: threat.ai_summary,
           source: 'AI Threat Detection',
           locationConfidence: primaryLocation.confidence,
-          locationSource: primaryLocation.source
+          locationSource: primaryLocation.source,
+          citationUrls
         }
       };
       

@@ -437,6 +437,13 @@ export class SocialMediaMonitoringService {
     const label = `${threat.threat_level} Threat: ${threat.threat_type || 'Unknown'}`;
     const smartAnnotationType = determineAnnotationType(primaryLocation);
 
+    // Extract citation URLs so clients can open sources (e.g. Android "Open source" link)
+    const rawCitations = Array.isArray(threat.citations) ? threat.citations : [];
+    const citationUrls = rawCitations
+      .map((c: unknown) => (typeof c === 'string' ? c : (c && typeof c === 'object' && typeof (c as { url?: string }).url === 'string' ? (c as { url: string }).url : null)))
+      .filter((u: string | null): u is string => typeof u === 'string' && u.trim().length > 0)
+      .map((u: string) => u.trim());
+
     const annotationData: any = {
       color,
       shape: 'exclamation',
@@ -451,7 +458,8 @@ export class SocialMediaMonitoringService {
         summary: threat.summary,
         source: 'AI Threat Detection (Auto)',
         locationConfidence: primaryLocation.confidence,
-        locationSource: primaryLocation.source
+        locationSource: primaryLocation.source,
+        citationUrls
       }
     };
     if (smartAnnotationType === 'area') {
