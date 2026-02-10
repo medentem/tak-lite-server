@@ -343,12 +343,18 @@ export class SocialMediaMonitoringService {
       return; // Skip low-level threats
     }
 
+    // Run auto-create map annotation first when enabled, so it is never blocked by legacy insert failures
+    const config = await this.configService.refreshConfig();
+    if (config.auto_create_annotations && threat.id && Array.isArray(threat.locations) && threat.locations.length > 0) {
+      try {
+        await this.createMapAnnotationFromThreat(threat);
+      } catch (err) {
+        logger.error('Auto-create map annotation from threat failed', { threatId: threat.id, error: err });
+      }
+    }
+
     const annotationId = uuidv4();
-    
-    // Determine color and shape based on threat level
     const { color, shape } = this.getThreatVisual(threat.threat_level);
-    
-    // Create TAK-Lite compatible annotation data
     const annotationData = {
       type: 'poi',
       position: { lt: threat.locations[0]?.lat || 0, lng: threat.locations[0]?.lng || 0 },
@@ -368,34 +374,34 @@ export class SocialMediaMonitoringService {
       }
     };
 
-    // Store threat annotation in database
-    await this.db.client('threat_annotations').insert({
-      id: annotationId,
-      threat_analysis_id: threat.id,
-      team_id: null, // Global threat annotation - visible to all teams
-      position: { 
-        lat: (threat.locations[0]?.lat && !isNaN(threat.locations[0].lat)) ? threat.locations[0].lat : 0, 
-        lng: (threat.locations[0]?.lng && !isNaN(threat.locations[0].lng)) ? threat.locations[0].lng : 0 
-      },
-      threat_level: threat.threat_level,
-      threat_type: threat.threat_type,
-      title: this.generateThreatTitle(threat),
-      description: threat.summary,
-      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
-    });
-
-    logger.info('Created threat annotation from Grok', { 
-      annotationId, 
-      threatLevel: threat.threat_level,
-      threatType: threat.threat_type,
-      color,
-      shape
-    });
-
-    // If auto-create annotations is enabled, also create the map annotation and mark threat approved (bypass review)
-    const config = await this.configService.getServiceConfig();
-    if (config.auto_create_annotations && Array.isArray(threat.locations) && threat.locations.length > 0) {
-      await this.createMapAnnotationFromThreat(threat);
+    try {
+      await this.db.client('threat_annotations').insert({
+        id: annotationId,
+        threat_analysis_id: threat.id,
+        team_id: null,
+        position: {
+          lat: (threat.locations[0]?.lat && !isNaN(threat.locations[0].lat)) ? threat.locations[0].lat : 0,
+          lng: (threat.locations[0]?.lng && !isNaN(threat.locations[0].lng)) ? threat.locations[0].lng : 0
+        },
+        threat_level: threat.threat_level,
+        threat_type: threat.threat_type,
+        title: this.generateThreatTitle(threat),
+        description: threat.summary,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+      });
+      logger.info('Created threat annotation from Grok', {
+        annotationId,
+        threatLevel: threat.threat_level,
+        threatType: threat.threat_type,
+        color,
+        shape
+      });
+    } catch (err) {
+      logger.warn('Legacy threat_annotations insert failed (map annotation may still have been created)', {
+        threatId: threat.id,
+        annotationId,
+        error: err
+      });
     }
   }
 

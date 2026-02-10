@@ -29,6 +29,12 @@ export class SocialMediaConfigService {
     return this.config!;
   }
 
+  /** Reload config from DB so callers see the latest values (e.g. after user toggles auto_create_annotations). */
+  async refreshConfig(): Promise<SocialMediaServiceConfig> {
+    await this.loadConfig();
+    return this.config!;
+  }
+
   async updateServiceConfig(updates: Partial<SocialMediaServiceConfig>): Promise<SocialMediaServiceConfig> {
     const currentConfig = await this.getServiceConfig();
     
