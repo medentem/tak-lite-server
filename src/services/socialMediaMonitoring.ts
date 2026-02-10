@@ -320,7 +320,15 @@ export class SocialMediaMonitoringService {
         lastSearchTime,
         search.id
       );
-      
+
+      logger.info('Geographical search completed: processing threats for auto-create', {
+        searchId: search.id,
+        geographical_area: search.geographical_area,
+        threatsReturned: threats.length,
+        threatIds: threats.map((t: any) => t.id),
+        threatLevels: threats.map((t: any) => t.threat_level)
+      });
+
       for (const threat of threats) {
         await this.createThreatAnnotationFromGrok(threat, search);
       }
@@ -339,17 +347,56 @@ export class SocialMediaMonitoringService {
   }
 
   private async createThreatAnnotationFromGrok(threat: any, search: GeographicalSearch): Promise<void> {
+    const hasLocations = Array.isArray(threat.locations) && threat.locations.length > 0;
+    logger.debug('createThreatAnnotationFromGrok: evaluating threat', {
+      threatId: threat.id,
+      threat_level: threat.threat_level,
+      hasLocations,
+      locationsLength: threat.locations?.length ?? 0,
+      searchId: search.id,
+      geographical_area: search.geographical_area
+    });
+
     if (threat.threat_level === 'LOW') {
+      logger.debug('Auto-create skipped: threat level is LOW', { threatId: threat.id });
       return; // Skip low-level threats
     }
 
     // Run auto-create map annotation first when enabled, so it is never blocked by legacy insert failures
     const config = await this.configService.refreshConfig();
+    const autoCreateEnabled = !!config.auto_create_annotations;
+    const hasThreatId = !!threat.id;
+
+    if (!autoCreateEnabled) {
+      logger.debug('Auto-create skipped: config.auto_create_annotations is false', {
+        threatId: threat.id,
+        auto_create_annotations: config.auto_create_annotations
+      });
+    } else if (!hasThreatId) {
+      logger.warn('Auto-create skipped: threat has no id', { threat_level: threat.threat_level, hasLocations });
+    } else if (!hasLocations) {
+      logger.warn('Auto-create skipped: threat has no valid locations', {
+        threatId: threat.id,
+        threat_level: threat.threat_level,
+        locationsType: typeof threat.locations,
+        locationsLength: threat.locations?.length ?? 0
+      });
+    }
+
     if (config.auto_create_annotations && threat.id && Array.isArray(threat.locations) && threat.locations.length > 0) {
+      logger.info('Auto-create: attempting to create map annotation from threat', {
+        threatId: threat.id,
+        threat_level: threat.threat_level,
+        locationsCount: threat.locations.length
+      });
       try {
         await this.createMapAnnotationFromThreat(threat);
       } catch (err) {
-        logger.error('Auto-create map annotation from threat failed', { threatId: threat.id, error: err });
+        logger.error('Auto-create map annotation from threat failed', {
+          threatId: threat.id,
+          error: err instanceof Error ? err.message : err,
+          stack: err instanceof Error ? err.stack : undefined
+        });
       }
     }
 
@@ -410,11 +457,29 @@ export class SocialMediaMonitoringService {
    * Used when "Automatically Create Annotations" is enabled to bypass the admin review flow.
    */
   private async createMapAnnotationFromThreat(threat: GrokThreatAnalysis): Promise<void> {
+    logger.debug('createMapAnnotationFromThreat: starting', {
+      threatId: threat.id,
+      locationsCount: threat.locations?.length ?? 0,
+      firstLocation: threat.locations?.[0] ? {
+        lat: threat.locations[0].lat,
+        lng: threat.locations[0].lng,
+        latType: typeof threat.locations[0].lat,
+        lngType: typeof threat.locations[0].lng
+      } : null
+    });
+
     const primaryLocation = threat.locations[0];
     if (!primaryLocation || typeof primaryLocation.lat !== 'number' || typeof primaryLocation.lng !== 'number' ||
         isNaN(primaryLocation.lat) || isNaN(primaryLocation.lng) ||
         !isFinite(primaryLocation.lat) || !isFinite(primaryLocation.lng)) {
-      logger.warn('Skipping auto-create map annotation: invalid threat location', { threatId: threat.id });
+      logger.warn('Skipping auto-create map annotation: invalid threat location', {
+        threatId: threat.id,
+        hasPrimaryLocation: !!primaryLocation,
+        lat: primaryLocation?.lat,
+        lng: primaryLocation?.lng,
+        latType: primaryLocation ? typeof primaryLocation.lat : 'n/a',
+        lngType: primaryLocation ? typeof primaryLocation.lng : 'n/a'
+      });
       return;
     }
 
@@ -473,6 +538,12 @@ export class SocialMediaMonitoringService {
     const userId = 'system';
     const teamId: string | null = null;
 
+    logger.debug('createMapAnnotationFromThreat: inserting annotation and updating threat_analyses', {
+      threatId: threat.id,
+      annotationId,
+      annotationType: smartAnnotationType
+    });
+
     await this.db.client('annotations').insert({
       id: annotationId,
       user_id: userId,
@@ -483,7 +554,7 @@ export class SocialMediaMonitoringService {
       updated_at: this.db.client.fn.now()
     });
 
-    await this.db.client('threat_analyses')
+    const updateCount = await this.db.client('threat_analyses')
       .where('id', threat.id)
       .update({
         admin_status: 'approved',
@@ -491,6 +562,13 @@ export class SocialMediaMonitoringService {
         reviewed_by: null,
         reviewed_at: new Date()
       });
+
+    if (updateCount === 0) {
+      logger.warn('createMapAnnotationFromThreat: threat_analyses update matched 0 rows', {
+        threatId: threat.id,
+        annotationId
+      });
+    }
 
     if (this.io) {
       this.io.emit('admin:threat_annotation_created', {
