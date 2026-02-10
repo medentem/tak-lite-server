@@ -670,11 +670,18 @@ export class GrokService {
   }
 
   /**
-   * Attach citation URLs from the Responses API (response.citations) to an analysis.
-   * Citations are taken directly from the response object; no parsing or inline citations.
+   * Attach citations to an analysis. Prefer the Responses API list (response.citations) when
+   * non-empty; otherwise keep the model's citations (rich objects with url, title, author)
+   * so the threat always has sources when the model returned them.
    */
   private enrichAnalysisCitations(analysis: any, apiCitationUrls: string[]): void {
-    analysis.citations = apiCitationUrls;
+    if (Array.isArray(apiCitationUrls) && apiCitationUrls.length > 0) {
+      analysis.citations = apiCitationUrls;
+    }
+    // Else keep analysis.citations as-is (model may have returned rich citation objects)
+    if (!Array.isArray(analysis.citations)) {
+      analysis.citations = [];
+    }
   }
 
   private getGeographicalThreatSystemPrompt(): string {
