@@ -43,9 +43,10 @@ export class SettingsPage {
   }
 
   async saveSettings() {
+    const saveBtn = q('#save');
     try {
-      setLoading(true);
-      
+      setLoading(saveBtn, true);
+
       const orgName = q('#org')?.value.trim() || '';
       const corsOrigin = q('#cors')?.value.trim() || '';
       const retentionDays = parseInt(q('#retention')?.value || '0', 10);
@@ -66,7 +67,7 @@ export class SettingsPage {
       console.error('Failed to save settings:', error);
       showError(`Failed to save settings: ${error.message}`);
     } finally {
-      setLoading(false);
+      setLoading(saveBtn, false);
     }
   }
 }
