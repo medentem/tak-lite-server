@@ -233,10 +233,12 @@ export class ThreatsPage {
     const hudPanelEl = q('#threats-hud-content');
     const hudBadgeEl = q('#threats-hud-badge');
 
-    // All pending and reviewed threats (for review in HUD and panels)
-    const activeThreats = threatsList.filter(t =>
-      (t.admin_status === 'pending' || t.admin_status === 'reviewed')
-    );
+    // All pending and reviewed threats (for review in HUD and panels).
+    // API returns admin_status null for pending; treat null/undefined as pending.
+    const activeThreats = threatsList.filter(t => {
+      const s = t.admin_status;
+      return s === 'pending' || s === 'reviewed' || s == null;
+    });
 
     // Update status bar count
     const activeThreatsCount = q('#k_active_threats');
