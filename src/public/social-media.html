@@ -491,6 +491,17 @@
             <input type="text" name="search_query" placeholder="e.g., violence, emergency, threat">
             <div class="help-text">Optional specific search terms to focus the threat detection</div>
           </div>
+
+          <div class="form-group" id="web-news-sources-group">
+            <label>Web news sources (optional)</label>
+            <div class="help-text">Restrict web search to these domains for threat news. Suggest up to 5 or add your own (max 5).</div>
+            <button type="button" class="secondary" id="suggest-sources-btn" style="margin-bottom:8px;">Suggest sources</button>
+            <div id="web-news-domains-container" style="display:flex; flex-direction:column; gap:6px; margin-top:6px;"></div>
+            <div style="display:flex; align-items:center; gap:6px; margin-top:6px; flex-wrap:wrap;">
+              <input type="text" id="web-news-domain-new" placeholder="e.g. bbc.com" style="max-width:220px;">
+              <button type="button" class="secondary" id="add-domain-btn">Add domain</button>
+            </div>
+          </div>
           
           <div class="form-group">
             <label>Monitoring Interval (seconds)</label>
@@ -509,6 +520,51 @@
           <div class="form-actions">
             <button type="button" onclick="closeModal()" class="secondary">Cancel</button>
             <button type="submit" class="success">Create Monitor</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Edit Geographical Monitor Modal -->
+    <div id="geographical-monitor-edit-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Edit Geographical Monitor</h3>
+          <button class="close" onclick="closeModal()">&times;</button>
+        </div>
+        <form id="geographical-monitor-edit-form">
+          <input type="hidden" name="monitor_id" id="edit-monitor-id">
+          <div class="form-group">
+            <label>Geographical Area</label>
+            <input type="text" name="geographical_area" id="edit-geographical_area" required>
+          </div>
+          <div class="form-group">
+            <label>Search Query (Optional)</label>
+            <input type="text" name="search_query" id="edit-search_query" placeholder="e.g., violence, emergency, threat">
+          </div>
+          <div class="form-group">
+            <label>Web news sources (optional)</label>
+            <div class="help-text">Max 5 domains. Use "Suggest sources" or add your own.</div>
+            <button type="button" class="secondary" id="edit-suggest-sources-btn" style="margin-bottom:8px;">Suggest sources</button>
+            <div id="edit-web-news-domains-container" style="display:flex; flex-direction:column; gap:6px; margin-top:6px;"></div>
+            <div style="display:flex; align-items:center; gap:6px; margin-top:6px; flex-wrap:wrap;">
+              <input type="text" id="edit-web-news-domain-new" placeholder="e.g. bbc.com" style="max-width:220px;">
+              <button type="button" class="secondary" id="edit-add-domain-btn">Add domain</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Monitoring Interval (seconds)</label>
+            <input type="number" name="monitoring_interval" id="edit-monitoring_interval" min="60" max="3600">
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" name="is_active" id="edit-is_active">
+              <span>Active</span>
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="button" onclick="closeModal()" class="secondary">Cancel</button>
+            <button type="submit" class="success">Save changes</button>
           </div>
         </form>
       </div>
@@ -724,10 +780,17 @@
         
         // Set up form handlers
         document.getElementById('geographical-monitor-form').addEventListener('submit', handleGeographicalMonitorSubmit);
+        document.getElementById('geographical-monitor-edit-form').addEventListener('submit', handleGeographicalMonitorEditSubmit);
         document.getElementById('ai-config-form').addEventListener('submit', handleAIConfigSubmit);
         document.getElementById('service-config-form').addEventListener('submit', handleServiceConfigSubmit);
         document.getElementById('xai-management-form').addEventListener('submit', handleXaiManagementSubmit);
         document.getElementById('monitor-interval-input')?.addEventListener('input', updateMonitorIntervalEstimate);
+
+        // Web news sources: suggest (add form)
+        document.getElementById('suggest-sources-btn').addEventListener('click', () => suggestWebNewsSources('web-news-domains-container', 'geographical_area', 'search_query'));
+        document.getElementById('add-domain-btn').addEventListener('click', () => addWebNewsDomain('web-news-domain-new', 'web-news-domains-container', 5));
+        document.getElementById('edit-suggest-sources-btn').addEventListener('click', () => suggestWebNewsSources('edit-web-news-domains-container', 'edit-geographical_area', 'edit-search_query'));
+        document.getElementById('edit-add-domain-btn').addEventListener('click', () => addWebNewsDomain('edit-web-news-domain-new', 'edit-web-news-domains-container', 5));
         
         // Start auto-refresh for service status
         startStatusAutoRefresh();
@@ -1047,6 +1110,7 @@
               <div style="flex:1;">
                 <h4 style="margin:0 0 4px; color:#cbd5e1;">${monitor.geographical_area}</h4>
                 ${monitor.search_query ? `<div style="font-size:12px; color:var(--muted); margin-top:2px;">Query: ${monitor.search_query}</div>` : ''}
+                ${(monitor.web_news_domains && monitor.web_news_domains.length) ? `<div style="font-size:12px; color:var(--muted); margin-top:2px;">Web: ${monitor.web_news_domains.slice(0, 3).join(', ')}${monitor.web_news_domains.length > 3 ? ' +' + (monitor.web_news_domains.length - 3) + ' more' : ''}</div>` : ''}
               </div>
               <span class="pill ${statusClass}" style="background: ${statusColor}; color: ${statusClass === 'active' ? '#000' : '#fff'};">
                 ${statusText}
@@ -1076,6 +1140,7 @@
                 ${buttonDisabled ? 'opacity: 0.5; cursor: not-allowed;' : ''}>
                 ${buttonText}
               </button>
+              <button onclick="showEditGeographicalMonitorModal('${monitor.id}')" class="secondary" title="Edit monitor">Edit</button>
               <button onclick="showMonitorRunLogs('${monitor.id}')" class="secondary" title="View run logs (last 6 hours; responses with threats kept longer)">Run logs</button>
               <button onclick="deleteGeographicalMonitor('${monitor.id}')" class="danger" title="Delete this monitor">Delete</button>
             </div>
@@ -1129,8 +1194,121 @@
 
       function showGeographicalMonitorModal() {
         document.getElementById('geographical-monitor-form').reset();
+        renderWebNewsDomainsList('web-news-domains-container', []);
+        document.getElementById('web-news-domain-new').value = '';
         document.getElementById('geographical-monitor-modal').classList.remove('hidden');
         updateMonitorIntervalEstimate();
+      }
+
+      function getWebNewsDomainsFromContainer(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return [];
+        const inputs = container.querySelectorAll('input[data-domain]');
+        const domains = [];
+        inputs.forEach(inp => {
+          const v = (inp.value || '').trim();
+          if (v) domains.push(v);
+        });
+        return domains.slice(0, 5);
+      }
+
+      function renderWebNewsDomainsList(containerId, domains) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.innerHTML = domains.map((d, i) =>
+          `<div style="display:flex; align-items:center; gap:8px;">
+            <input type="text" data-domain value="${escapeHtml(d)}" placeholder="domain.com" style="flex:1; max-width:240px;">
+            <button type="button" class="secondary" data-remove-domain style="padding:4px 8px;">Remove</button>
+          </div>`
+        ).join('');
+        container.querySelectorAll('[data-remove-domain]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const row = btn.closest('div');
+            if (row) row.remove();
+          });
+        });
+      }
+
+      async function suggestWebNewsSources(containerId, areaInputId, queryInputId) {
+        const area = (document.getElementById(areaInputId)?.value || '').trim();
+        if (!area) {
+          showError('Enter a geographical area first.');
+          return;
+        }
+        const query = (document.getElementById(queryInputId)?.value || '').trim() || undefined;
+        const btn = containerId === 'edit-web-news-domains-container' ? document.getElementById('edit-suggest-sources-btn') : document.getElementById('suggest-sources-btn');
+        const prevText = btn?.textContent;
+        if (btn) { btn.disabled = true; btn.textContent = 'Suggesting…'; }
+        try {
+          const data = await apiCall('/api/social-media/geographical-monitors/suggest-sources', {
+            method: 'POST',
+            body: JSON.stringify({ geographical_area: area, search_query: query })
+          });
+          const domains = data.domains || [];
+          renderWebNewsDomainsList(containerId, domains);
+          if (domains.length) showSuccess(`Suggested ${domains.length} web news source(s).`);
+          else showError('No sources suggested. Add domains manually or try a different area.');
+        } catch (err) {
+          showError('Failed to suggest sources: ' + (err.message || 'Unknown error'));
+        } finally {
+          if (btn) { btn.disabled = false; btn.textContent = prevText || 'Suggest sources'; }
+        }
+      }
+
+      function addWebNewsDomain(newInputId, containerId, max) {
+        const input = document.getElementById(newInputId);
+        const container = document.getElementById(containerId);
+        if (!input || !container) return;
+        const v = (input.value || '').trim();
+        if (!v) return;
+        const current = getWebNewsDomainsFromContainer(containerId);
+        if (current.length >= max) {
+          showError(`Maximum ${max} domains allowed.`);
+          return;
+        }
+        if (current.includes(v)) return;
+        current.push(v);
+        renderWebNewsDomainsList(containerId, current);
+        input.value = '';
+      }
+
+      function showEditGeographicalMonitorModal(monitorId) {
+        const monitor = geographicalMonitors.find(m => m.id === monitorId);
+        if (!monitor) return;
+        document.getElementById('edit-monitor-id').value = monitor.id;
+        document.getElementById('edit-geographical_area').value = monitor.geographical_area || '';
+        document.getElementById('edit-search_query').value = monitor.search_query || '';
+        document.getElementById('edit-monitoring_interval').value = monitor.monitoring_interval || 300;
+        document.getElementById('edit-is_active').checked = monitor.is_active !== false;
+        renderWebNewsDomainsList('edit-web-news-domains-container', monitor.web_news_domains || []);
+        document.getElementById('edit-web-news-domain-new').value = '';
+        document.getElementById('geographical-monitor-edit-modal').classList.remove('hidden');
+      }
+
+      async function handleGeographicalMonitorEditSubmit(e) {
+        e.preventDefault();
+        const form = e.target;
+        const monitorId = form.monitor_id?.value;
+        if (!monitorId) { showError('Missing monitor id'); return; }
+        const data = {
+          geographical_area: form.geographical_area?.value?.trim() || '',
+          search_query: (form.search_query?.value || '').trim() || undefined,
+          monitoring_interval: parseInt(form.monitoring_interval?.value, 10) || 300,
+          is_active: form.is_active?.checked !== false,
+          web_news_domains: getWebNewsDomainsFromContainer('edit-web-news-domains-container')
+        };
+        try {
+          await apiCall(`/api/social-media/geographical-monitors/${monitorId}`, {
+            method: 'PUT',
+            body: JSON.stringify(data)
+          });
+          closeModal();
+          document.getElementById('geographical-monitor-edit-modal').classList.add('hidden');
+          loadGeographicalMonitors();
+          showSuccess('Geographical monitor updated successfully');
+        } catch (error) {
+          showError('Failed to update monitor: ' + error.message);
+        }
       }
 
       function updateMonitorIntervalEstimate() {
@@ -1227,6 +1405,9 @@
         if (data.search_query === '') {
           data.search_query = undefined;
         }
+
+        const webDomains = getWebNewsDomainsFromContainer('web-news-domains-container');
+        if (webDomains.length) data.web_news_domains = webDomains;
 
         try {
           await apiCall('/api/social-media/geographical-monitors', {

@@ -176,6 +176,10 @@ export class SocialMediaMonitoringService {
     return await this.grokService.searchThreats(geographicalArea, searchQuery, lastSearchTime);
   }
 
+  async suggestWebNewsSources(geographicalArea: string, searchQuery?: string): Promise<string[]> {
+    return await this.grokService.suggestWebNewsSourcesForArea(geographicalArea, searchQuery);
+  }
+
   // New geographical monitoring methods
   async createGeographicalMonitor(monitorData: Partial<GeographicalSearch>, createdBy: string): Promise<GeographicalSearch> {
     return await this.grokService.createGeographicalSearch(monitorData, createdBy);
@@ -318,7 +322,8 @@ export class SocialMediaMonitoringService {
         search.geographical_area, 
         search.search_query || undefined, 
         lastSearchTime,
-        search.id
+        search.id,
+        search.web_news_domains ?? undefined
       );
 
       logger.info('Geographical search completed: processing threats for auto-create', {

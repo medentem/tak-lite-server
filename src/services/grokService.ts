@@ -76,12 +76,54 @@ export interface GeographicalSearch {
   geographical_area: string;
   search_query?: string;
   search_parameters?: any;
+  /** Up to 5 domains for web_search allowed_domains (e.g. bbc.com). */
+  web_news_domains?: string[] | null;
   monitoring_interval: number;
   is_active: boolean;
   last_searched_at?: Date;
   created_by?: string;
   created_at: Date;
   updated_at: Date;
+}
+
+/** Max domains allowed for web_search allowed_domains (xAI API limit). */
+export const WEB_NEWS_DOMAINS_MAX = 5;
+
+/**
+ * Normalize a single domain string (strip protocol, lowercase, host only).
+ * Returns null if invalid or empty.
+ */
+export function normalizeWebNewsDomain(raw: string): string | null {
+  if (typeof raw !== 'string') return null;
+  let s = raw.trim().toLowerCase();
+  if (!s) return null;
+  try {
+    if (s.startsWith('http://')) s = s.slice(7);
+    else if (s.startsWith('https://')) s = s.slice(8);
+    const host = s.split('/')[0];
+    if (!host || !host.includes('.')) return null;
+    return host;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Normalize and dedupe an array of domain strings; cap at WEB_NEWS_DOMAINS_MAX.
+ */
+export function normalizeWebNewsDomains(raw: string[] | null | undefined): string[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of raw) {
+    const d = normalizeWebNewsDomain(r);
+    if (d && !seen.has(d)) {
+      seen.add(d);
+      out.push(d);
+      if (out.length >= WEB_NEWS_DOMAINS_MAX) break;
+    }
+  }
+  return out;
 }
 
 export interface ExistingThreatContext {
@@ -325,7 +367,63 @@ export class GrokService {
     }
   }
 
-  async searchThreats(geographicalArea: string, searchQuery?: string, lastSearchTime?: Date, geographicalSearchId?: string): Promise<ThreatAnalysis[]> {
+  /**
+   * Ask Grok for up to 5 recommended web news domains for a geographical area.
+   * Uses a single completion (no tools). Returns normalized, deduped domain list.
+   */
+  async suggestWebNewsSourcesForArea(geographicalArea: string, searchQuery?: string): Promise<string[]> {
+    const grokConfig = await this.getGrokConfiguration();
+    if (!grokConfig) {
+      throw new Error('No active Grok configuration found');
+    }
+
+    const userPrompt = searchQuery
+      ? `Geographical area: ${geographicalArea}. Optional focus: ${searchQuery}.`
+      : `Geographical area: ${geographicalArea}.`;
+    const systemPrompt = `You are a helpful assistant. For the given geographical area, list the best web news domains for local/regional news and emergencies (e.g. major local newspapers, national news with regional coverage, emergency services or government news). Return ONLY a JSON array of domain strings, nothing else. Example: ["bbc.com","reuters.com","apnews.com"]. Maximum 5 domains. No explanation, no markdown, no code fence.`;
+
+    const decryptedApiKey = await this.securityService.decryptApiKey(grokConfig.api_key_encrypted);
+    const cleanApiKey = decryptedApiKey.trim().replace(/[\r\n\t]/g, '');
+    const authHeader = `Bearer ${cleanApiKey}`;
+
+    const response = await axios.post('https://api.x.ai/v1/responses', {
+      model: grokConfig.model,
+      input: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      store: false,
+      text: { format: { type: 'text' } },
+    }, {
+      headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+      timeout: 60000,
+    });
+
+    if (response.data?.usage) {
+      this.logUsage(response.data.model || grokConfig.model, response.data.usage, null, 'suggest_sources').catch(err => logger.warn('Failed to log AI usage', { error: err }));
+    }
+
+    const text = this.extractTextFromResponsesOutput(response.data?.output);
+    if (!text || !text.trim()) {
+      logger.warn('Grok suggest sources returned no text');
+      return [];
+    }
+
+    try {
+      // Strip possible markdown code fence
+      let jsonStr = text.trim();
+      const match = jsonStr.match(/\[[\s\S]*\]/);
+      if (match) jsonStr = match[0];
+      const arr = JSON.parse(jsonStr);
+      if (!Array.isArray(arr)) return [];
+      return normalizeWebNewsDomains(arr.map((x: unknown) => typeof x === 'string' ? x : String(x)));
+    } catch (e) {
+      logger.warn('Failed to parse Grok suggest-sources response as JSON', { text: text.slice(0, 200), error: e });
+      return [];
+    }
+  }
+
+  async searchThreats(geographicalArea: string, searchQuery?: string, lastSearchTime?: Date, geographicalSearchId?: string, webNewsDomains?: string[] | null): Promise<ThreatAnalysis[]> {
     const grokConfig = await this.getGrokConfiguration();
     if (!grokConfig) {
       throw new Error('No active Grok configuration found');
@@ -370,6 +468,12 @@ export class GrokService {
           xSearchTool.to_date = toDate.toISOString().slice(0, 10);
         }
 
+        const tools: Record<string, unknown>[] = [xSearchTool];
+        const normalizedWebDomains = normalizeWebNewsDomains(webNewsDomains);
+        if (normalizedWebDomains.length > 0) {
+          tools.push({ type: 'web_search', allowed_domains: normalizedWebDomains });
+        }
+
         const useStructuredOutput = isGrok4 && !skipStructuredOutput;
         const textFormat: Record<string, unknown> = { type: 'text' };
         if (useStructuredOutput) {
@@ -383,18 +487,19 @@ export class GrokService {
             { role: 'system', content: systemPrompt },
             { role: 'user', content: prompt },
           ],
-          tools: [xSearchTool],
+          tools,
           tool_choice: 'auto',
           store: false,
           text: { format: textFormat },
           // Note: REST API does not support "include"; response.citations (all URLs) is returned by default per docs.
         };
 
-        logger.debug('Grok geographical threat search (Responses API + x_search)', {
+        logger.debug('Grok geographical threat search (Responses API + x_search + web_search)', {
           area: geographicalArea,
           promptLen: prompt.length,
           from_date: xSearchTool.from_date,
           to_date: xSearchTool.to_date,
+          web_news_domains: normalizedWebDomains.length > 0 ? normalizedWebDomains : undefined,
           structuredOutput: useStructuredOutput,
         });
 
@@ -839,11 +944,13 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
   // Geographical search management
   async createGeographicalSearch(searchData: Partial<GeographicalSearch>, createdBy: string): Promise<GeographicalSearch> {
     const id = uuidv4();
+    const web_news_domains = normalizeWebNewsDomains(searchData.web_news_domains);
     const search: GeographicalSearch = {
       id,
       geographical_area: searchData.geographical_area!,
       search_query: searchData.search_query,
       search_parameters: searchData.search_parameters,
+      web_news_domains: web_news_domains.length > 0 ? web_news_domains : null,
       monitoring_interval: searchData.monitoring_interval || 300,
       is_active: searchData.is_active !== false,
       created_by: createdBy,
@@ -853,7 +960,7 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
 
     await this.db.client('geographical_searches').insert(search);
     
-    logger.info('Created geographical search', { id, area: search.geographical_area });
+    logger.info('Created geographical search', { id, area: search.geographical_area, web_news_domains: search.web_news_domains?.length ?? 0 });
     return search;
   }
 
@@ -863,10 +970,15 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
   }
 
   async updateGeographicalSearch(searchId: string, updates: Partial<GeographicalSearch>): Promise<GeographicalSearch> {
-    const updateData = {
+    const updateData: Record<string, unknown> = {
       ...updates,
       updated_at: new Date()
     };
+    if (Object.prototype.hasOwnProperty.call(updates, 'web_news_domains')) {
+      updateData.web_news_domains = updates.web_news_domains === null || (Array.isArray(updates.web_news_domains) && updates.web_news_domains.length === 0)
+        ? null
+        : normalizeWebNewsDomains(updates.web_news_domains);
+    }
 
     await this.db.client('geographical_searches')
       .where('id', searchId)
@@ -1230,7 +1342,7 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
     model: string,
     usage: UsageFromResponse,
     geographicalSearchId: string | null,
-    callType: 'search' | 'deduplication' | 'test'
+    callType: 'search' | 'deduplication' | 'test' | 'suggest_sources'
   ): Promise<void> {
     try {
       const { costUsd, promptTokens, completionTokens, totalTokens } = estimateCostUsd(model, usage);

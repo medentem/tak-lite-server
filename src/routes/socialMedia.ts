@@ -37,7 +37,8 @@ export function createSocialMediaRouter(
     geographical_area: Joi.string().min(1).max(1000).required(),
     search_query: Joi.string().max(1000).allow('').optional(),
     monitoring_interval: Joi.number().integer().min(60).max(3600).default(300),
-    is_active: Joi.boolean().default(true)
+    is_active: Joi.boolean().default(true),
+    web_news_domains: Joi.array().items(Joi.string().min(1).max(253)).max(5).allow(null).optional()
   });
 
   // Legacy monitor endpoints removed - use geographical monitoring instead
@@ -203,6 +204,22 @@ export function createSocialMediaRouter(
         service_enabled: serviceStatus.service_enabled
       });
     } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/geographical-monitors/suggest-sources', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { geographical_area, search_query } = req.body ?? {};
+      if (!geographical_area || typeof geographical_area !== 'string' || !geographical_area.trim()) {
+        return res.status(400).json({ error: 'geographical_area is required' });
+      }
+      const domains = await socialMediaService.suggestWebNewsSources(geographical_area.trim(), search_query?.trim() || undefined);
+      res.json({ domains });
+    } catch (error: any) {
+      if (error?.message === 'No active Grok configuration found') {
+        return res.status(503).json({ error: 'Grok AI is not configured. Configure Grok AI to suggest web news sources.' });
+      }
       next(error);
     }
   });
