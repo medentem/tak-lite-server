@@ -387,16 +387,25 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       }
       
       const rows = await query;
-      const annotations = rows.map((r: any) => ({
-        id: r.id,
-        user_id: r.user_id,
-        team_id: r.team_id,
-        type: r.type,
-        data: r.data,
-        created_at: r.created_at,
-        updated_at: r.updated_at,
-        user_name: r.user_name ?? (r.user_id === 'admin' ? 'Admin' : null)
-      }));
+      const now = Date.now();
+      const annotations = rows
+        .map((r: any) => ({
+          id: r.id,
+          user_id: r.user_id,
+          team_id: r.team_id,
+          type: r.type,
+          data: r.data,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+          user_name: r.user_name ?? (r.user_id === 'admin' ? 'Admin' : null)
+        }))
+        .filter((a: any) => {
+          const data = typeof a.data === 'string' ? (() => { try { return JSON.parse(a.data); } catch { return {}; } })() : a.data;
+          const exp = data?.expirationTime;
+          if (exp == null) return true;
+          const expMs = typeof exp === 'number' ? exp : Number(exp);
+          return !Number.isNaN(expMs) && expMs > now;
+        });
       res.json(annotations);
     } catch (err) { next(err); }
   });

@@ -7,6 +7,8 @@ export interface SocialMediaServiceConfig {
   auto_start_monitors: boolean;
   /** When true, threat annotations are created as map annotations immediately without admin review. */
   auto_create_annotations: boolean;
+  /** How long auto-created threat annotations stay on the map before expiring (minutes). Default 120 (2 hours). */
+  auto_annotation_expire_minutes: number;
   max_monitors_per_team: number;
   default_monitoring_interval: number;
   service_settings: {
@@ -164,6 +166,7 @@ export class SocialMediaConfigService {
         service_enabled: false,
         auto_start_monitors: false,
         auto_create_annotations: false,
+        auto_annotation_expire_minutes: 120,
         max_monitors_per_team: 5,
         default_monitoring_interval: 300,
         service_settings: {

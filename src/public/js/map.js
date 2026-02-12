@@ -2259,6 +2259,7 @@ class AdminMap {
       if (!this.expirationTickInterval) {
         this.expirationTickInterval = setInterval(() => {
           if (this.annotationManager?.hasExpiringAnnotations() || this.annotationManager?.hasExpiredAnnotations()) {
+            this.annotationManager.removeExpiredAnnotations();
             this.updateMapData();
           }
         }, 1000);
@@ -2287,6 +2288,7 @@ class AdminMap {
       if (!this.expirationTickInterval && this.annotationManager) {
         this.expirationTickInterval = setInterval(() => {
           if (this.annotationManager?.hasExpiringAnnotations() || this.annotationManager?.hasExpiredAnnotations()) {
+            this.annotationManager.removeExpiredAnnotations();
             this.updateMapData();
           }
         }, 1000);

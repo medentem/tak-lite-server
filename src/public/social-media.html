@@ -647,6 +647,12 @@
           </div>
           
           <div class="form-group">
+            <label>Auto-Created Annotation Expiration (minutes)</label>
+            <input type="number" name="auto_annotation_expire_minutes" value="120" min="1" max="10080">
+            <div class="help-text">How long auto-created threat annotations stay on the map before they expire. Default 120 (2 hours). Without an operator reviewing threats, there is no one to remove or update them as the situation changes.</div>
+          </div>
+          
+          <div class="form-group">
             <label>Max Geographical Monitors</label>
             <input type="number" name="max_monitors_per_team" value="10" min="1" max="50">
             <div class="help-text">Maximum number of geographical monitors that can be active simultaneously</div>
@@ -1666,6 +1672,8 @@
         form.querySelector('[name="auto_start_monitors"]').checked = serviceConfig.auto_start_monitors;
         const autoCreateEl = form.querySelector('[name="auto_create_annotations"]');
         if (autoCreateEl) autoCreateEl.checked = !!serviceConfig.auto_create_annotations;
+        const expireEl = form.querySelector('[name="auto_annotation_expire_minutes"]');
+        if (expireEl) expireEl.value = serviceConfig.auto_annotation_expire_minutes ?? 120;
         form.querySelector('[name="max_monitors_per_team"]').value = serviceConfig.max_monitors_per_team;
         form.querySelector('[name="default_monitoring_interval"]').value = serviceConfig.default_monitoring_interval;
         form.querySelector('[name="max_posts_per_hour"]').value = serviceConfig.service_settings?.max_posts_per_hour || 100;
@@ -1779,6 +1787,7 @@
         data.auto_create_annotations = data.auto_create_annotations === 'on';
         
         // Convert numeric values
+        data.auto_annotation_expire_minutes = parseInt(data.auto_annotation_expire_minutes, 10);
         data.max_monitors_per_team = parseInt(data.max_monitors_per_team);
         data.default_monitoring_interval = parseInt(data.default_monitoring_interval);
         data.max_posts_per_hour = parseInt(data.max_posts_per_hour);

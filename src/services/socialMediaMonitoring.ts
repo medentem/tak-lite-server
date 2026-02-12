@@ -507,6 +507,11 @@ export class SocialMediaMonitoringService {
     const label = `${threat.threat_level} Threat: ${threat.threat_type || 'Unknown'}`;
     const smartAnnotationType = determineAnnotationType(primaryLocation);
 
+    // Expiration: auto-created annotations expire after configured minutes (no operator to remove/update)
+    const config = await this.configService.getServiceConfig();
+    const expireMinutes = Math.max(1, config.auto_annotation_expire_minutes ?? 120);
+    const expirationTimeMs = Date.now() + expireMinutes * 60 * 1000;
+
     // Extract citation URLs so clients can open sources (e.g. Android "Open source" link)
     const rawCitations = Array.isArray(threat.citations) ? threat.citations : [];
     const citationUrls = rawCitations
@@ -520,6 +525,7 @@ export class SocialMediaMonitoringService {
       label,
       description: threat.summary || '',
       timestamp: Date.now(),
+      expirationTime: expirationTimeMs,
       threatInfo: {
         threatId: threat.id,
         threatLevel: threat.threat_level,
