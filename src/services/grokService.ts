@@ -655,7 +655,8 @@ export class GrokService {
             prompt ?? '',
             analysisText != null ? String(analysisText) : '',
             validAnalyses.length,
-            citations
+            citations,
+            requestBody
           ).catch(err =>
             logger.warn('Failed to save monitor run log', { geographicalSearchId, error: err })
           );
@@ -1037,7 +1038,7 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
   private static readonly RUN_LOG_MAX_COUNT = 100;
 
   /**
-   * Persist one run log for a geographical monitor (request + raw response + optional citations).
+   * Persist one run log for a geographical monitor (request payload + prompts + raw response + optional citations).
    * Retention: time-based (drop older than RUN_LOG_RETENTION_HOURS) then cap at RUN_LOG_MAX_COUNT
    * per monitor, deleting least "interesting" runs first (no threats, empty/short response, oldest).
    */
@@ -1047,7 +1048,8 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
     userPrompt: string,
     responseRaw: string,
     threatsFound: number,
-    citations?: string[]
+    citations?: string[],
+    requestPayload?: Record<string, unknown>
   ): Promise<void> {
     const hasTable = await this.db.client.schema.hasTable('geographical_monitor_run_logs');
     if (!hasTable) {
@@ -1067,6 +1069,10 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
     const hasCitationsCol = await this.db.client.schema.hasColumn('geographical_monitor_run_logs', 'citations');
     if (hasCitationsCol && Array.isArray(citations) && citations.length > 0) {
       insertRow.citations = citations;
+    }
+    const hasRequestPayloadCol = await this.db.client.schema.hasColumn('geographical_monitor_run_logs', 'request_payload');
+    if (hasRequestPayloadCol && requestPayload != null) {
+      insertRow.request_payload = this.db.client.raw('?::jsonb', [JSON.stringify(requestPayload)]);
     }
     await this.db.client('geographical_monitor_run_logs').insert(insertRow);
 
@@ -1112,14 +1118,16 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
     response_raw: string;
     threats_found: number;
     citations?: string[];
+    request_payload?: Record<string, unknown>;
   }>> {
     const hasTable = await this.db.client.schema.hasTable('geographical_monitor_run_logs');
     if (!hasTable) return [];
 
     const hasCitationsCol = await this.db.client.schema.hasColumn('geographical_monitor_run_logs', 'citations');
-    const selectCols = hasCitationsCol
-      ? ['id', 'run_at', 'system_prompt', 'user_prompt', 'response_raw', 'threats_found', 'citations']
-      : ['id', 'run_at', 'system_prompt', 'user_prompt', 'response_raw', 'threats_found'];
+    const hasRequestPayloadCol = await this.db.client.schema.hasColumn('geographical_monitor_run_logs', 'request_payload');
+    const selectCols = ['id', 'run_at', 'system_prompt', 'user_prompt', 'response_raw', 'threats_found'];
+    if (hasCitationsCol) selectCols.push('citations');
+    if (hasRequestPayloadCol) selectCols.push('request_payload');
 
     const retentionCutoff = new Date(Date.now() - GrokService.RUN_LOG_RETENTION_HOURS * 60 * 60 * 1000);
 
@@ -1138,6 +1146,7 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
       response_raw: r.response_raw,
       threats_found: r.threats_found ?? 0,
       ...(hasCitationsCol && r.citations != null && { citations: Array.isArray(r.citations) ? r.citations : (typeof r.citations === 'string' ? JSON.parse(r.citations || '[]') : []) }),
+      ...(hasRequestPayloadCol && r.request_payload != null && { request_payload: typeof r.request_payload === 'object' ? r.request_payload : (typeof r.request_payload === 'string' ? JSON.parse(r.request_payload || '{}') : {}) }),
     }));
   }
 

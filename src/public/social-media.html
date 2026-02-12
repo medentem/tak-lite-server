@@ -1492,6 +1492,14 @@
                   </ul>
                 </details>`
               : '';
+            const hasRequestPayload = log.request_payload && typeof log.request_payload === 'object';
+            const requestPayloadJson = hasRequestPayload ? escapeHtml(JSON.stringify(log.request_payload, null, 2)) : '';
+            const requestPayloadHtml = hasRequestPayload
+              ? `<details style="margin-top:8px;" open>
+                  <summary style="cursor:pointer; color:var(--accent);">Request payload (sent to API)</summary>
+                  <pre style="white-space:pre-wrap; word-break:break-word; background:#0d1b34; padding:12px; border-radius:8px; overflow:auto; max-height:400px; font-size:12px; margin-top:8px;">${requestPayloadJson}</pre>
+                </details>`
+              : '';
             return `
               <div class="card" style="margin-bottom:12px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -1500,6 +1508,7 @@
                 </div>
                 <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Threats found: ${log.threats_found ?? 0}</div>
                 ${citationsHtml}
+                ${requestPayloadHtml}
                 <details style="margin-top:8px;" id="${expandId}">
                   <summary style="cursor:pointer; color:var(--accent);">Conversation (sent to Grok)</summary>
                   <div style="margin-top:8px; font-size:13px;">
