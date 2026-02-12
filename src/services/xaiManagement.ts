@@ -44,15 +44,23 @@ export class XaiManagementService {
   /** Get the single management config row, if any. */
   async getConfig(): Promise<XaiManagementConfig | null> {
     const hasTable = await this.db.client.schema.hasTable('xai_management_config');
-    if (!hasTable) return null;
+    if (!hasTable) {
+      logger.debug('xAI Management: xai_management_config table not found');
+      return null;
+    }
     const row = await this.db.client('xai_management_config').first();
-    return row ? (row as XaiManagementConfig) : null;
+    const config = row ? (row as XaiManagementConfig) : null;
+    if (!config) logger.debug('xAI Management: no config row in xai_management_config');
+    else logger.debug('xAI Management: config present', { team_id: config.team_id, has_key: !!config.management_key_encrypted?.trim() });
+    return config;
   }
 
   /** Whether we have enough config to call the Management API (key + team_id). */
   async isConfigured(): Promise<boolean> {
     const c = await this.getConfig();
-    return !!(c?.management_key_encrypted?.trim() && c?.team_id?.trim());
+    const configured = !!(c?.management_key_encrypted?.trim() && c?.team_id?.trim());
+    logger.info('xAI Management: isConfigured', { configured, team_id: c?.team_id ?? null });
+    return configured;
   }
 
   /**
@@ -81,6 +89,7 @@ export class XaiManagementService {
           updated_at: now,
         });
       const updated = await this.db.client('xai_management_config').where({ id: existing.id }).first();
+      logger.info('xAI Management: setConfig updated existing', { team_id: tid });
       return updated as XaiManagementConfig;
     }
     const id = uuidv4();
@@ -92,6 +101,7 @@ export class XaiManagementService {
       updated_at: now,
     });
     const row = await this.db.client('xai_management_config').where({ id }).first();
+    logger.info('xAI Management: setConfig created new', { team_id: tid });
     return row as XaiManagementConfig;
   }
 
@@ -117,23 +127,30 @@ export class XaiManagementService {
    */
   async fetchBalance(): Promise<XaiPrepaidBalance | null> {
     const config = await this.getConfig();
-    if (!config?.management_key_encrypted || !config?.team_id) return null;
+    if (!config?.management_key_encrypted || !config?.team_id) {
+      logger.info('xAI Management: fetchBalance skipped (not configured)', { has_key: !!config?.management_key_encrypted, team_id: config?.team_id ?? null });
+      return null;
+    }
+    const url = `${MANAGEMENT_API_BASE}/v1/billing/teams/${encodeURIComponent(config.team_id)}/prepaid/balance`;
+    logger.info('xAI Management: fetchBalance calling', { url, team_id: config.team_id });
     try {
       const key = await this.security.decryptApiKey(config.management_key_encrypted);
       const cleanKey = key.trim().replace(/[\r\n\t]/g, '');
-      const url = `${MANAGEMENT_API_BASE}/v1/billing/teams/${encodeURIComponent(config.team_id)}/prepaid/balance`;
       const res = await axios.get(url, {
         headers: { Authorization: `Bearer ${cleanKey}` },
         timeout: 15000,
       });
-      return (res.data ?? {}) as XaiPrepaidBalance;
+      const data = (res.data ?? {}) as XaiPrepaidBalance;
+      logger.info('xAI Management: fetchBalance success', { balance_usd: data.balance_usd, status: res.status });
+      return data;
     } catch (err: any) {
       const status = err.response?.status;
+      const responseBody = err.response?.data;
       const notAvailable = status === 501 || status === 404;
       if (notAvailable) {
-        logger.debug('xAI Management API balance not available (endpoint may not be enabled)', { status });
+        logger.info('xAI Management: fetchBalance endpoint not available', { status, responseBody });
       } else {
-        logger.warn('xAI Management API balance fetch failed', { status, message: err.message });
+        logger.warn('xAI Management: fetchBalance failed', { status, message: err.message, responseBody });
       }
       return null;
     }
@@ -146,23 +163,31 @@ export class XaiManagementService {
    */
   async fetchUsage(): Promise<XaiUsageResponse | null> {
     const config = await this.getConfig();
-    if (!config?.management_key_encrypted || !config?.team_id) return null;
+    if (!config?.management_key_encrypted || !config?.team_id) {
+      logger.info('xAI Management: fetchUsage skipped (not configured)', { has_key: !!config?.management_key_encrypted, team_id: config?.team_id ?? null });
+      return null;
+    }
+    const url = `${MANAGEMENT_API_BASE}/v1/billing/teams/${encodeURIComponent(config.team_id)}/usage`;
+    logger.info('xAI Management: fetchUsage calling', { url, team_id: config.team_id });
     try {
       const key = await this.security.decryptApiKey(config.management_key_encrypted);
       const cleanKey = key.trim().replace(/[\r\n\t]/g, '');
-      const url = `${MANAGEMENT_API_BASE}/v1/billing/teams/${encodeURIComponent(config.team_id)}/usage`;
       const res = await axios.get(url, {
         headers: { Authorization: `Bearer ${cleanKey}` },
         timeout: 15000,
       });
-      return (res.data ?? {}) as XaiUsageResponse;
+      const data = (res.data ?? {}) as XaiUsageResponse;
+      const usageArr = Array.isArray(data.usage) ? data.usage : [];
+      logger.info('xAI Management: fetchUsage success', { usage_rows: usageArr.length, status: res.status, sample_dates: usageArr.slice(0, 3).map((r: any) => r?.date) });
+      return data;
     } catch (err: any) {
       const status = err.response?.status;
+      const responseBody = err.response?.data;
       const notAvailable = status === 501 || status === 404;
       if (notAvailable) {
-        logger.debug('xAI Management API usage not available (endpoint may not be enabled)', { status });
+        logger.info('xAI Management: fetchUsage endpoint not available', { status, responseBody });
       } else {
-        logger.warn('xAI Management API usage fetch failed', { status, message: err.message });
+        logger.warn('xAI Management: fetchUsage failed', { status, message: err.message, responseBody });
       }
       return null;
     }

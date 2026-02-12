@@ -129,13 +129,16 @@ export function createSocialMediaRouter(
           management_cost?: { cost_today_usd: number; cost_month_usd: number };
         };
       } = { usage: summary };
-      if (await xaiManagementService.isConfigured()) {
+      const configured = await xaiManagementService.isConfigured();
+      if (configured) {
         const [balance, usage] = await Promise.all([
           xaiManagementService.fetchBalance(),
           xaiManagementService.fetchUsage(),
         ]);
         const config = await xaiManagementService.getConfig();
-        const management_cost = usage && Array.isArray(usage.usage) && usage.usage.length > 0
+        const usageArray = usage && Array.isArray(usage.usage) ? usage.usage : [];
+        const hasUsageData = usageArray.length > 0;
+        const management_cost = hasUsageData
           ? (() => {
               const now = new Date();
               const todayStr = now.toISOString().slice(0, 10);
@@ -143,7 +146,7 @@ export function createSocialMediaRouter(
               const month = now.getMonth();
               let cost_today_usd = 0;
               let cost_month_usd = 0;
-              for (const row of usage.usage) {
+              for (const row of usage!.usage!) {
                 const dateStr = row?.date;
                 const cost = typeof row?.cost_usd === 'number' ? row.cost_usd : 0;
                 if (!dateStr) continue;
@@ -155,6 +158,17 @@ export function createSocialMediaRouter(
               return { cost_today_usd, cost_month_usd };
             })()
           : null;
+        logger.info('xAI Management (ai-usage): results', {
+          configured: true,
+          team_id: config?.team_id,
+          balance_result: balance != null ? 'ok' : 'null',
+          usage_result: usage != null ? 'ok' : 'null',
+          usage_array_length: usageArray.length,
+          usage_response_keys: usage != null ? Object.keys(usage) : [],
+          management_cost_computed: management_cost != null,
+          cost_today_usd: management_cost?.cost_today_usd,
+          cost_month_usd: management_cost?.cost_month_usd,
+        });
         payload.xai_account = {
           configured: true,
           team_id: config?.team_id ?? undefined,
@@ -163,6 +177,7 @@ export function createSocialMediaRouter(
           ...(management_cost != null && { management_cost }),
         };
       } else {
+        logger.info('xAI Management (ai-usage): not configured, skipping balance/usage fetch');
         payload.xai_account = { configured: false };
       }
       res.json(payload);
@@ -200,9 +215,11 @@ export function createSocialMediaRouter(
       const teamId = (value.team_id ?? '').trim();
       if (!key || !teamId) {
         await xaiManagementService.clearConfig();
+        logger.info('xAI Management (config): cleared');
         return res.json({ configured: false, message: 'Management key and team ID cleared.' });
       }
       await xaiManagementService.setConfig(key, teamId);
+      logger.info('xAI Management (config): saved', { team_id: teamId });
       res.json({ configured: true, team_id: teamId });
     } catch (error) {
       next(error);
