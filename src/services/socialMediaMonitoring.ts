@@ -643,11 +643,13 @@ export class SocialMediaMonitoringService {
         timestamp: new Date().toISOString(),
         source: 'threat_approval'
       });
+      // Use placeholder creatorId when userId is null so clients (e.g. Android) that require non-null creatorId can deserialize
+      const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000001';
       const clientData = {
         ...annotationData,
         type: annotationType,
         id: annotationId,
-        creatorId: userId,
+        creatorId: userId ?? SYSTEM_USER_ID,
         creatorUsername: 'System (Threat Detection)',
         source: 'server',
         originalSource: 'server'
