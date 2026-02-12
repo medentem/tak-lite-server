@@ -870,6 +870,15 @@ export class SocialMediaMonitoringService {
         )
         .first();
 
+      const startOf7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const last7dRows = await this.db.client('ai_usage_log')
+        .where('created_at', '>=', startOf7d)
+        .select(
+          this.db.client.raw('COALESCE(SUM(estimated_cost_usd), 0) as cost_usd'),
+          this.db.client.raw("COUNT(*) FILTER (WHERE call_type = 'search')::int as search_calls")
+        )
+        .first();
+
       const todaySearchCalls = Number(todayRows?.search_calls ?? 0);
       const today = {
         cost_usd: Number(todayRows?.cost_usd ?? 0) + todaySearchCalls * X_SEARCH_COST_PER_CALL_USD,
@@ -901,9 +910,14 @@ export class SocialMediaMonitoringService {
       const activeMonitors = searches.filter(s => s.is_active);
       const dailySearchCalls = activeMonitors.reduce((sum, s) => sum + Math.floor(86400 / Math.max(60, s.monitoring_interval)), 0);
 
-      const avgCostPerSearch =
-        last_24h.search_calls > 0 ? last_24h.cost_usd / last_24h.search_calls : 0;
-      const costPerSearch = avgCostPerSearch > 0 ? avgCostPerSearch : 0.01; // fallback $0.01 per search if no history
+      const last7dCost = Number(last7dRows?.cost_usd ?? 0) + Number(last7dRows?.search_calls ?? 0) * X_SEARCH_COST_PER_CALL_USD;
+      const last7dSearchCalls = Number(last7dRows?.search_calls ?? 0);
+      const avgCostPerSearch24h = last_24h.search_calls > 0 ? last_24h.cost_usd / last_24h.search_calls : 0;
+      const avgCostPerSearch7d = last7dSearchCalls > 0 ? last7dCost / last7dSearchCalls : 0;
+      const avgCostPerSearch = avgCostPerSearch24h > 0
+        ? (avgCostPerSearch7d > 0 ? (avgCostPerSearch24h + avgCostPerSearch7d) / 2 : avgCostPerSearch24h)
+        : (avgCostPerSearch7d > 0 ? avgCostPerSearch7d : 0);
+      const costPerSearch = avgCostPerSearch > 0 ? avgCostPerSearch : 0.01; // conservative fallback when no usage history
 
       const secondsElapsedToday = (now.getTime() - startOfToday.getTime()) / 1000;
       const secondsRemainingToday = Math.max(0, 86400 - secondsElapsedToday);
