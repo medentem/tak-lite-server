@@ -112,6 +112,11 @@ export class PopupManager {
     if (properties.expirationTime != null) {
       lines.push({ type: 'expiration', expirationTime: Number(properties.expirationTime) });
     }
+    // Threat annotations (auto-created or approved): show citation/source links
+    const citationUrls = fullAnnotation?.data?.threatInfo?.citationUrls;
+    if (Array.isArray(citationUrls) && citationUrls.length > 0) {
+      lines.push({ type: 'citations', urls: citationUrls });
+    }
     this.addCommonInfo(lines, properties, lngLat);
     return this.buildPopupHTML(lines, properties);
   }
@@ -282,6 +287,11 @@ export class PopupManager {
         const pillClass = this.getExpirationPillClass(line.expirationTime);
         const extraClass = pillClass ? ` ${pillClass}` : '';
         return `<span class="expiration-text timer-pill${extraClass}" data-expiration-time="${line.expirationTime}">${escapeHtml(text)}</span>`;
+      }
+      if (typeof line === 'object' && line.type === 'citations' && Array.isArray(line.urls)) {
+        const links = line.urls.slice(0, 5).map(url => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Open source</a>`);
+        if (line.urls.length > 5) links.push(`+${line.urls.length - 5} more`);
+        return `Sources: ${links.join(' · ')}`;
       }
       return escapeHtml(line);
     });
