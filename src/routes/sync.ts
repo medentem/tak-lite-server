@@ -121,7 +121,13 @@ export function createSyncRouter(sync: SyncService) {
         const exp = row.data?.expirationTime;
         return exp == null || (typeof exp === 'number' && exp > now);
       });
-      res.json(active);
+      // Normalize for clients (e.g. Android) that expect non-null user_id: use placeholder for system/auto-created
+      const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000001';
+      const normalized = active.map((row: { user_id?: string | null; [k: string]: unknown }) => ({
+        ...row,
+        user_id: row.user_id ?? SYSTEM_USER_ID
+      }));
+      res.json(normalized);
     } catch (err) { next(err); }
   });
 

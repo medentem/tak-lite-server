@@ -356,22 +356,23 @@ export class SocialMediaMonitoringService {
    * Resolve lat/lng for a threat location. When the location has a specific address or place name
    * (name or area_description), geocode it so the map pin matches the address. Otherwise fall
    * back to Grok's lat/lng (e.g. when only coordinates or a vague area are mentioned).
+   * Returns geocoded: true when an address was successfully geocoded (caller can treat as precise POI).
    */
-  private async resolveLocationCoordinates(location: { lat: number; lng: number; name?: string; area_description?: string }): Promise<{ lat: number; lng: number }> {
+  private async resolveLocationCoordinates(location: { lat: number; lng: number; name?: string; area_description?: string }): Promise<{ lat: number; lng: number; geocoded: boolean }> {
     const address = [location.name, location.area_description].filter(Boolean).map(String).find(s => s.trim().length >= 3);
     if (address) {
       try {
         const geocoded = await geocodeAddress(address);
         if (geocoded) {
           logger.debug('Geocoded threat address for annotation', { address: address.slice(0, 60), lat: geocoded.lat, lng: geocoded.lng });
-          return { lat: geocoded.lat, lng: geocoded.lng };
+          return { lat: geocoded.lat, lng: geocoded.lng, geocoded: true };
         }
       } catch (err) {
         logger.debug('Geocoding failed, using threat coordinates', { address: address.slice(0, 40), error: err instanceof Error ? err.message : err });
       }
     }
     // No address/specific location mentioned — use Grok's lt/lng
-    return { lat: location.lat, lng: location.lng };
+    return { lat: location.lat, lng: location.lng, geocoded: false };
   }
 
   private async createThreatAnnotationFromGrok(threat: any, search: GeographicalSearch): Promise<void> {
@@ -431,7 +432,7 @@ export class SocialMediaMonitoringService {
     const annotationId = uuidv4();
     const { color, shape } = this.getThreatVisual(threat.threat_level);
     const firstLoc = threat.locations[0];
-    const resolved = firstLoc ? await this.resolveLocationCoordinates(firstLoc) : { lat: 0, lng: 0 };
+    const resolved = firstLoc ? await this.resolveLocationCoordinates(firstLoc) : { lat: 0, lng: 0, geocoded: false };
     const annotationData = {
       type: 'poi',
       position: { lt: resolved.lat, lng: resolved.lng },
@@ -483,6 +484,27 @@ export class SocialMediaMonitoringService {
   }
 
   /**
+   * Decide whether to create a POI (point) or area (circle) for a threat location.
+   * Prefer POI when we have a precise location (e.g. successfully geocoded address).
+   * Use area only when the location is still uncertain (explicit radius, inferred, or very low confidence).
+   */
+  private determineAnnotationType(
+    location: { radius_km?: number; confidence?: number; source?: string; name?: string; area_description?: string },
+    wasGeocoded: boolean
+  ): 'poi' | 'area' {
+    if (wasGeocoded) return 'poi';
+    const hasSpecificPlace = [location.name, location.area_description].some(s => s && String(s).trim().length >= 3);
+    const hasExplicitRadius = typeof location.radius_km === 'number' && location.radius_km > 0;
+    const isInferred = location.source === 'inferred';
+    const confidence = location.confidence ?? 0.5;
+    const veryLowConfidence = confidence < 0.5;
+    if (hasExplicitRadius) return 'area';
+    if (isInferred && !hasSpecificPlace) return 'area';
+    if (veryLowConfidence && !hasSpecificPlace) return 'area';
+    return 'poi';
+  }
+
+  /**
    * Creates a map annotation (annotations table) from a threat and marks the threat as approved.
    * Used when "Automatically Create Annotations" is enabled to bypass the admin review flow.
    */
@@ -515,15 +537,6 @@ export class SocialMediaMonitoringService {
 
     const resolvedCoords = await this.resolveLocationCoordinates(primaryLocation);
 
-    const determineAnnotationType = (location: any): 'poi' | 'area' => {
-      const hasRadius = location.radius_km && location.radius_km > 0;
-      const lowConfidence = (location.confidence ?? 0) < 0.7;
-      const isInferred = location.source === 'inferred';
-      const hasSpecificLocation = location.name && String(location.name).trim().length > 0;
-      if (hasRadius || lowConfidence || isInferred || !hasSpecificLocation) return 'area';
-      return 'poi';
-    };
-
     const threatLevelColors: Record<string, string> = {
       LOW: 'green',
       MEDIUM: 'yellow',
@@ -532,7 +545,8 @@ export class SocialMediaMonitoringService {
     };
     const color = threatLevelColors[threat.threat_level] || 'red';
     const label = `${threat.threat_level} Threat: ${threat.threat_type || 'Unknown'}`;
-    const smartAnnotationType = determineAnnotationType(primaryLocation);
+    // Prefer POI when we have a precise location (e.g. geocoded address); use area when location is uncertain
+    const annotationType = this.determineAnnotationType(primaryLocation, resolvedCoords.geocoded);
 
     // Expiration: auto-created annotations expire after configured minutes (no operator to remove/update)
     const config = await this.configService.getServiceConfig();
@@ -565,10 +579,9 @@ export class SocialMediaMonitoringService {
         citationUrls
       }
     };
-    if (smartAnnotationType === 'area') {
+    if (annotationType === 'area') {
       annotationData.center = { lng: resolvedCoords.lng, lt: resolvedCoords.lat };
-      // Client generateCirclePolygon expects radius in meters; we have radius_km from Grok
-      annotationData.radius = ((primaryLocation.radius_km ?? 1.0) * 1000);
+      annotationData.radius = ((primaryLocation.radius_km ?? 1.0) * 1000); // meters
     } else {
       annotationData.position = { lng: resolvedCoords.lng, lt: resolvedCoords.lat };
     }
@@ -581,14 +594,14 @@ export class SocialMediaMonitoringService {
     logger.debug('createMapAnnotationFromThreat: inserting annotation and updating threat_analyses', {
       threatId: threat.id,
       annotationId,
-      annotationType: smartAnnotationType
+      annotationType
     });
 
     await this.db.client('annotations').insert({
       id: annotationId,
       user_id: userId,
       team_id: teamId,
-      type: smartAnnotationType,
+      type: annotationType,
       data: annotationData,
       created_at: this.db.client.fn.now(),
       updated_at: this.db.client.fn.now()
@@ -622,7 +635,7 @@ export class SocialMediaMonitoringService {
       this.io.emit('admin:annotation_update', {
         id: annotationId,
         teamId,
-        type: smartAnnotationType,
+        type: annotationType,
         data: annotationData,
         userId,
         userName: 'System (Threat Detection)',
@@ -632,7 +645,7 @@ export class SocialMediaMonitoringService {
       });
       const clientData = {
         ...annotationData,
-        type: smartAnnotationType,
+        type: annotationType,
         id: annotationId,
         creatorId: userId,
         creatorUsername: 'System (Threat Detection)',
@@ -642,7 +655,7 @@ export class SocialMediaMonitoringService {
       this.io.to('global').emit('annotation:update', {
         id: annotationId,
         teamId,
-        type: smartAnnotationType,
+        type: annotationType,
         data: JSON.stringify(clientData),
         userId,
         userName: 'System (Threat Detection)',
