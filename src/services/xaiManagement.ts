@@ -8,9 +8,9 @@
  *
  * ENDPOINTS USED:
  * - Prepaid balance: GET /v1/billing/teams/{team_id}/prepaid/balance
- *   Ref: "List prepaid credit balance and balance changes"
- * - Historical usage: GET /v1/billing/teams/{team_id}/usage
- *   Ref: "Get historical usage of the API"
+ *   Ref: https://docs.x.ai/developers/management-api/billing
+ * - Historical usage: POST /v1/billing/teams/{team_id}/usage (body: { startDate, endDate })
+ *   Ref: https://docs.x.ai/developers/management-api/billing
  *
  * REQUIRED PERMISSION:
  * The management key only needs read access to billing (we only call GET for balance and usage).
@@ -199,9 +199,10 @@ export class XaiManagementService {
 
   /**
    * Fetch historical usage from xAI Management API.
-   * Docs: GET with optional query params startDate, endDate (camelCase).
-   *   curl "https://management-api.x.ai/v1/billing/teams/{team_id}/usage?startDate=2025-01-01&endDate=2025-02-12" \
-   *     -H "Authorization: Bearer <management_api_key>"
+   * Per https://docs.x.ai/developers/management-api/billing the usage endpoint is POST, not GET.
+   *   Method: POST
+   *   Path: /v1/billing/teams/{team_id}/usage
+   * Send startDate and endDate in the request body (camelCase).
    */
   async fetchUsage(): Promise<XaiUsageResponse | null> {
     const config = await this.getConfig();
@@ -216,12 +217,13 @@ export class XaiManagementService {
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     const startDate = startOfMonth.toISOString().slice(0, 10);
     const endDate = endOfMonth.toISOString().slice(0, 10);
-    const url = `${MANAGEMENT_API_BASE}/v1/billing/teams/${encodeURIComponent(config.team_id)}/usage?startDate=${startDate}&endDate=${endDate}`;
-    const headers = { Authorization: `Bearer ${cleanKey}` };
+    const url = `${MANAGEMENT_API_BASE}/v1/billing/teams/${encodeURIComponent(config.team_id)}/usage`;
+    const headers = { Authorization: `Bearer ${cleanKey}`, 'Content-Type': 'application/json' };
+    const body = { startDate, endDate };
 
     try {
-      logger.info('xAI Management: fetchUsage GET', { url, team_id: config.team_id, startDate, endDate });
-      const res = await axios.get(url, { headers, timeout: 15000 });
+      logger.info('xAI Management: fetchUsage POST', { url, team_id: config.team_id, startDate, endDate });
+      const res = await axios.post(url, body, { headers, timeout: 15000 });
       const data = this.normalizeUsageResponse(res.data);
       if (data) {
         const usageArr = Array.isArray(data.usage) ? data.usage : [];
