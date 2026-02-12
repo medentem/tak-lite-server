@@ -540,7 +540,8 @@ export class SocialMediaMonitoringService {
     };
     if (smartAnnotationType === 'area') {
       annotationData.center = { lng: primaryLocation.lng, lt: primaryLocation.lat };
-      annotationData.radius = primaryLocation.radius_km ?? 1.0;
+      // Client generateCirclePolygon expects radius in meters; we have radius_km from Grok
+      annotationData.radius = ((primaryLocation.radius_km ?? 1.0) * 1000);
     } else {
       annotationData.position = { lng: primaryLocation.lng, lt: primaryLocation.lat };
     }
