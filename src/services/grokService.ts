@@ -429,7 +429,9 @@ export class GrokService {
       throw new Error('No active Grok configuration found');
     }
 
-    const prompt = this.buildGeographicalThreatSearchPrompt(geographicalArea, searchQuery);
+    const normalizedWebDomains = normalizeWebNewsDomains(webNewsDomains);
+    const useWebSearch = normalizedWebDomains.length > 0;
+    const prompt = this.buildGeographicalThreatSearchPrompt(geographicalArea, searchQuery, useWebSearch);
     
     // Log the time window being used
     if (lastSearchTime) {
@@ -469,7 +471,6 @@ export class GrokService {
         }
 
         const tools: Record<string, unknown>[] = [xSearchTool];
-        const normalizedWebDomains = normalizeWebNewsDomains(webNewsDomains);
         if (normalizedWebDomains.length > 0) {
           tools.push({ type: 'web_search', allowed_domains: normalizedWebDomains });
           logger.info('Grok threat search using web_search with allowed_domains from monitor', {
@@ -795,7 +796,9 @@ export class GrokService {
   }
 
   private getGeographicalThreatSystemPrompt(): string {
-    return `You are a specialized threat detection AI for emergency services and security teams. You have access to real-time X (Twitter) posts and can search for current threats and emergency situations in specific geographical areas.
+    return `You are a specialized threat detection AI for emergency services and security teams. You have access to real-time X (Twitter) posts and, when provided, web search restricted to specific news domains. Use both to find current threats and emergency situations in specific geographical areas.
+
+When using web search (allowed domains): search only for BREAKING NEWS and the LATEST HEADLINES from today or the past 24 hours. Do not use web search for older articles, opinion pieces, or non-news content. Apply the same recency and specific-incident rules as for X.
 
 CRITICAL INSTRUCTIONS - FOCUS ON SPECIFIC INCIDENTS ONLY:
 1. ONLY report SPECIFIC, ACTIONABLE INCIDENTS that are happening NOW or very recently
@@ -806,7 +809,7 @@ CRITICAL INSTRUCTIONS - FOCUS ON SPECIFIC INCIDENTS ONLY:
 6. Extract PRECISE location information from X posts when available
 7. For general area references, provide center point AND radius in kilometers
 8. Always respond with valid JSON in the exact format specified
-9. Prioritize recency - only include information from within the specified time window
+9. Prioritize recency - only include information from within the specified time window (X: use the date range; web: breaking news and latest headlines only, today/recent)
 
 WHAT TO INCLUDE (Specific Incidents):
 - "Active shooter at [specific location] - police responding"
@@ -872,16 +875,22 @@ Always respond with valid JSON array in this exact format:
 ]`;
   }
 
-  private buildGeographicalThreatSearchPrompt(geographicalArea: string, searchQuery?: string): string {
+  private buildGeographicalThreatSearchPrompt(geographicalArea: string, searchQuery?: string, useWebSearch?: boolean): string {
+    const webSearchBlock = useWebSearch
+      ? `
+
+WEB SEARCH (when used): Query only the allowed news domains for BREAKING NEWS and LATEST HEADLINES from today or the past 24 hours. Look for articles with "breaking", "just in", "developing", or similar. Ignore older articles, archives, and non-news pages. Same standard as X: only specific, actionable incidents.`
+      : '';
+
     return `
-Search for REAL-TIME SPECIFIC INCIDENTS from X (Twitter) posts in the specified geographical area.
+Search for REAL-TIME SPECIFIC INCIDENTS from X (Twitter) posts${useWebSearch ? ' and from breaking news on the allowed web domains' : ''} in the specified geographical area.
 
 GEOGRAPHICAL AREA: "${geographicalArea}"
 ${searchQuery ? `SEARCH FOCUS: "${searchQuery}"` : ''}
 
 IMPORTANT: ONLY search for SPECIFIC, ACTIONABLE INCIDENTS that are happening NOW or very recently. IGNORE general discussions, statistics, or commentary.
 
-Use your real-time search capabilities to find recent X posts about SPECIFIC INCIDENTS in this area.
+Use your real-time search capabilities to find recent X posts about SPECIFIC INCIDENTS in this area.${webSearchBlock}
 
 For each SPECIFIC INCIDENT found, provide:
 1. The specific location with coordinates AND radius if it's an area-based threat
