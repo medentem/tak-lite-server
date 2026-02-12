@@ -10,6 +10,7 @@ import Joi from 'joi';
 import { ConfigService } from '../services/config';
 import { AuditService } from '../services/audit';
 import { logger } from '../utils/logger';
+import { geocodeAddress } from '../utils/geocode';
 const bcrypt = require('bcryptjs');
 import { v4 as uuidv4 } from 'uuid';
 
@@ -165,37 +166,20 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
     res.json({ setupCompleted: !!(await config.get('setup.completed')) });
   });
 
-  // Geocode proxy for command palette / map search (avoids CORS; Nominatim requires server-side requests)
+  // Geocode proxy for command palette / map search (avoids CORS). Uses shared geocode utility so behavior matches threat geolocation.
   router.get('/geocode', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const q = (req.query.q as string)?.trim();
       if (!q) return res.status(400).json({ error: 'Missing query parameter q' });
-      const params = new URLSearchParams({
-        q,
-        format: 'json',
-        limit: '1',
-        addressdetails: '1'
-      });
-      const nominatimRes = await fetch(
-        `https://nominatim.openstreetmap.org/search?${params}`,
-        { headers: { 'Accept-Language': 'en', 'User-Agent': 'TAK-Lite-Server/1.0 (admin map search)' } }
-      );
-      if (!nominatimRes.ok) {
-        return res.status(nominatimRes.status).json({ error: 'Geocoding service unavailable' });
-      }
-      const data = (await nominatimRes.json()) as any[];
-      const first = data?.[0];
-      if (!first || first.lat == null || first.lon == null) {
+      const result = await geocodeAddress(q);
+      if (!result) {
         return res.json({ lat: null, lon: null, bbox: null, display_name: null });
       }
-      const bbox = Array.isArray(first.boundingbox)
-        ? first.boundingbox.map((v: string | number) => Number(v))
-        : null;
       res.json({
-        lat: parseFloat(first.lat),
-        lon: parseFloat(first.lon),
-        bbox: bbox && bbox.length >= 4 ? bbox : null,
-        display_name: first.display_name ?? null
+        lat: result.lat,
+        lon: result.lng,
+        bbox: result.bbox && result.bbox.length >= 4 ? result.bbox : null,
+        display_name: result.display_name ?? null
       });
     } catch (err) {
       next(err);
@@ -1340,6 +1324,22 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
           message: 'Coordinates must be valid numbers (not NaN or infinite)'
         });
       }
+
+      // Resolve coordinates: geocode when threat has an address/specific location; otherwise use Grok's lt/lng
+      let resolvedLat = primaryLocation.lat;
+      let resolvedLng = primaryLocation.lng;
+      const address = [primaryLocation.name, primaryLocation.area_description].filter(Boolean).map(String).find(s => s.trim().length >= 3);
+      if (address) {
+        try {
+          const geocoded = await geocodeAddress(address);
+          if (geocoded) {
+            resolvedLat = geocoded.lat;
+            resolvedLng = geocoded.lng;
+          }
+        } catch (_) {
+          // keep Grok coordinates on geocode failure
+        }
+      }
       
       // Determine annotation type based on location confidence and specificity
       const determineAnnotationType = (location: any, customType?: string): 'poi' | 'area' => {
@@ -1425,17 +1425,17 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       };
       
       if (smartAnnotationType === 'area') {
-        // For area annotations, use center and radius
+        // For area annotations, use center and radius (use geocoded coords when we resolved from address)
         annotationData.center = {
-          lng: primaryLocation.lng,
-          lt: primaryLocation.lat  // Use 'lt' to match Android LatLngSerializable format
+          lng: resolvedLng,
+          lt: resolvedLat  // Use 'lt' to match Android LatLngSerializable format
         };
         annotationData.radius = primaryLocation.radius_km || 1.0; // Default 1km radius if not specified
       } else {
         // For POI annotations, use position
         annotationData.position = {
-          lng: primaryLocation.lng,
-          lt: primaryLocation.lat  // Use 'lt' to match Android LatLngSerializable format
+          lng: resolvedLng,
+          lt: resolvedLat  // Use 'lt' to match Android LatLngSerializable format
         };
       }
       

@@ -5,6 +5,7 @@ import { SyncService } from './sync';
 import { SocialMediaConfigService } from './socialMediaConfig';
 import { X_SEARCH_COST_PER_CALL_USD } from './grokPricing';
 import { logger } from '../utils/logger';
+import { geocodeAddress } from '../utils/geocode';
 
 // Legacy interfaces removed - now using GeographicalSearch from GrokService
 
@@ -351,6 +352,28 @@ export class SocialMediaMonitoringService {
     }
   }
 
+  /**
+   * Resolve lat/lng for a threat location. When the location has a specific address or place name
+   * (name or area_description), geocode it so the map pin matches the address. Otherwise fall
+   * back to Grok's lat/lng (e.g. when only coordinates or a vague area are mentioned).
+   */
+  private async resolveLocationCoordinates(location: { lat: number; lng: number; name?: string; area_description?: string }): Promise<{ lat: number; lng: number }> {
+    const address = [location.name, location.area_description].filter(Boolean).map(String).find(s => s.trim().length >= 3);
+    if (address) {
+      try {
+        const geocoded = await geocodeAddress(address);
+        if (geocoded) {
+          logger.debug('Geocoded threat address for annotation', { address: address.slice(0, 60), lat: geocoded.lat, lng: geocoded.lng });
+          return { lat: geocoded.lat, lng: geocoded.lng };
+        }
+      } catch (err) {
+        logger.debug('Geocoding failed, using threat coordinates', { address: address.slice(0, 40), error: err instanceof Error ? err.message : err });
+      }
+    }
+    // No address/specific location mentioned — use Grok's lt/lng
+    return { lat: location.lat, lng: location.lng };
+  }
+
   private async createThreatAnnotationFromGrok(threat: any, search: GeographicalSearch): Promise<void> {
     const hasLocations = Array.isArray(threat.locations) && threat.locations.length > 0;
     logger.debug('createThreatAnnotationFromGrok: evaluating threat', {
@@ -407,9 +430,11 @@ export class SocialMediaMonitoringService {
 
     const annotationId = uuidv4();
     const { color, shape } = this.getThreatVisual(threat.threat_level);
+    const firstLoc = threat.locations[0];
+    const resolved = firstLoc ? await this.resolveLocationCoordinates(firstLoc) : { lat: 0, lng: 0 };
     const annotationData = {
       type: 'poi',
-      position: { lt: threat.locations[0]?.lat || 0, lng: threat.locations[0]?.lng || 0 },
+      position: { lt: resolved.lat, lng: resolved.lng },
       shape: shape,
       color: color,
       label: this.generateThreatLabel({ ...threat, ai_summary: threat.summary }),
@@ -432,8 +457,8 @@ export class SocialMediaMonitoringService {
         threat_analysis_id: threat.id,
         team_id: null,
         position: {
-          lat: (threat.locations[0]?.lat && !isNaN(threat.locations[0].lat)) ? threat.locations[0].lat : 0,
-          lng: (threat.locations[0]?.lng && !isNaN(threat.locations[0].lng)) ? threat.locations[0].lng : 0
+          lat: (resolved.lat != null && !isNaN(resolved.lat)) ? resolved.lat : 0,
+          lng: (resolved.lng != null && !isNaN(resolved.lng)) ? resolved.lng : 0
         },
         threat_level: threat.threat_level,
         threat_type: threat.threat_type,
@@ -488,6 +513,8 @@ export class SocialMediaMonitoringService {
       return;
     }
 
+    const resolvedCoords = await this.resolveLocationCoordinates(primaryLocation);
+
     const determineAnnotationType = (location: any): 'poi' | 'area' => {
       const hasRadius = location.radius_km && location.radius_km > 0;
       const lowConfidence = (location.confidence ?? 0) < 0.7;
@@ -539,11 +566,11 @@ export class SocialMediaMonitoringService {
       }
     };
     if (smartAnnotationType === 'area') {
-      annotationData.center = { lng: primaryLocation.lng, lt: primaryLocation.lat };
+      annotationData.center = { lng: resolvedCoords.lng, lt: resolvedCoords.lat };
       // Client generateCirclePolygon expects radius in meters; we have radius_km from Grok
       annotationData.radius = ((primaryLocation.radius_km ?? 1.0) * 1000);
     } else {
-      annotationData.position = { lng: primaryLocation.lng, lt: primaryLocation.lat };
+      annotationData.position = { lng: resolvedCoords.lng, lt: resolvedCoords.lat };
     }
 
     const annotationId = uuidv4();
