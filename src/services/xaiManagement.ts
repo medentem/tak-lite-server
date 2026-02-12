@@ -199,10 +199,7 @@ export class XaiManagementService {
 
   /**
    * Fetch historical usage from xAI Management API.
-   * Per https://docs.x.ai/developers/management-api/billing the usage endpoint is POST, not GET.
-   *   Method: POST
-   *   Path: /v1/billing/teams/{team_id}/usage
-   * Send startDate and endDate in the request body (camelCase).
+   * Per https://docs.x.ai/developers/management-api/billing the usage endpoint is POST with analyticsRequest body.
    */
   async fetchUsage(): Promise<XaiUsageResponse | null> {
     const config = await this.getConfig();
@@ -215,14 +212,28 @@ export class XaiManagementService {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const startDate = startOfMonth.toISOString().slice(0, 10);
-    const endDate = endOfMonth.toISOString().slice(0, 10);
+    const startTime = `${startOfMonth.getFullYear()}-${String(startOfMonth.getMonth() + 1).padStart(2, '0')}-${String(startOfMonth.getDate()).padStart(2, '0')} 00:00:00`;
+    const endTime = `${endOfMonth.getFullYear()}-${String(endOfMonth.getMonth() + 1).padStart(2, '0')}-${String(endOfMonth.getDate()).padStart(2, '0')} 23:59:59`;
     const url = `${MANAGEMENT_API_BASE}/v1/billing/teams/${encodeURIComponent(config.team_id)}/usage`;
     const headers = { Authorization: `Bearer ${cleanKey}`, 'Content-Type': 'application/json' };
-    const body = { startDate, endDate };
+    const body = {
+      analyticsRequest: {
+        timeRange: {
+          startTime,
+          endTime,
+          timezone: 'Etc/GMT',
+        },
+        timeUnit: 'TIME_UNIT_DAY',
+        values: [
+          { name: 'usd', aggregation: 'AGGREGATION_SUM' },
+        ],
+        groupBy: ['description'],
+        filters: [],
+      },
+    };
 
     try {
-      logger.info('xAI Management: fetchUsage POST', { url, team_id: config.team_id, startDate, endDate });
+      logger.info('xAI Management: fetchUsage POST', { url, team_id: config.team_id, startTime, endTime });
       const res = await axios.post(url, body, { headers, timeout: 15000 });
       const data = this.normalizeUsageResponse(res.data);
       if (data) {
@@ -244,18 +255,50 @@ export class XaiManagementService {
     }
   }
 
+  private mapAnalyticsRowsToUsage(rows: Array<Record<string, unknown>>): Array<{ date?: string; cost_usd?: number; [key: string]: unknown }> {
+    return rows.map((row) => {
+      const dateStr = row.startTime ?? row.date ?? row.timeBucket ?? (row.timeRange as Record<string, unknown>)?.startTime;
+      let date: string | undefined;
+      if (typeof dateStr === 'string') date = dateStr.slice(0, 10);
+      const cost = typeof row.usd === 'number' ? row.usd : typeof row.cost_usd === 'number' ? row.cost_usd : typeof row.value === 'number' ? row.value : 0;
+      return { date, cost_usd: cost };
+    });
+  }
+
   /**
-   * Normalize usage response: accept usage array at top level or under .usage / .data / .daily_usage.
+   * Normalize usage response to { usage: [{ date, cost_usd }, ...] } for the route.
+   * Handles the documented format: { timeSeries: [{ dataPoints: [{ timestamp, values: [usd] }] }] }.
+   * Aggregates by date: sums values[0] (USD) across all series and dataPoints for each date.
    */
   private normalizeUsageResponse(raw: unknown): XaiUsageResponse | null {
     if (raw == null) return null;
     const obj = raw as Record<string, unknown>;
     let usageArr: Array<{ date?: string; cost_usd?: number; tokens?: number; [key: string]: unknown }> | undefined;
-    if (Array.isArray(obj.usage)) usageArr = obj.usage;
+
+    if (Array.isArray(obj.timeSeries)) {
+      const byDate: Record<string, number> = {};
+      for (const series of obj.timeSeries as Array<{ dataPoints?: Array<{ timestamp?: string; values?: number[] }> }>) {
+        const points = series.dataPoints;
+        if (!Array.isArray(points)) continue;
+        for (const dp of points) {
+          const ts = dp.timestamp;
+          const date = typeof ts === 'string' ? ts.slice(0, 10) : undefined;
+          if (!date) continue;
+          const val = Array.isArray(dp.values) && dp.values.length > 0 ? Number(dp.values[0]) : 0;
+          byDate[date] = (byDate[date] ?? 0) + val;
+        }
+      }
+      usageArr = Object.entries(byDate).map(([date, cost_usd]) => ({ date, cost_usd }));
+    } else if (Array.isArray(obj.usage)) usageArr = obj.usage;
     else if (Array.isArray((obj.data as Record<string, unknown>)?.usage)) usageArr = (obj.data as Record<string, unknown>).usage as typeof usageArr;
     else if (Array.isArray(obj.daily_usage)) usageArr = obj.daily_usage;
-    else if (Array.isArray(obj)) usageArr = obj;
-    if (!usageArr) return null;
+    else if (Array.isArray(obj.rows)) {
+      usageArr = this.mapAnalyticsRowsToUsage(obj.rows as Array<Record<string, unknown>>);
+    } else if (obj.data && typeof obj.data === 'object' && Array.isArray((obj.data as Record<string, unknown>).rows)) {
+      usageArr = this.mapAnalyticsRowsToUsage((obj.data as Record<string, unknown>).rows as Array<Record<string, unknown>>);
+    } else if (Array.isArray(obj)) usageArr = obj;
+
+    if (!usageArr || usageArr.length === 0) return null;
     return { usage: usageArr };
   }
 }
