@@ -126,6 +126,7 @@ export function createSocialMediaRouter(
           team_id?: string;
           balance?: unknown;
           usage?: unknown;
+          usage_api_available?: boolean;
           management_cost?: { cost_today_usd: number; cost_month_usd: number };
         };
       } = { usage: summary };
@@ -174,6 +175,7 @@ export function createSocialMediaRouter(
           team_id: config?.team_id ?? undefined,
           balance: balance ?? undefined,
           usage: usage ?? undefined,
+          usage_api_available: usage != null,
           ...(management_cost != null && { management_cost }),
         };
       } else {

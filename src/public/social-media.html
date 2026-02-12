@@ -687,7 +687,8 @@
         <div style="margin-bottom:16px; padding:12px; background:#1e293b; border-radius:8px; border:1px solid #334155; font-size:13px;">
           <strong>This is a different key from your Grok API key.</strong><br>
           The Grok API key is used for threat search. The Management API key is used only to <em>view</em> actual balance and usage from x.ai in this dashboard.<br>
-          Get it from <strong>xAI Console → Settings → Management Keys</strong>. You also need your <strong>Team ID</strong> (from the Console URL or team settings).
+          <strong>Required permission:</strong> Your xAI account must have <strong>Management Keys Read + Write</strong> (xAI Console → Users). The key must be created at <strong>xAI Console → Settings → Management Keys</strong>. For <strong>Cost Today</strong> and <strong>Cost This Month</strong> to appear, the key must have access to the billing usage API (if you see 501, the usage endpoint may not be enabled for your key).<br>
+          You also need your <strong>Team ID</strong> (from the Console URL or team settings).
         </div>
         <form id="xai-management-form">
           <div class="form-group">
@@ -914,8 +915,8 @@
         const parts = [];
         if (xaiAccountData.balance != null && typeof xaiAccountData.balance === 'object') {
           const b = xaiAccountData.balance;
-          const amt = b.balance_usd ?? b.balance ?? b.credits;
-          const cur = b.currency ?? 'USD';
+          const amt = b.balance_usd ?? b.balance ?? b.credits ?? b.amount ?? (b.balance && typeof b.balance === 'object' ? (b.balance.amount ?? b.balance.value ?? b.balance.balance_usd) : null);
+          const cur = b.currency ?? (b.balance && typeof b.balance === 'object' && b.balance.currency) ?? 'USD';
           if (amt != null) parts.push('Balance: ' + (cur === 'USD' ? '$' : '') + Number(amt).toFixed(2) + (cur !== 'USD' ? ' ' + cur : ''));
         } else if (xaiAccountData.balance != null) {
           parts.push('Balance: ' + String(xaiAccountData.balance));
@@ -930,7 +931,10 @@
           }
         }
         if (xaiAccountData.team_id) parts.push('Team: ' + xaiAccountData.team_id);
-        const text = parts.length ? parts.join(' · ') : 'Actual data loaded.';
+        const usageUnavailableMsg = (xaiAccountData.usage_api_available === false && xaiAccountData.configured)
+          ? ' Usage API returned 501 (Method Not Allowed). Cost Today / Cost This Month require the usage endpoint—your billing read-only key may not have access.'
+          : '';
+        const text = (parts.length ? parts.join(' · ') : 'Connected.') + usageUnavailableMsg;
         content.innerHTML = '<span id="xai-account-message">' + text + '</span> <button onclick="showXaiManagementModal()" class="secondary" style="margin-left:8px;">Manage key</button>';
       }
 

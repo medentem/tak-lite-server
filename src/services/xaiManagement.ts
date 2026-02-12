@@ -1,8 +1,25 @@
 /**
  * xAI Management API integration for actual balance and usage.
- * Uses a separate Management API key (not the Grok inference key).
- * See: https://docs.x.ai/docs/key-information/using-management-api
- * Base URL: https://management-api.x.ai
+ *
+ * DOCUMENTATION (definitive):
+ * - Using Management API: https://docs.x.ai/docs/key-information/using-management-api
+ * - Management API Reference (billing): https://docs.x.ai/developers/management-api (Billing Management section)
+ * - Base URL: https://management-api.x.ai
+ *
+ * ENDPOINTS USED:
+ * - Prepaid balance: GET /v1/billing/teams/{team_id}/prepaid/balance
+ *   Ref: "List prepaid credit balance and balance changes"
+ * - Historical usage: GET /v1/billing/teams/{team_id}/usage
+ *   Ref: "Get historical usage of the API"
+ *
+ * REQUIRED PERMISSION:
+ * Your xAI account must have "Management Keys Read + Write" permission (see xAI Console → Users).
+ * Obtain the Management API key at: xAI Console → Settings → Management Keys.
+ * For Cost Today / Cost This Month we need the usage endpoint to succeed; if you get 501 Method Not Allowed,
+ * the usage API may not be enabled for your key or plan—ensure the management key has full billing/usage
+ * access or contact xAI support.
+ *
+ * This uses a separate Management API key, not the Grok inference API key.
  */
 
 import axios from 'axios';
@@ -140,9 +157,34 @@ export class XaiManagementService {
         headers: { Authorization: `Bearer ${cleanKey}` },
         timeout: 15000,
       });
-      const data = (res.data ?? {}) as XaiPrepaidBalance;
-      logger.info('xAI Management: fetchBalance success', { balance_usd: data.balance_usd, status: res.status });
-      return data;
+      const raw = res.data ?? {};
+      const data = raw as Record<string, unknown>;
+      const keys = Object.keys(data);
+      logger.info('xAI Management: fetchBalance success', { status: res.status, response_keys: keys });
+
+      // Normalize balance from various possible response shapes (xAI docs don't specify; try common patterns)
+      const balance_usd =
+        typeof (data as XaiPrepaidBalance).balance_usd === 'number' ? (data as XaiPrepaidBalance).balance_usd
+        : typeof data.balance === 'number' ? data.balance
+        : typeof data.amount === 'number' ? data.amount
+        : typeof data.credits === 'number' ? data.credits
+        : typeof data.current_balance === 'number' ? data.current_balance
+        : data.balance && typeof data.balance === 'object' && data.balance !== null
+          ? typeof (data.balance as Record<string, unknown>).amount === 'number'
+            ? (data.balance as Record<string, unknown>).amount as number
+            : typeof (data.balance as Record<string, unknown>).value === 'number'
+              ? (data.balance as Record<string, unknown>).value as number
+              : typeof (data.balance as Record<string, unknown>).balance_usd === 'number'
+                ? (data.balance as Record<string, unknown>).balance_usd as number
+                : undefined
+          : undefined;
+      if (balance_usd !== undefined) {
+        (data as XaiPrepaidBalance).balance_usd = balance_usd;
+        logger.info('xAI Management: fetchBalance normalized', { balance_usd });
+      } else {
+        logger.info('xAI Management: fetchBalance could not normalize balance from response', { response_keys: keys });
+      }
+      return data as XaiPrepaidBalance;
     } catch (err: any) {
       const status = err.response?.status;
       const responseBody = err.response?.data;
@@ -158,8 +200,9 @@ export class XaiManagementService {
 
   /**
    * Fetch historical usage from xAI Management API.
-   * Returns null if not configured or request fails.
-   * 501/404: endpoint not implemented or not enabled for this account — we log at debug only.
+   * Docs: GET with optional query params startDate, endDate (camelCase).
+   *   curl "https://management-api.x.ai/v1/billing/teams/{team_id}/usage?startDate=2025-01-01&endDate=2025-02-12" \
+   *     -H "Authorization: Bearer <management_api_key>"
    */
   async fetchUsage(): Promise<XaiUsageResponse | null> {
     const config = await this.getConfig();
@@ -167,29 +210,51 @@ export class XaiManagementService {
       logger.info('xAI Management: fetchUsage skipped (not configured)', { has_key: !!config?.management_key_encrypted, team_id: config?.team_id ?? null });
       return null;
     }
-    const url = `${MANAGEMENT_API_BASE}/v1/billing/teams/${encodeURIComponent(config.team_id)}/usage`;
-    logger.info('xAI Management: fetchUsage calling', { url, team_id: config.team_id });
+    const key = await this.security.decryptApiKey(config.management_key_encrypted);
+    const cleanKey = key.trim().replace(/[\r\n\t]/g, '');
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const startDate = startOfMonth.toISOString().slice(0, 10);
+    const endDate = endOfMonth.toISOString().slice(0, 10);
+    const url = `${MANAGEMENT_API_BASE}/v1/billing/teams/${encodeURIComponent(config.team_id)}/usage?startDate=${startDate}&endDate=${endDate}`;
+    const headers = { Authorization: `Bearer ${cleanKey}` };
+
     try {
-      const key = await this.security.decryptApiKey(config.management_key_encrypted);
-      const cleanKey = key.trim().replace(/[\r\n\t]/g, '');
-      const res = await axios.get(url, {
-        headers: { Authorization: `Bearer ${cleanKey}` },
-        timeout: 15000,
-      });
-      const data = (res.data ?? {}) as XaiUsageResponse;
-      const usageArr = Array.isArray(data.usage) ? data.usage : [];
-      logger.info('xAI Management: fetchUsage success', { usage_rows: usageArr.length, status: res.status, sample_dates: usageArr.slice(0, 3).map((r: any) => r?.date) });
-      return data;
+      logger.info('xAI Management: fetchUsage GET', { url, team_id: config.team_id, startDate, endDate });
+      const res = await axios.get(url, { headers, timeout: 15000 });
+      const data = this.normalizeUsageResponse(res.data);
+      if (data) {
+        const usageArr = Array.isArray(data.usage) ? data.usage : [];
+        logger.info('xAI Management: fetchUsage success', { usage_rows: usageArr.length, status: res.status });
+        return data;
+      }
+      logger.info('xAI Management: fetchUsage response shape not recognized', { response_keys: res.data && typeof res.data === 'object' ? Object.keys(res.data) : [] });
+      return null;
     } catch (err: any) {
       const status = err.response?.status;
       const responseBody = err.response?.data;
-      const notAvailable = status === 501 || status === 404;
-      if (notAvailable) {
+      if (status === 501 || status === 404) {
         logger.info('xAI Management: fetchUsage endpoint not available', { status, responseBody });
       } else {
         logger.warn('xAI Management: fetchUsage failed', { status, message: err.message, responseBody });
       }
       return null;
     }
+  }
+
+  /**
+   * Normalize usage response: accept usage array at top level or under .usage / .data / .daily_usage.
+   */
+  private normalizeUsageResponse(raw: unknown): XaiUsageResponse | null {
+    if (raw == null) return null;
+    const obj = raw as Record<string, unknown>;
+    let usageArr: Array<{ date?: string; cost_usd?: number; tokens?: number; [key: string]: unknown }> | undefined;
+    if (Array.isArray(obj.usage)) usageArr = obj.usage;
+    else if (Array.isArray((obj.data as Record<string, unknown>)?.usage)) usageArr = (obj.data as Record<string, unknown>).usage as typeof usageArr;
+    else if (Array.isArray(obj.daily_usage)) usageArr = obj.daily_usage;
+    else if (Array.isArray(obj)) usageArr = obj;
+    if (!usageArr) return null;
+    return { usage: usageArr };
   }
 }
