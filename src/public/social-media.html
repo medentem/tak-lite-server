@@ -687,7 +687,7 @@
         <div style="margin-bottom:16px; padding:12px; background:#1e293b; border-radius:8px; border:1px solid #334155; font-size:13px;">
           <strong>This is a different key from your Grok API key.</strong><br>
           The Grok API key is used for threat search. The Management API key is used only to <em>view</em> actual balance and usage from x.ai in this dashboard.<br>
-          <strong>Required permission:</strong> Your xAI account must have <strong>Management Keys Read + Write</strong> (xAI Console → Users). The key must be created at <strong>xAI Console → Settings → Management Keys</strong>. For <strong>Cost Today</strong> and <strong>Cost This Month</strong> to appear, the key must have access to the billing usage API (if you see 501, the usage endpoint may not be enabled for your key).<br>
+          <strong>Required permission:</strong> The key only needs <strong>billing read</strong> access (we only read balance and usage). Create it at <strong>xAI Console → Settings → Management Keys</strong>. For <strong>Cost Today</strong> and <strong>Cost This Month</strong>, the key must have access to the billing usage API (if you see 501, that endpoint may not be enabled for your key).<br>
           You also need your <strong>Team ID</strong> (from the Console URL or team settings).
         </div>
         <form id="xai-management-form">

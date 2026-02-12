@@ -13,11 +13,10 @@
  *   Ref: "Get historical usage of the API"
  *
  * REQUIRED PERMISSION:
- * Your xAI account must have "Management Keys Read + Write" permission (see xAI Console → Users).
- * Obtain the Management API key at: xAI Console → Settings → Management Keys.
- * For Cost Today / Cost This Month we need the usage endpoint to succeed; if you get 501 Method Not Allowed,
- * the usage API may not be enabled for your key or plan—ensure the management key has full billing/usage
- * access or contact xAI support.
+ * The management key only needs read access to billing (we only call GET for balance and usage).
+ * Obtain the key at: xAI Console → Settings → Management Keys. Ensure the key has billing read access.
+ * For Cost Today / Cost This Month the usage endpoint must succeed; if you get 501, the usage API may not
+ * be enabled for your key—check that billing read is granted for the key.
  *
  * This uses a separate Management API key, not the Grok inference API key.
  */
