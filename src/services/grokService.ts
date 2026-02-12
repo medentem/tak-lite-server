@@ -472,6 +472,10 @@ export class GrokService {
         const normalizedWebDomains = normalizeWebNewsDomains(webNewsDomains);
         if (normalizedWebDomains.length > 0) {
           tools.push({ type: 'web_search', allowed_domains: normalizedWebDomains });
+          logger.info('Grok threat search using web_search with allowed_domains from monitor', {
+            geographicalSearchId: geographicalSearchId ?? null,
+            allowed_domains: normalizedWebDomains,
+          });
         }
 
         const useStructuredOutput = isGrok4 && !skipStructuredOutput;
