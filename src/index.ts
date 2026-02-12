@@ -145,14 +145,6 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
   } else {
     // After setup: use configured origins, fallback to env, or use development defaults if nothing configured
     allowlist = configured.length > 0 ? configured : fromEnv;
-    
-    // If still no origins configured, fall back to development defaults for safety
-    if (allowlist.length === 0) {
-      allowlist = ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:8080', 'http://127.0.0.1:8080'];
-      logger.warn('CORS: No origins configured, falling back to development defaults:', { allowlist });
-    }
-    
-    logger.info('CORS post-setup - using origins:', { allowlist, configured, fromEnv, completed });
   }
   
   const originFn = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {

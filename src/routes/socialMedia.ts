@@ -115,21 +115,52 @@ export function createSocialMediaRouter(
   });
 
   // AI usage and cost summary (for monitoring and forecasting)
+  // Cost Today / Cost This Month are only included when Management API returns usable usage data.
   router.get('/ai-usage', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const summary = await socialMediaService.getAIUsageSummary();
-      const payload: { usage: typeof summary; xai_account?: { configured: boolean; team_id?: string; balance?: unknown; usage?: unknown } } = { usage: summary };
+      const payload: {
+        usage: typeof summary;
+        xai_account?: {
+          configured: boolean;
+          team_id?: string;
+          balance?: unknown;
+          usage?: unknown;
+          management_cost?: { cost_today_usd: number; cost_month_usd: number };
+        };
+      } = { usage: summary };
       if (await xaiManagementService.isConfigured()) {
         const [balance, usage] = await Promise.all([
           xaiManagementService.fetchBalance(),
           xaiManagementService.fetchUsage(),
         ]);
         const config = await xaiManagementService.getConfig();
+        const management_cost = usage && Array.isArray(usage.usage) && usage.usage.length > 0
+          ? (() => {
+              const now = new Date();
+              const todayStr = now.toISOString().slice(0, 10);
+              const year = now.getFullYear();
+              const month = now.getMonth();
+              let cost_today_usd = 0;
+              let cost_month_usd = 0;
+              for (const row of usage.usage) {
+                const dateStr = row?.date;
+                const cost = typeof row?.cost_usd === 'number' ? row.cost_usd : 0;
+                if (!dateStr) continue;
+                const d = dateStr.slice(0, 10);
+                if (d === todayStr) cost_today_usd += cost;
+                const [y, m] = [parseInt(d.slice(0, 4), 10), parseInt(d.slice(5, 7), 10) - 1];
+                if (y === year && m === month) cost_month_usd += cost;
+              }
+              return { cost_today_usd, cost_month_usd };
+            })()
+          : null;
         payload.xai_account = {
           configured: true,
           team_id: config?.team_id ?? undefined,
           balance: balance ?? undefined,
           usage: usage ?? undefined,
+          ...(management_cost != null && { management_cost }),
         };
       } else {
         payload.xai_account = { configured: false };

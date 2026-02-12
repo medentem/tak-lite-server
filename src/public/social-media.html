@@ -404,11 +404,11 @@
             <button onclick="loadAIUsage()" class="secondary" title="Refresh usage">Refresh</button>
           </div>
           <div id="ai-usage-content" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:16px;">
-            <div class="kpi">
+            <div id="cost-today-kpi" class="kpi" style="display:none;">
               <div class="value" id="usage-today-cost">$0.00</div>
               <div class="label">Cost Today</div>
             </div>
-            <div class="kpi">
+            <div id="cost-month-kpi" class="kpi" style="display:none;">
               <div class="value" id="usage-month-cost">$0.00</div>
               <div class="label">Cost This Month</div>
             </div>
@@ -885,8 +885,15 @@
         const u = aiUsageSummary;
         const fmt = (n) => (typeof n === 'number' && !Number.isNaN(n) ? n.toFixed(4) : '0').replace(/\.?0+$/, '') || '0';
         const fmtCost = (c) => '$' + (typeof c === 'number' && !Number.isNaN(c) ? c.toFixed(2) : '0.00');
-        document.getElementById('usage-today-cost').textContent = fmtCost(u.today.cost_usd);
-        document.getElementById('usage-month-cost').textContent = fmtCost(u.month.cost_usd);
+        const mc = xaiAccountData?.management_cost;
+        const costTodayEl = document.getElementById('cost-today-kpi');
+        const costMonthEl = document.getElementById('cost-month-kpi');
+        if (costTodayEl) costTodayEl.style.display = mc ? '' : 'none';
+        if (costMonthEl) costMonthEl.style.display = mc ? '' : 'none';
+        if (mc) {
+          document.getElementById('usage-today-cost').textContent = fmtCost(mc.cost_today_usd);
+          document.getElementById('usage-month-cost').textContent = fmtCost(mc.cost_month_usd);
+        }
         document.getElementById('usage-today-tokens').textContent = (u.today.total_tokens || 0).toLocaleString();
         document.getElementById('usage-today-calls').textContent = (u.today.api_calls || 0).toLocaleString();
         const f = u.forecast;
