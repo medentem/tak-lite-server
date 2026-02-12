@@ -945,12 +945,12 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
   async createGeographicalSearch(searchData: Partial<GeographicalSearch>, createdBy: string): Promise<GeographicalSearch> {
     const id = uuidv4();
     const web_news_domains = normalizeWebNewsDomains(searchData.web_news_domains);
-    const search: GeographicalSearch = {
+    const search: Record<string, unknown> = {
       id,
       geographical_area: searchData.geographical_area!,
       search_query: searchData.search_query,
       search_parameters: searchData.search_parameters,
-      web_news_domains: web_news_domains.length > 0 ? web_news_domains : null,
+      web_news_domains: web_news_domains.length > 0 ? this.db.client.raw('?::jsonb', [JSON.stringify(web_news_domains)]) : null,
       monitoring_interval: searchData.monitoring_interval || 300,
       is_active: searchData.is_active !== false,
       created_by: createdBy,
@@ -959,9 +959,21 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
     };
 
     await this.db.client('geographical_searches').insert(search);
-    
-    logger.info('Created geographical search', { id, area: search.geographical_area, web_news_domains: search.web_news_domains?.length ?? 0 });
-    return search;
+
+    const result: GeographicalSearch = {
+      id,
+      geographical_area: searchData.geographical_area!,
+      search_query: searchData.search_query,
+      search_parameters: searchData.search_parameters,
+      web_news_domains: web_news_domains.length > 0 ? web_news_domains : null,
+      monitoring_interval: searchData.monitoring_interval || 300,
+      is_active: searchData.is_active !== false,
+      created_by: createdBy,
+      created_at: search.created_at as Date,
+      updated_at: search.updated_at as Date
+    };
+    logger.info('Created geographical search', { id, area: result.geographical_area, web_news_domains: result.web_news_domains?.length ?? 0 });
+    return result;
   }
 
   async getGeographicalSearches(): Promise<GeographicalSearch[]> {
@@ -975,9 +987,13 @@ Return results as a JSON array of threat analyses. ONLY include specific inciden
       updated_at: new Date()
     };
     if (Object.prototype.hasOwnProperty.call(updates, 'web_news_domains')) {
-      updateData.web_news_domains = updates.web_news_domains === null || (Array.isArray(updates.web_news_domains) && updates.web_news_domains.length === 0)
+      const raw = updates.web_news_domains;
+      const isEmpty = raw === null || (Array.isArray(raw) && raw.length === 0);
+      const normalized = isEmpty ? [] : normalizeWebNewsDomains(raw);
+      // PostgreSQL jsonb expects a JSON string; bind with explicit cast to avoid invalid syntax
+      updateData.web_news_domains = isEmpty || normalized.length === 0
         ? null
-        : normalizeWebNewsDomains(updates.web_news_domains);
+        : this.db.client.raw('?::jsonb', [JSON.stringify(normalized)]);
     }
 
     await this.db.client('geographical_searches')
