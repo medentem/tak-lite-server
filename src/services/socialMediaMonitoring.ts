@@ -540,7 +540,8 @@ export class SocialMediaMonitoringService {
     }
 
     const annotationId = uuidv4();
-    const userId = 'system';
+    // user_id is UUID; use null for system/auto-created annotations (column is nullable)
+    const userId: string | null = null;
     const teamId: string | null = null;
 
     logger.debug('createMapAnnotationFromThreat: inserting annotation and updating threat_analyses', {
