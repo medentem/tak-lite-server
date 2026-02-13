@@ -809,6 +809,8 @@ CRITICAL INSTRUCTIONS - FOCUS ON SPECIFIC INCIDENTS ONLY:
 6. For general area references, provide center point AND radius in kilometers
 7. Always respond with valid JSON in the exact format specified
 8. Prioritize recency - only include information from within the specified time window (X: use the date range; web: breaking news and latest headlines only, today/recent)
+9. Each threat should be a separate item in the JSON array unless multiple threats are essentially the same incident.
+10. Threats that occur at different locations should be separate items in the JSON array even if they are similar.
 
 EXAMPLES OF WHAT TO INCLUDE (Specific Incidents):
 - "Active shooter at [specific location] - police responding"
@@ -1317,11 +1319,12 @@ ${searchQuery ? `SEARCH FOCUS: "${searchQuery}"` : ''}`;
    * Generate semantic hash for quick similarity detection (from analysis object).
    */
   private generateSemanticHash(threat: any): string {
+    const keywordsPart = Array.isArray(threat.keywords) ? threat.keywords.join(',') : (typeof threat.keywords === 'string' ? threat.keywords : '');
     const hashInput = [
       threat.threat_level,
       threat.threat_type,
       threat.summary?.substring(0, 100), // First 100 chars
-      threat.keywords?.join(','),
+      keywordsPart,
       threat.locations?.map((loc: any) => `${loc.lat.toFixed(2)},${loc.lng.toFixed(2)}`).join('|')
     ].filter(Boolean).join('|');
     
