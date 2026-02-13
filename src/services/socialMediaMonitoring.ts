@@ -562,9 +562,8 @@ export class SocialMediaMonitoringService {
 
     /** Minimum area radius in meters so circles are visible and tappable on all clients (e.g. Android at zoom 5+). */
     const MIN_AREA_RADIUS_METERS = 250;
-    const annotationData: any = {
+    const commonData = {
       color,
-      shape: 'exclamation',
       label,
       description: threat.summary || '',
       timestamp: Date.now(),
@@ -581,13 +580,19 @@ export class SocialMediaMonitoringService {
         citationUrls
       }
     };
-    if (annotationType === 'area') {
-      annotationData.center = { lng: resolvedCoords.lng, lt: resolvedCoords.lat };
-      const radiusMeters = (primaryLocation.radius_km ?? 1.0) * 1000;
-      annotationData.radius = Math.max(radiusMeters, MIN_AREA_RADIUS_METERS);
-    } else {
-      annotationData.position = { lng: resolvedCoords.lng, lt: resolvedCoords.lat };
-    }
+    // Build type-specific payload only. POI = position + shape (point icon). Area = center + radius (circle). Never both.
+    const annotationData: Record<string, unknown> =
+      annotationType === 'area'
+        ? {
+            ...commonData,
+            center: { lng: resolvedCoords.lng, lt: resolvedCoords.lat },
+            radius: Math.max((primaryLocation.radius_km ?? 1.0) * 1000, MIN_AREA_RADIUS_METERS)
+          }
+        : {
+            ...commonData,
+            shape: 'exclamation',
+            position: { lng: resolvedCoords.lng, lt: resolvedCoords.lat }
+          };
 
     const annotationId = uuidv4();
     // user_id is UUID; use null for system/auto-created annotations (column is nullable)
