@@ -545,7 +545,7 @@ export class SocialMediaMonitoringService {
     };
     const color = threatLevelColors[threat.threat_level] || 'red';
     const label = `${threat.threat_level} Threat: ${threat.threat_type || 'Unknown'}`;
-    // Prefer POI when we have a precise location (e.g. geocoded address); use area when location is uncertain
+    // Use POI when location is precise (e.g. geocoded); use area when uncertain. Area size is clamped to minimum for tappability.
     const annotationType = this.determineAnnotationType(primaryLocation, resolvedCoords.geocoded);
 
     // Expiration: auto-created annotations expire after configured minutes (no operator to remove/update)
@@ -560,6 +560,8 @@ export class SocialMediaMonitoringService {
       .filter((u: string | null): u is string => typeof u === 'string' && u.trim().length > 0)
       .map((u: string) => u.trim());
 
+    /** Minimum area radius in meters so circles are visible and tappable on all clients (e.g. Android at zoom 5+). */
+    const MIN_AREA_RADIUS_METERS = 250;
     const annotationData: any = {
       color,
       shape: 'exclamation',
@@ -581,7 +583,8 @@ export class SocialMediaMonitoringService {
     };
     if (annotationType === 'area') {
       annotationData.center = { lng: resolvedCoords.lng, lt: resolvedCoords.lat };
-      annotationData.radius = ((primaryLocation.radius_km ?? 1.0) * 1000); // meters
+      const radiusMeters = (primaryLocation.radius_km ?? 1.0) * 1000;
+      annotationData.radius = Math.max(radiusMeters, MIN_AREA_RADIUS_METERS);
     } else {
       annotationData.position = { lng: resolvedCoords.lng, lt: resolvedCoords.lat };
     }
