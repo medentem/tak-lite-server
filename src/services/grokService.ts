@@ -804,14 +804,13 @@ CRITICAL INSTRUCTIONS - FOCUS ON SPECIFIC INCIDENTS ONLY:
 1. ONLY report SPECIFIC, ACTIONABLE INCIDENTS that are happening NOW or very recently
 2. IGNORE general discussions, statistics, commentary, or historical data
 3. IGNORE posts that are just complaining about crime rates, political commentary, or general area problems
-4. ONLY include posts that describe a specific event with clear details about what happened, where, and when
-5. Look for posts with words like: "BREAKING", "ACTIVE", "HAPPENING NOW", "JUST OCCURRED", "CURRENTLY", "IN PROGRESS"
-6. Extract PRECISE location information from X posts when available
-7. For general area references, provide center point AND radius in kilometers
-8. Always respond with valid JSON in the exact format specified
-9. Prioritize recency - only include information from within the specified time window (X: use the date range; web: breaking news and latest headlines only, today/recent)
+4. Look for posts with words like: "BREAKING", "ACTIVE", "HAPPENING NOW", "JUST OCCURRED", "CURRENTLY", "IN PROGRESS"
+5. Extract PRECISE location information from X posts when available
+6. For general area references, provide center point AND radius in kilometers
+7. Always respond with valid JSON in the exact format specified
+8. Prioritize recency - only include information from within the specified time window (X: use the date range; web: breaking news and latest headlines only, today/recent)
 
-WHAT TO INCLUDE (Specific Incidents):
+EXAMPLES OF WHAT TO INCLUDE (Specific Incidents):
 - "Active shooter at [specific location] - police responding"
 - "BREAKING: Fire at [specific building] - evacuations in progress"
 - "Heavy police presence at [specific intersection] after [specific incident]"
@@ -820,7 +819,7 @@ WHAT TO INCLUDE (Specific Incidents):
 - "Power outage affecting [specific area] - traffic lights down"
 - "Flooding at [specific intersection] - roads closed"
 
-WHAT TO EXCLUDE (General Discussion):
+EXAMPLES OF WHAT TO EXCLUDE (General Discussion):
 - "Another day in [city] with more violence"
 - "Crime is out of control in [area]"
 - "Why is there so much crime in [city]?"
@@ -876,35 +875,11 @@ Always respond with valid JSON array in this exact format:
   }
 
   private buildGeographicalThreatSearchPrompt(geographicalArea: string, searchQuery?: string, useWebSearch?: boolean): string {
-    const webSearchBlock = useWebSearch
-      ? `
-
-WEB SEARCH (when used): Query only the allowed news domains for BREAKING NEWS and LATEST HEADLINES from today or the past 24 hours. Look for articles with "breaking", "just in", "developing", or similar. Ignore older articles, archives, and non-news pages. Same standard as X: only specific, actionable incidents.`
-      : '';
-
     return `
 Search for REAL-TIME SPECIFIC INCIDENTS from X (Twitter) posts${useWebSearch ? ' and from breaking news on the allowed web domains' : ''} in the specified geographical area.
 
 GEOGRAPHICAL AREA: "${geographicalArea}"
-${searchQuery ? `SEARCH FOCUS: "${searchQuery}"` : ''}
-
-IMPORTANT: ONLY search for SPECIFIC, ACTIONABLE INCIDENTS that are happening NOW or very recently. IGNORE general discussions, statistics, or commentary.
-
-Use your real-time search capabilities to find recent X posts about SPECIFIC INCIDENTS in this area.${webSearchBlock}
-
-For each SPECIFIC INCIDENT found, provide:
-1. The specific location with coordinates AND radius if it's an area-based threat
-2. Threat level assessment based on immediate danger
-3. Confidence in the threat assessment
-4. Detailed geographic information for mapping
-
-GEOGRAPHIC REQUIREMENTS:
-- For specific locations: provide exact lat/lng coordinates
-- For area-based threats: provide center point + radius_km
-- Include area_description for human reference
-- Ensure all location data is actionable for emergency response
-
-Return results as a JSON array of threat analyses. ONLY include specific incidents, not general discussions.`;
+${searchQuery ? `SEARCH FOCUS: "${searchQuery}"` : ''}`;
   }
 
   private validateThreatAnalysis(analysis: any): boolean {
