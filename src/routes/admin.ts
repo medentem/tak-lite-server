@@ -1425,12 +1425,14 @@ export function createAdminRouter(config: ConfigService, db?: DatabaseService, i
       };
       
       if (smartAnnotationType === 'area') {
-        // For area annotations, use center and radius (use geocoded coords when we resolved from address)
+        // For area annotations, use center and radius in meters (use geocoded coords when we resolved from address)
+        const MIN_AREA_RADIUS_METERS = 305; // 1000 ft minimum
+        const radiusMeters = (primaryLocation.radius_km ?? 1.0) * 1000;
         annotationData.center = {
           lng: resolvedLng,
           lt: resolvedLat  // Use 'lt' to match Android LatLngSerializable format
         };
-        annotationData.radius = primaryLocation.radius_km || 1.0; // Default 1km radius if not specified
+        annotationData.radius = Math.max(radiusMeters, MIN_AREA_RADIUS_METERS);
       } else {
         // For POI annotations, use position
         annotationData.position = {

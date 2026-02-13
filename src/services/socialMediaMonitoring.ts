@@ -484,23 +484,16 @@ export class SocialMediaMonitoringService {
   }
 
   /**
-   * Decide whether to create a POI (point) or area (circle) for a threat location.
-   * Prefer POI when we have a precise location (e.g. successfully geocoded address).
-   * Use area only when the location is still uncertain (explicit radius, inferred, or very low confidence).
+   * Decide whether to create a POI (point with icon) or area (circle) for a threat location.
+   * Use area only when the location has an explicit radius (true regional threat). Otherwise use POI
+   * so clients (e.g. Android) show the exclamation icon; area annotations render as circle-only with
+   * no icon inside.
    */
   private determineAnnotationType(
-    location: { radius_km?: number; confidence?: number; source?: string; name?: string; area_description?: string },
-    wasGeocoded: boolean
+    location: { radius_km?: number }
   ): 'poi' | 'area' {
-    if (wasGeocoded) return 'poi';
-    const hasSpecificPlace = [location.name, location.area_description].some(s => s && String(s).trim().length >= 3);
     const hasExplicitRadius = typeof location.radius_km === 'number' && location.radius_km > 0;
-    const isInferred = location.source === 'inferred';
-    const confidence = location.confidence ?? 0.5;
-    const veryLowConfidence = confidence < 0.5;
     if (hasExplicitRadius) return 'area';
-    if (isInferred && !hasSpecificPlace) return 'area';
-    if (veryLowConfidence && !hasSpecificPlace) return 'area';
     return 'poi';
   }
 
@@ -546,7 +539,7 @@ export class SocialMediaMonitoringService {
     const color = threatLevelColors[threat.threat_level] || 'red';
     const label = `${threat.threat_level} Threat: ${threat.threat_type || 'Unknown'}`;
     // Use POI when location is precise (e.g. geocoded); use area when uncertain. Area size is clamped to minimum for tappability.
-    const annotationType = this.determineAnnotationType(primaryLocation, resolvedCoords.geocoded);
+    const annotationType = this.determineAnnotationType(primaryLocation);
 
     // Expiration: auto-created annotations expire after configured minutes (no operator to remove/update)
     const config = await this.configService.getServiceConfig();
@@ -560,8 +553,8 @@ export class SocialMediaMonitoringService {
       .filter((u: string | null): u is string => typeof u === 'string' && u.trim().length > 0)
       .map((u: string) => u.trim());
 
-    /** Minimum area radius in meters so circles are visible and tappable on all clients (e.g. Android at zoom 5+). */
-    const MIN_AREA_RADIUS_METERS = 250;
+    /** Minimum area radius in meters (~1000 ft). Ensures area annotations are never smaller than 1000 ft. */
+    const MIN_AREA_RADIUS_METERS = 305; // 1000 ft
     const commonData = {
       color,
       label,
