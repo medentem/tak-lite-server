@@ -121,12 +121,24 @@ export function createSyncRouter(sync: SyncService) {
         const exp = row.data?.expirationTime;
         return exp == null || (typeof exp === 'number' && exp > now);
       });
-      // Normalize for clients (e.g. Android) that expect non-null user_id: use placeholder for system/auto-created
+      // Normalize for clients (e.g. Android): ensure user_id is non-null and data is always an object (parse if string)
       const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000001';
-      const normalized = active.map((row: { user_id?: string | null; [k: string]: unknown }) => ({
-        ...row,
-        user_id: row.user_id ?? SYSTEM_USER_ID
-      }));
+      const normalized = active.map((row: { user_id?: string | null; data?: unknown; [k: string]: unknown }) => {
+        let data = row.data;
+        if (typeof data === 'string') {
+          try {
+            data = JSON.parse(data);
+          } catch {
+            data = {};
+          }
+        }
+        if (data == null || typeof data !== 'object') data = {};
+        return {
+          ...row,
+          user_id: row.user_id ?? SYSTEM_USER_ID,
+          data
+        };
+      });
       res.json(normalized);
     } catch (err) { next(err); }
   });

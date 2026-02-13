@@ -555,10 +555,13 @@ export class SocialMediaMonitoringService {
 
     /** Minimum area radius in meters (~1000 ft). Ensures area annotations are never smaller than 1000 ft. */
     const MIN_AREA_RADIUS_METERS = 305; // 1000 ft
+    // Use summary or ai_summary so description is set whether threat is in-memory (summary) or DB-shaped (ai_summary)
+    const t = threat as unknown as { summary?: string; ai_summary?: string };
+    const threatSummary = (typeof t.summary === 'string' && t.summary) || (typeof t.ai_summary === 'string' && t.ai_summary) || '';
     const commonData = {
       color,
       label,
-      description: threat.summary || '',
+      description: threatSummary,
       timestamp: Date.now(),
       expirationTime: expirationTimeMs,
       threatInfo: {
@@ -566,7 +569,7 @@ export class SocialMediaMonitoringService {
         threatLevel: threat.threat_level,
         threatType: threat.threat_type,
         confidenceScore: threat.confidence_score,
-        summary: threat.summary,
+        summary: threatSummary,
         source: 'AI Threat Detection (Auto)',
         locationConfidence: primaryLocation.confidence,
         locationSource: primaryLocation.source,
