@@ -21,17 +21,20 @@ export class MessageManager {
    */
   async init() {
     if (!this.map.isStyleLoaded()) {
-      this.map.once('styledata', () => this.init());
+      this.map.once('style.load', () => this.init());
       return;
     }
 
     this.setupSource();
     this.setupLayer();
+    this.updateMap();
     
-    // Listen for new messages
-    this.eventBus.on('message:received', (data) => {
-      this.addMessage(data);
-    });
+    if (!this._listenersBound) {
+      this._listenersBound = true;
+      this.eventBus.on('message:received', (data) => {
+        this.addMessage(data);
+      });
+    }
   }
 
   /**
@@ -83,21 +86,22 @@ export class MessageManager {
       }
     });
 
-    // Setup click handler
-    this.map.on('click', this.messageLayer, (e) => {
-      const feature = e.features[0];
-      if (feature) {
-        this.handleMessageClick(feature, e.lngLat);
-      }
-    });
+    if (!this._layerEventsBound) {
+      this._layerEventsBound = true;
+      this.map.on('click', this.messageLayer, (e) => {
+        const feature = e.features[0];
+        if (feature) {
+          this.handleMessageClick(feature, e.lngLat);
+        }
+      });
 
-    // Setup hover cursor
-    this.map.on('mouseenter', this.messageLayer, () => {
-      this.map.getCanvas().style.cursor = 'pointer';
-    });
-    this.map.on('mouseleave', this.messageLayer, () => {
-      this.map.getCanvas().style.cursor = '';
-    });
+      this.map.on('mouseenter', this.messageLayer, () => {
+        this.map.getCanvas().style.cursor = 'pointer';
+      });
+      this.map.on('mouseleave', this.messageLayer, () => {
+        this.map.getCanvas().style.cursor = '';
+      });
+    }
   }
 
   /**

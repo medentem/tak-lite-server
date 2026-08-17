@@ -41,16 +41,9 @@ export class IconManager {
   generateIcon(shape, color) {
     const iconName = `poi-${shape}-${color}`;
     
-    // Check if icon already exists
-    if (this.generatedIcons.has(iconName)) {
-      logger.debug(`Icon ${iconName} already generated, skipping`);
-      return false;
-    }
-    
     try {
-      // Check if icon already exists in map
+      // After setStyle() map images are gone even if we previously generated them.
       if (this.map.getImage(iconName)) {
-        logger.debug(`Icon ${iconName} already exists in map, skipping`);
         this.generatedIcons.add(iconName);
         return false;
       }

@@ -22,7 +22,7 @@ export class ThreatManager {
    */
   async init() {
     if (!this.map.isStyleLoaded()) {
-      this.map.once('styledata', () => this.init());
+      this.map.once('style.load', () => this.init());
       return;
     }
 
@@ -125,23 +125,23 @@ export class ThreatManager {
       }
     });
 
-    // Setup click handler
-    this.map.on('click', this.threatLayer, (e) => {
-      const feature = e.features[0];
-      if (feature) {
-        this.handleThreatClick(feature, e.lngLat);
-      }
-    });
+    if (!this._layerEventsBound) {
+      this._layerEventsBound = true;
+      this.map.on('click', this.threatLayer, (e) => {
+        const feature = e.features[0];
+        if (feature) {
+          this.handleThreatClick(feature, e.lngLat);
+        }
+      });
 
-    // Setup hover cursor
-    this.map.on('mouseenter', this.threatLayer, () => {
-      this.map.getCanvas().style.cursor = 'pointer';
-    });
-    this.map.on('mouseleave', this.threatLayer, () => {
-      this.map.getCanvas().style.cursor = '';
-    });
+      this.map.on('mouseenter', this.threatLayer, () => {
+        this.map.getCanvas().style.cursor = 'pointer';
+      });
+      this.map.on('mouseleave', this.threatLayer, () => {
+        this.map.getCanvas().style.cursor = '';
+      });
+    }
 
-    // Start pulsing animation
     this.startPulsingAnimation();
   }
 
@@ -149,9 +149,9 @@ export class ThreatManager {
    * Start pulsing animation for threats
    */
   startPulsingAnimation() {
+    if (this._pulseRunning) return;
+    this._pulseRunning = true;
     const animate = () => {
-      if (!this.map.getSource(this.threatSource)) return;
-      
       const source = this.map.getSource(this.threatSource);
       if (source && source._data) {
         const features = source._data.features || [];
@@ -160,8 +160,7 @@ export class ThreatManager {
         features.forEach(feature => {
           const threatLevel = feature.properties.threat_level;
           if (threatLevel === 'CRITICAL' || threatLevel === 'HIGH') {
-            // Calculate pulse phase (0 to 1)
-            const pulseSpeed = threatLevel === 'CRITICAL' ? 1000 : 1500; // Faster for critical
+            const pulseSpeed = threatLevel === 'CRITICAL' ? 1000 : 1500;
             const pulsePhase = ((now % pulseSpeed) / pulseSpeed);
             feature.properties.pulsePhase = pulsePhase;
           } else {
@@ -169,7 +168,6 @@ export class ThreatManager {
           }
         });
         
-        // Update source to trigger repaint
         source.setData(source._data);
       }
       

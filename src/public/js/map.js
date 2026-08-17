@@ -508,7 +508,7 @@ class AdminMap {
     // Check if map style is loaded before adding sources
     if (!this.map.isStyleLoaded()) {
       logger.debug('Map style not loaded yet, waiting...');
-      this.map.once('styledata', () => {
+      this.map.once('style.load', () => {
         this.setupMapSources();
       });
       return;
@@ -555,6 +555,8 @@ class AdminMap {
   }
   
   setupClickHandlers() {
+    if (this._clickHandlersBound) return;
+    this._clickHandlersBound = true;
     logger.debug('Setting up click handlers...');
     
     const layers = LAYER_CONFIG.annotationLayers;
@@ -1845,11 +1847,27 @@ class AdminMap {
       satelliteBtn.classList.toggle('active', type === 'satellite');
       satelliteBtn.setAttribute('aria-pressed', type === 'satellite' ? 'true' : 'false');
     }
-    // setStyle() replaces the style and removes all layers/sources. Re-add our layers and data when the new style is loaded.
-    this.map.once('styledata', () => {
-      this.setupMapSources();
-      this.updateMapData();
-    });
+    // setStyle() replaces the style and removes all custom layers/sources/images.
+    // Wait until the new style is fully loaded; styledata can fire too early.
+    this._needsOverlayRestore = true;
+    const restore = () => {
+      if (!this._needsOverlayRestore || !this.map?.isStyleLoaded()) return;
+      this._needsOverlayRestore = false;
+      this.map.off('styledata', restore);
+      this.restoreOverlayLayers();
+    };
+    this.map.once('style.load', restore);
+    this.map.on('styledata', restore);
+  }
+
+  restoreOverlayLayers() {
+    if (!this.map) return;
+    this.iconManager?.clearCache();
+    this.setupMapSources();
+    this.updateMapData();
+    this.threatManager?.init?.();
+    this.messageManager?.init?.();
+    this.userLocationManager?.ensureLayers();
   }
 
   /**
@@ -2360,7 +2378,7 @@ class AdminMap {
     // Set them up and re-run updateMapData once the style is ready so client-created annotations paint immediately.
     if (!this.map.getSource(LAYER_CONFIG.sources.annotationsPoi)) {
       if (!this.map.isStyleLoaded()) {
-        this.map.once('styledata', () => this.updateMapData());
+        this.map.once('style.load', () => this.updateMapData());
         return;
       }
       this.setupMapSources();

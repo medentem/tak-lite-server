@@ -25,6 +25,8 @@ export class PopupManager {
     this.currentPopup = null;
     this.ageUpdateInterval = null;
     this.getUserLocation = null;
+    this._outsideDismiss = null;
+    this._outsideDismissGen = 0;
   }
 
   /**
@@ -50,6 +52,7 @@ export class PopupManager {
     
     this.currentPopup = popup;
     this.startAgeUpdates(popup);
+    this.bindOutsideDismiss();
   }
 
   /**
@@ -74,6 +77,7 @@ export class PopupManager {
     
     this.currentPopup = popup;
     this.startAgeUpdates(popup);
+    this.bindOutsideDismiss();
   }
 
   /**
@@ -363,9 +367,43 @@ export class PopupManager {
   }
 
   /**
+   * Close popup when tapping/clicking anywhere outside it.
+   * closeOnClick is left false so the same tap that opened the popup does not immediately close it.
+   */
+  bindOutsideDismiss() {
+    this.unbindOutsideDismiss();
+    const generation = ++this._outsideDismissGen;
+    const handler = (e) => {
+      if (generation !== this._outsideDismissGen) return;
+      if (!this.currentPopup) {
+        this.unbindOutsideDismiss();
+        return;
+      }
+      const popupEl = this.currentPopup.getElement?.();
+      const target = e.target;
+      if (popupEl && target && popupEl.contains(target)) return;
+      this.closeAllPopups();
+    };
+    this._outsideDismiss = handler;
+    window.setTimeout(() => {
+      if (generation !== this._outsideDismissGen || this._outsideDismiss !== handler) return;
+      document.addEventListener('pointerdown', handler, true);
+    }, TIMING.menuDismissDelay ?? 100);
+  }
+
+  unbindOutsideDismiss() {
+    this._outsideDismissGen = (this._outsideDismissGen || 0) + 1;
+    if (this._outsideDismiss) {
+      document.removeEventListener('pointerdown', this._outsideDismiss, true);
+      this._outsideDismiss = null;
+    }
+  }
+
+  /**
    * Close all popups
    */
   closeAllPopups() {
+    this.unbindOutsideDismiss();
     if (this.currentPopup) {
       this.currentPopup.remove();
       this.currentPopup = null;
