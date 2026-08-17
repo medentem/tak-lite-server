@@ -303,18 +303,7 @@ class AdminMap {
         onLongPress: (e) => {
           this.state.setIsLongPressing(true);
 
-          // Check for existing annotation at long press location (include polygon fill and stroke so long-press inside or on edge shows edit menu)
-          const layers = [
-            LAYER_CONFIG.annotationLayers.poi,
-            LAYER_CONFIG.annotationLayers.line,
-            LAYER_CONFIG.annotationLayers.area,
-            LAYER_CONFIG.annotationLayers.polygon,
-            LAYER_CONFIG.annotationLayers.polygonStroke
-          ];
-          
-          const features = this.map.queryRenderedFeatures(e.point, {
-            layers: layers
-          });
+          const features = this.queryAnnotationFeaturesAt(e.point);
           
           if (features.length > 0) {
             // Show edit menu for existing annotation
@@ -543,6 +532,27 @@ class AdminMap {
     // Add click handlers
     this.setupClickHandlers();
   }
+
+  /**
+   * Features under a screen point, including the wide line hit area.
+   * @param {{x: number, y: number}} point
+   * @returns {Array}
+   */
+  queryAnnotationFeaturesAt(point) {
+    if (!this.map || !point) return [];
+    const layers = LAYER_CONFIG.annotationLayers;
+    const layerIds = [
+      layers.poi,
+      layers.line,
+      layers.lineHit,
+      layers.area,
+      layers.polygon,
+      layers.polygonStroke
+    ].filter((id) => id && this.map.getLayer(id));
+
+    if (layerIds.length === 0) return [];
+    return this.map.queryRenderedFeatures(point, { layers: layerIds });
+  }
   
   setupClickHandlers() {
     logger.debug('Setting up click handlers...');
@@ -563,11 +573,16 @@ class AdminMap {
       this.showAnnotationPopup(feature, e.lngLat);
     });
     
-    // Line click handler
-    this.map.on('click', layers.line, (e) => {
-      const feature = e.features[0];
-      this.showAnnotationPopup(feature, e.lngLat);
-    });
+    // Line click handler (visible stroke + wide hit area)
+    const onLineClick = (e) => {
+      if (this._lineClickAt && (Date.now() - this._lineClickAt) < 50) return;
+      this._lineClickAt = Date.now();
+      this.showAnnotationPopup(e.features[0], e.lngLat);
+    };
+    this.map.on('click', layers.line, onLineClick);
+    if (layers.lineHit) {
+      this.map.on('click', layers.lineHit, onLineClick);
+    }
     
     // Area click handler
     this.map.on('click', layers.area, (e) => {
@@ -592,11 +607,12 @@ class AdminMap {
     const layerIds = [
       LAYER_CONFIG.annotationLayers.poi,
       LAYER_CONFIG.annotationLayers.line,
+      LAYER_CONFIG.annotationLayers.lineHit,
       LAYER_CONFIG.annotationLayers.area,
       LAYER_CONFIG.annotationLayers.polygon,
       LAYER_CONFIG.locationLayer,
       locationClickLayer
-    ];
+    ].filter(Boolean);
     layerIds.forEach(layerId => {
       this.map.on('mouseenter', layerId, () => {
         this.map.getCanvas().style.cursor = 'pointer';

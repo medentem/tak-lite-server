@@ -63,7 +63,10 @@ export class LayerManager {
     // 4. Polygons (stroke) - on top of polygon fill
     this.addPolygonStrokeLayer(layers.polygonStroke);
     
-    // 5. Lines - on top of areas and polygons
+    // 5. Lines — wide invisible hit area first (Android), then the visible stroke
+    if (layers.lineHit) {
+      this.addLineHitLayer(layers.lineHit);
+    }
     this.addLineLayer(layers.line);
     
     // 6. Monitor areas (fill + stroke) - geographical social media monitors
@@ -224,6 +227,43 @@ export class LayerManager {
       }
     });
     
+    this.layers.set(layerId, { type: 'line', category: 'annotation' });
+    logger.debug(`Added layer: ${layerId}`);
+  }
+
+  /**
+   * Wide nearly-invisible stroke so lines can be long-pressed / tapped on phones.
+   * Matches Android LINE_HIT_AREA_LAYER (20–50px by zoom).
+   */
+  addLineHitLayer(layerId) {
+    if (this.map.getLayer(layerId)) {
+      logger.debug(`Layer ${layerId} already exists`);
+      return;
+    }
+
+    this.map.addLayer({
+      id: layerId,
+      type: 'line',
+      source: LAYER_CONFIG.sources.annotationsLine,
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'square'
+      },
+      paint: {
+        'line-color': '#FFFFFF',
+        'line-opacity': 0.01,
+        'line-width': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          8, 20,
+          12, 30,
+          16, 40,
+          20, 50
+        ]
+      }
+    });
+
     this.layers.set(layerId, { type: 'line', category: 'annotation' });
     logger.debug(`Added layer: ${layerId}`);
   }

@@ -118,6 +118,7 @@ export const LAYER_CONFIG = {
     poi: 'annotations-poi',
     poiTimerRing: 'annotations-poi-timer-ring',
     line: 'annotations-line',
+    lineHit: 'annotations-line-hit',
     area: 'annotations-area',
     areaStroke: 'annotations-area-stroke',
     polygon: 'annotations-polygon',
