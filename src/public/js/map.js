@@ -1829,14 +1829,12 @@ class AdminMap {
 
   /**
    * Switch map base style between street (OSM) and satellite (ESRI), matching Android app.
+   * Toggles raster layers in place so annotation overlays are not destroyed by setStyle().
    * @param {'street'|'satellite'} type
    */
   setMapStyle(type) {
-    if (!this.map || !this.mapInitializer) return;
-    const style = this.mapInitializer.getStyleForType(type);
-    if (!style) return;
+    if (!this.map || !this.mapInitializer || !this.map.isStyleLoaded()) return;
     this.currentMapType = type;
-    this.map.setStyle(style);
     const streetBtn = q('#map_style_street');
     const satelliteBtn = q('#map_style_satellite');
     if (streetBtn) {
@@ -1847,27 +1845,44 @@ class AdminMap {
       satelliteBtn.classList.toggle('active', type === 'satellite');
       satelliteBtn.setAttribute('aria-pressed', type === 'satellite' ? 'true' : 'false');
     }
-    // setStyle() replaces the style and removes all custom layers/sources/images.
-    // Wait until the new style is fully loaded; styledata can fire too early.
-    this._needsOverlayRestore = true;
-    const restore = () => {
-      if (!this._needsOverlayRestore || !this.map?.isStyleLoaded()) return;
-      this._needsOverlayRestore = false;
-      this.map.off('styledata', restore);
-      this.restoreOverlayLayers();
-    };
-    this.map.once('style.load', restore);
-    this.map.on('styledata', restore);
+    this.applyBasemap(type);
   }
 
-  restoreOverlayLayers() {
-    if (!this.map) return;
-    this.iconManager?.clearCache();
-    this.setupMapSources();
-    this.updateMapData();
-    this.threatManager?.init?.();
-    this.messageManager?.init?.();
-    this.userLocationManager?.ensureLayers();
+  applyBasemap(type) {
+    const street = {
+      sourceId: 'osm',
+      layerId: 'osm',
+      spec: this.mapInitializer.getStyleForType('street').sources.osm
+    };
+    const satellite = {
+      sourceId: 'satellite',
+      layerId: 'satellite',
+      spec: this.mapInitializer.getStyleForType('satellite').sources.satellite
+    };
+    const active = type === 'satellite' ? satellite : street;
+    const inactive = type === 'satellite' ? street : satellite;
+
+    if (!this.map.getSource(active.sourceId)) {
+      this.map.addSource(active.sourceId, active.spec);
+    }
+    if (!this.map.getLayer(active.layerId)) {
+      const beforeId = this.getFirstOverlayLayerId();
+      this.map.addLayer({
+        id: active.layerId,
+        type: 'raster',
+        source: active.sourceId
+      }, beforeId);
+    }
+    this.map.setLayoutProperty(active.layerId, 'visibility', 'visible');
+    if (this.map.getLayer(inactive.layerId)) {
+      this.map.setLayoutProperty(inactive.layerId, 'visibility', 'none');
+    }
+  }
+
+  getFirstOverlayLayerId() {
+    const layers = this.map.getStyle()?.layers || [];
+    const basemapIds = new Set(['osm', 'satellite']);
+    return layers.find((layer) => !basemapIds.has(layer.id))?.id;
   }
 
   /**

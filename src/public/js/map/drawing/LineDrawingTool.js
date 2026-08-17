@@ -110,8 +110,8 @@ export class LineDrawingTool extends DrawingTool {
         },
         paint: {
           'line-color': getColorHex(this.currentColor),
-          'line-width': 3,
-          'line-opacity': 0.8
+          'line-width': 5,
+          'line-opacity': 0.95
         }
       });
     }

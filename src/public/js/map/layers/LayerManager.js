@@ -222,8 +222,8 @@ export class LayerManager {
       },
       paint: {
         'line-color': ['coalesce', ['get', 'timerColor'], ['get', 'color']],
-        'line-width': 2,
-        'line-opacity': 0.8
+        'line-width': 3,
+        'line-opacity': 0.95
       }
     });
     
@@ -287,8 +287,8 @@ export class LayerManager {
       },
       paint: {
         'line-color': ['coalesce', ['get', 'timerColor'], ['get', 'color']],
-        'line-width': 3,
-        'line-opacity': 0.8
+        'line-width': 5,
+        'line-opacity': 0.95
       }
     });
     
