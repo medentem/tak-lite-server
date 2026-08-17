@@ -24,6 +24,10 @@ export class Navigation {
       });
       const socialLink = q('#nav-social');
       if (socialLink) socialLink.style.display = 'none';
+      ['#view-all-messages', '#mobile-sheet-view-all-messages', '#view-all-threats', '#mobile-sheet-view-all-threats'].forEach((selector) => {
+        const el = q(selector);
+        if (el) el.style.display = 'none';
+      });
     }
     this.setupBrowserHistory();
     this.checkInitialPage();

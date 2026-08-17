@@ -94,10 +94,10 @@ class AdminApp {
         setTimeout(() => clearInterval(checkSocketIO), 5000);
       }
 
-      // Initialize pages (non-admins only get dashboard to avoid 403s on admin-only API calls)
+      // Initialize pages (non-admins skip admin-only APIs; messages HUD is available to all)
       const pagesToInit = isAdmin
         ? Object.values(this.pages)
-        : [this.pages.dashboard];
+        : [this.pages.dashboard, this.pages.messages];
       pagesToInit.forEach(page => {
         try {
           if (page && page.init) {

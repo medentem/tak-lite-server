@@ -52,21 +52,21 @@ export class DashboardPage {
     const viewAllThreats = q('#mobile-sheet-view-all-threats');
     const viewAllMessages = q('#mobile-sheet-view-all-messages');
     const threatsContent = q('#threats-hud-content');
-    const messagesContent = q('#messages-hud-content');
+    const messagesBody = q('#messages-hud-body');
     const threatsPanel = q('#threats-hud-panel');
     const messagesPanel = q('#messages-hud-panel');
     const threatsSlot = q('#mobile-sheet-threats-slot');
     const messagesSlot = q('#mobile-sheet-messages-slot');
 
-    if (!sheet || !threatsContent || !messagesContent || !threatsPanel || !messagesPanel) return;
+    if (!sheet || !threatsContent || !messagesBody || !threatsPanel || !messagesPanel) return;
 
     const openSheet = (tab) => {
       // Return the other pane’s content to its panel before showing the active one
       if (threatsContent.parentElement === threatsSlot) {
         threatsPanel.appendChild(threatsContent);
       }
-      if (messagesContent.parentElement === messagesSlot) {
-        messagesPanel.appendChild(messagesContent);
+      if (messagesBody.parentElement === messagesSlot) {
+        messagesPanel.appendChild(messagesBody);
       }
       if (tab === 'threats') {
         threatsSlot.appendChild(threatsContent);
@@ -75,7 +75,7 @@ export class DashboardPage {
         tabThreats.classList.add('active');
         tabMessages.classList.remove('active');
       } else {
-        messagesSlot.appendChild(messagesContent);
+        messagesSlot.appendChild(messagesBody);
         paneThreats.classList.add('hidden');
         paneMessages.classList.remove('hidden');
         tabThreats.classList.remove('active');
@@ -92,7 +92,7 @@ export class DashboardPage {
 
     const closeSheet = () => {
       threatsPanel.appendChild(threatsContent);
-      messagesPanel.appendChild(messagesContent);
+      messagesPanel.appendChild(messagesBody);
       sheet.classList.add('hidden');
       sheet.classList.remove('open');
       sheet.setAttribute('aria-hidden', 'true');

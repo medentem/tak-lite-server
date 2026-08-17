@@ -301,17 +301,22 @@ export class SyncService {
 
   async handleMessage(userId: string, payload: any) {
     const schema = Joi.object({
-      teamId: Joi.string().uuid().required(),
+      teamId: Joi.string().uuid().allow(null, '').optional(),
       messageType: Joi.string().valid('text').default('text'),
       content: Joi.string().min(1).max(2000).required()
     });
-    const { teamId, messageType, content } = await schema.validateAsync(payload, { abortEarly: false, stripUnknown: true });
-    await this.assertTeamMembership(userId, teamId);
+    const { teamId: rawTeamId, messageType, content } = await schema.validateAsync(payload, { abortEarly: false, stripUnknown: true });
+    const teamId = rawTeamId || null;
+    if (teamId) {
+      await this.assertTeamMembership(userId, teamId);
+    }
     const row = { id: uuidv4(), user_id: userId, team_id: teamId, message_type: messageType, content };
     await this.db.client('messages').insert(row);
     
-    this.emitSyncActivity('message_send', `User ${userId} sent message in team ${teamId}`);
-    return row;
+    this.emitSyncActivity('message_send', teamId
+      ? `User ${userId} sent message in team ${teamId}`
+      : `User ${userId} sent message to all teams`);
+    return { ...row, created_at: new Date().toISOString() };
   }
 }
 

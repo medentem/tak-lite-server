@@ -1,9 +1,11 @@
 import { Router } from 'express';
+import { Server } from 'socket.io';
 import { SyncService } from '../services/sync';
+import type { SocketGateway } from '../services/sockets';
 import rateLimit from 'express-rate-limit';
 import Joi from 'joi';
 
-export function createSyncRouter(sync: SyncService) {
+export function createSyncRouter(sync: SyncService, io?: Server) {
   const router = Router();
 
   // Limit sync write requests per IP to reduce abuse; tune as needed
@@ -29,6 +31,10 @@ export function createSyncRouter(sync: SyncService) {
     try {
       if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
       const message = await sync.handleMessage(req.user.sub, req.body);
+      const gateway = (io as any)?.socketGateway as SocketGateway | undefined;
+      if (gateway && typeof gateway.broadcastMessage === 'function') {
+        await gateway.broadcastMessage(req.user.sub, message, message.team_id || undefined);
+      }
       res.json(message);
     } catch (err) { next(err); }
   });

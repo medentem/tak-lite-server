@@ -12,6 +12,7 @@ class WebSocketService {
     this.maxReconnectAttempts = 5;
     this.listeners = new Map();
     this.isConnecting = false;
+    this.seenMessageIds = new Set();
   }
 
   /**
@@ -171,7 +172,10 @@ class WebSocketService {
     });
 
     this.socket.on('admin:message_received', (data) => {
-      this.emit('message_received', data);
+      this.emitMessageReceived(data);
+    });
+    this.socket.on('message:received', (data) => {
+      this.emitMessageReceived(data);
     });
 
     this.socket.on('admin:new_threat_detected', (data) => {
@@ -226,9 +230,26 @@ class WebSocketService {
   emitToServer(event, data) {
     if (this.socket && this.socket.connected) {
       this.socket.emit(event, data);
-    } else {
-      console.warn('Cannot emit event - WebSocket not connected:', event);
+      return true;
     }
+    console.warn('Cannot emit event - WebSocket not connected:', event);
+    return false;
+  }
+
+  /**
+   * Deduplicate team + admin message events that can both fire for admins.
+   */
+  emitMessageReceived(data) {
+    const id = data?.id;
+    if (id) {
+      if (this.seenMessageIds.has(id)) return;
+      this.seenMessageIds.add(id);
+      if (this.seenMessageIds.size > 200) {
+        const first = this.seenMessageIds.values().next().value;
+        this.seenMessageIds.delete(first);
+      }
+    }
+    this.emit('message_received', data);
   }
 
   /**

@@ -239,19 +239,18 @@ export class SocketGateway {
     socket.on('message:send', async (data: { teamId?: string; [key: string]: unknown }) => {
       const user = (socket.data as any).user;
       if (!user) return socket.emit('error', { message: 'Not authenticated' });
-      const message = await this.sync.handleMessage(user.id, data);
-      
-      // Broadcast to appropriate rooms based on team filtering logic
-      if (data.teamId) {
-        // Broadcast to specific team room
-        this.io.to(`team:${data.teamId}`).emit('message:received', message);
-      } else {
-        // Broadcast to global room for null team_id data
-        this.io.to('global').emit('message:received', message);
+      try {
+        const message = await this.sync.handleMessage(user.id, data);
+        const teamId = (typeof data.teamId === 'string' && data.teamId) ? data.teamId : message.team_id;
+        const payload = await this.broadcastMessage(user.id, message, teamId || undefined);
+        socket.emit('message:received', payload);
+      } catch (error: any) {
+        console.error('[SOCKET] Message send error:', error);
+        socket.emit('error', {
+          message: error.message || 'Failed to send message',
+          code: 'MESSAGE_SEND_ERROR'
+        });
       }
-      
-      // Emit admin event for real-time message monitoring
-      this.emitAdminMessageReceived(user.id, message);
     });
     
     // Handle disconnection
@@ -441,6 +440,29 @@ export class SocketGateway {
       console.error('[SOCKET] Failed to get user info for admin message received:', error);
       this.io.to('admin').emit('admin:message_received', messageData);
     });
+  }
+
+  public async broadcastMessage(userId: string, messageData: any, teamId?: string) {
+    let payload = { ...messageData };
+    try {
+      const userInfo = await this.getUserInfo(userId);
+      payload = {
+        ...messageData,
+        user_name: userInfo?.name ?? messageData.user_name ?? userId,
+        user_email: userInfo?.email ?? messageData.user_email ?? ''
+      };
+    } catch (error) {
+      console.error('[SOCKET] Failed to get user info for message broadcast:', error);
+    }
+
+    const roomTeamId = teamId || messageData.team_id || messageData.teamId;
+    if (roomTeamId) {
+      this.io.to(`team:${roomTeamId}`).emit('message:received', payload);
+    } else {
+      this.io.to('global').emit('message:received', payload);
+    }
+    this.io.to('admin').emit('admin:message_received', payload);
+    return payload;
   }
   
   // Helper method to get user information

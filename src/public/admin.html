@@ -233,6 +233,14 @@
           <div id="message_monitor" style="height: 600px; border-radius: 8px; overflow: hidden; background: #0c1527; border: 1px solid #1f2a44; padding: 12px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 13px;">
             <div class="muted" style="text-align: center; padding: 20px;">Waiting for messages...</div>
           </div>
+
+          <div class="message-compose message-compose-full" id="messages-page-compose">
+            <div class="message-compose-hint" id="messages-page-compose-hint"></div>
+            <div class="message-compose-row">
+              <textarea id="messages-page-input" class="message-compose-input" rows="2" maxlength="2000" placeholder="Send a message…"></textarea>
+              <button type="button" id="messages-page-send" class="message-compose-send">Send</button>
+            </div>
+          </div>
           
           <div style="margin-top: 16px; font-size: 13px;">
             <strong>Message Controls:</strong>
@@ -240,7 +248,8 @@
               • Messages appear in real-time as they are sent<br>
               • Use team filter to focus on specific teams<br>
               • Auto-scroll keeps the latest messages visible<br>
-              • Messages are stored for the current session only
+              • Messages are stored for the current session only<br>
+              • Sending uses the team selected on the map, or all teams if none is selected
             </div>
           </div>
         </div>
@@ -416,8 +425,17 @@
               </select>
               <button id="clear_messages_compact" class="hud-panel-btn">Clear</button>
             </div>
-            <div class="hud-panel-content" id="messages-hud-content">
-              <div class="muted" style="text-align: center; padding: 20px;">Waiting for messages...</div>
+            <div id="messages-hud-body">
+              <div class="hud-panel-content" id="messages-hud-content">
+                <div class="muted" style="text-align: center; padding: 20px;">Waiting for messages...</div>
+              </div>
+              <div class="message-compose" id="messages-hud-compose">
+                <div class="message-compose-hint" id="messages-hud-compose-hint"></div>
+                <div class="message-compose-row">
+                  <textarea id="messages-hud-input" class="message-compose-input" rows="2" maxlength="2000" placeholder="Send a message…"></textarea>
+                  <button type="button" id="messages-hud-send" class="message-compose-send">Send</button>
+                </div>
+              </div>
             </div>
           </div>
           </div>

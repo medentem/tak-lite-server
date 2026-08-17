@@ -324,7 +324,7 @@ app.use('/api/admin', auth.authenticate, allowDashboardOrAdmin, createAdminRoute
 // Social media monitoring routes will be registered after migrations
 
 // Sync routes (auth required)
-app.use('/api/sync', auth.authenticate, createSyncRouter(syncService));
+app.use('/api/sync', auth.authenticate, createSyncRouter(syncService, io));
 
 // Serve login page (public, no authentication required)
 app.get('/login', (_req: Request, res: Response) => {

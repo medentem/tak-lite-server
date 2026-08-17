@@ -27,6 +27,7 @@ export class TeamManager {
       this.teams = await get(API_ENDPOINTS.teams);
       this.populateTeamSelect();
       this.eventBus.emit('teams:loaded', this.teams);
+      document.dispatchEvent(new CustomEvent('teamsLoaded', { detail: { teams: this.teams } }));
       logger.info(`Loaded ${this.teams.length} teams`);
       return this.teams;
     } catch (error) {

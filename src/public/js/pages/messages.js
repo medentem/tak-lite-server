@@ -3,13 +3,16 @@
  */
 
 import { q } from '../utils/dom.js';
+import { post } from '../utils/api.js';
 import { websocketService } from '../services/websocket.js';
 
+const MAX_CONTENT_LENGTH = 2000;
 let messageLog = [];
 const MAX_MESSAGE_ITEMS = 100;
 let messageTeamFilter = '';
 let messageAutoScroll = true;
 let messageShowTimestamps = true;
+let sending = false;
 
 export class MessagesPage {
   constructor() {
@@ -20,8 +23,10 @@ export class MessagesPage {
     if (this.initialized) return;
     
     this.setupControls();
+    this.setupCompose();
     this.setupWebSocketListeners();
     this.updateMessageDisplay();
+    this.syncTeamFiltersFromMap();
     this.initialized = true;
   }
 
@@ -83,6 +88,116 @@ export class MessagesPage {
     }
   }
 
+  setupCompose() {
+    this.bindComposer('#messages-hud-input', '#messages-hud-send');
+    this.bindComposer('#messages-page-input', '#messages-page-send');
+
+    const mapTeamSelect = q('#map_team_select');
+    if (mapTeamSelect) {
+      mapTeamSelect.addEventListener('change', () => this.updateComposeState());
+    }
+
+    document.addEventListener('teamsLoaded', (e) => {
+      this.populateTeamFilters(e.detail?.teams || []);
+      this.updateComposeState();
+    });
+
+    this.updateComposeState();
+  }
+
+  bindComposer(inputSelector, sendSelector) {
+    const input = q(inputSelector);
+    const sendBtn = q(sendSelector);
+    if (!input || !sendBtn) return;
+
+    sendBtn.addEventListener('click', () => this.sendFromInput(input));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this.sendFromInput(input);
+      }
+    });
+    input.addEventListener('input', () => this.updateComposeState());
+  }
+
+  getSelectedTeam() {
+    const mapTeamSelect = q('#map_team_select');
+    const teamId = mapTeamSelect?.value || '';
+    const teamName = teamId
+      ? (mapTeamSelect.options[mapTeamSelect.selectedIndex]?.textContent || 'selected team')
+      : '';
+    return { teamId, teamName };
+  }
+
+  updateComposeState() {
+    const { teamId, teamName } = this.getSelectedTeam();
+    const hints = [q('#messages-hud-compose-hint'), q('#messages-page-compose-hint')].filter(Boolean);
+    const hasTeam = Boolean(teamId);
+    const hintText = hasTeam
+      ? `Sending to ${teamName}`
+      : 'Sending to all teams';
+
+    hints.forEach((hint) => {
+      hint.textContent = hintText;
+      hint.classList.remove('is-error');
+    });
+
+    const pairs = [
+      { input: q('#messages-hud-input'), btn: q('#messages-hud-send') },
+      { input: q('#messages-page-input'), btn: q('#messages-page-send') },
+    ];
+    pairs.forEach(({ input, btn }) => {
+      if (!input || !btn) return;
+      input.disabled = sending;
+      btn.disabled = sending || !(input.value || '').trim();
+    });
+  }
+
+  async sendFromInput(input) {
+    if (!input || sending) return;
+    const content = (input.value || '').trim();
+    if (!content) return;
+    if (content.length > MAX_CONTENT_LENGTH) {
+      this.setComposeError(`Message must be ${MAX_CONTENT_LENGTH} characters or fewer`);
+      return;
+    }
+
+    const { teamId } = this.getSelectedTeam();
+
+    sending = true;
+    this.updateComposeState();
+
+    const payload = { messageType: 'text', content };
+    if (teamId) payload.teamId = teamId;
+    try {
+      websocketService.emitToServer('team:join', teamId || 'global');
+      const sent = websocketService.emitToServer('message:send', payload);
+      if (!sent) {
+        const message = await post('/api/sync/message', payload);
+        this.handleMessageReceived({
+          ...message,
+          user_name: message.user_name || 'You'
+        });
+      }
+      input.value = '';
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      this.setComposeError(error.message || 'Failed to send message');
+    } finally {
+      sending = false;
+      this.updateComposeState();
+      input.focus();
+    }
+  }
+
+  setComposeError(message) {
+    const hints = [q('#messages-hud-compose-hint'), q('#messages-page-compose-hint')].filter(Boolean);
+    hints.forEach((hint) => {
+      hint.textContent = message;
+      hint.classList.add('is-error');
+    });
+  }
+
   setupWebSocketListeners() {
     websocketService.on('message_received', (data) => {
       this.handleMessageReceived(data);
@@ -90,10 +205,15 @@ export class MessagesPage {
   }
 
   handleMessageReceived(data) {
-    const timestamp = new Date();
+    if (!data?.content) return;
+    if (data?.id && messageLog.some(msg => msg.id === data.id)) {
+      return;
+    }
+
+    const timestamp = data.created_at ? new Date(data.created_at) : new Date();
     const messageEntry = {
       id: data.id,
-      timestamp: timestamp,
+      timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
       teamId: data.team_id,
       userId: data.user_id,
       userName: data.user_name || 'Unknown User',
@@ -128,6 +248,7 @@ export class MessagesPage {
     // Update badge
     const badgeEl = q('#messages-hud-badge');
     const badgeStatusEl = q('#k_recent_messages');
+    const mobileCountEl = q('#mobile-pill-messages-count');
     const messageCount = messageLog.length;
     
     if (badgeEl) {
@@ -137,6 +258,10 @@ export class MessagesPage {
     
     if (badgeStatusEl) {
       badgeStatusEl.textContent = messageCount;
+    }
+
+    if (mobileCountEl) {
+      mobileCountEl.textContent = messageCount;
     }
   }
 
@@ -151,7 +276,7 @@ export class MessagesPage {
     // Filter messages by team if filter is set
     const teamFilter = q('#message_team_filter_compact')?.value || '';
     const filteredMessages = teamFilter
-      ? messageLog.filter(msg => msg.teamId === teamFilter)
+      ? messageLog.filter(msg => msg.teamId === teamFilter || !msg.teamId)
       : messageLog;
 
     if (filteredMessages.length === 0) {
@@ -165,7 +290,7 @@ export class MessagesPage {
     const html = recentMessages.map(msg => {
       const timeStr = msg.timestamp.toLocaleTimeString();
       return `<div style="margin-bottom: 6px; line-height: 1.3; font-size: 11px;">
-        <span style="color: #3b82f6; font-weight: 500;">[${timeStr}] ${msg.userName}:</span>
+        <span style="color: #3b82f6; font-weight: 500;">[${timeStr}] ${this.escapeHtml(msg.userName)}:</span>
         <span style="color: #e6edf3;">${this.escapeHtml(msg.content)}</span>
       </div>`;
     }).join('');
@@ -186,7 +311,7 @@ export class MessagesPage {
 
     // Filter messages by team if filter is set
     const filteredMessages = messageTeamFilter
-      ? messageLog.filter(msg => msg.teamId === messageTeamFilter)
+      ? messageLog.filter(msg => msg.teamId === messageTeamFilter || !msg.teamId)
       : messageLog;
 
     if (filteredMessages.length === 0) {
@@ -197,10 +322,10 @@ export class MessagesPage {
     const html = filteredMessages.map(msg => {
       const timeStr = messageShowTimestamps ? msg.timestamp.toLocaleTimeString() : '';
       const timePrefix = timeStr ? `[${timeStr}] ` : '';
-      const teamInfo = messageTeamFilter ? '' : ` (Team: ${msg.teamId.substring(0, 8)}...)`;
+      const teamInfo = messageTeamFilter ? '' : ` (Team: ${msg.teamId ? msg.teamId.substring(0, 8) + '...' : 'All'})`;
 
       return `<div style="margin-bottom: 8px; line-height: 1.4;">
-        <span style="color: #3b82f6;">${timePrefix}${msg.userName}${teamInfo}:</span>
+        <span style="color: #3b82f6;">${timePrefix}${this.escapeHtml(msg.userName)}${teamInfo}:</span>
         <span style="color: #e6edf3;">${this.escapeHtml(msg.content)}</span>
       </div>`;
     }).join('');
@@ -224,28 +349,35 @@ export class MessagesPage {
     this.updateMessageDisplay();
   }
 
-  populateTeamFilters(teams) {
-    const messageTeamFilter = q('#message_team_filter');
-    if (messageTeamFilter) {
-      messageTeamFilter.innerHTML = '<option value="">All Teams</option>';
-      teams.forEach(t => {
-        const o = document.createElement('option');
-        o.value = t.id;
-        o.textContent = t.name;
-        messageTeamFilter.appendChild(o);
-      });
+  syncTeamFiltersFromMap() {
+    const mapSelect = q('#map_team_select');
+    if (!mapSelect) return;
+    const teams = Array.from(mapSelect.options)
+      .filter(o => o.value)
+      .map(o => ({ id: o.value, name: o.textContent }));
+    if (teams.length) {
+      this.populateTeamFilters(teams);
     }
+  }
 
-    const messageTeamFilterCompact = q('#message_team_filter_compact');
-    if (messageTeamFilterCompact) {
-      messageTeamFilterCompact.innerHTML = '<option value="">All Teams</option>';
+  populateTeamFilters(teams) {
+    const apply = (select) => {
+      if (!select) return;
+      const current = select.value;
+      select.innerHTML = '<option value="">All Teams</option>';
       teams.forEach(t => {
         const o = document.createElement('option');
         o.value = t.id;
         o.textContent = t.name;
-        messageTeamFilterCompact.appendChild(o);
+        select.appendChild(o);
       });
-    }
+      if (current && teams.some(t => t.id === current)) {
+        select.value = current;
+      }
+    };
+
+    apply(q('#message_team_filter'));
+    apply(q('#message_team_filter_compact'));
   }
 }
 
