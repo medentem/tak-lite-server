@@ -13,6 +13,7 @@ export class Auth {
   constructor() {
     this.isAuthenticated = false;
     this.isAdmin = false;
+    this.userId = null;
   }
 
   async checkExistingAuth() {
@@ -36,7 +37,7 @@ export class Auth {
 
       if (res.ok) {
         const userData = await res.json();
-        this.isAdmin = !!userData.isAdmin;
+        this.applyUserData(userData);
         this.setAuthenticated(true, userData.name ?? userData.email);
         return true;
       }
@@ -46,6 +47,7 @@ export class Auth {
 
     this.setAuthenticated(false);
     this.isAdmin = false;
+    this.userId = null;
     return false;
   }
 
@@ -58,7 +60,7 @@ export class Auth {
 
       if (res.ok) {
         const userData = await res.json();
-        this.isAdmin = !!userData.isAdmin;
+        this.applyUserData(userData);
         this.setAuthenticated(true, userData.name ?? userData.email);
         return true;
       } else {
@@ -70,6 +72,7 @@ export class Auth {
       removeToken();
       currentToken = '';
       this.isAdmin = false;
+      this.userId = null;
       return false;
     }
   }
@@ -99,7 +102,7 @@ export class Auth {
         });
         if (whoRes.ok) {
           const userData = await whoRes.json();
-          this.isAdmin = !!userData.isAdmin;
+          this.applyUserData(userData);
         }
       } catch (_) {
         this.isAdmin = false;
@@ -140,9 +143,17 @@ export class Auth {
     showMessage('Logged out successfully', 'info');
   }
 
+  applyUserData(userData) {
+    this.isAdmin = !!userData?.isAdmin;
+    this.userId = userData?.userId || null;
+  }
+
   setAuthenticated(authenticated, displayName = null) {
     this.isAuthenticated = authenticated;
-    if (!authenticated) this.isAdmin = false;
+    if (!authenticated) {
+      this.isAdmin = false;
+      this.userId = null;
+    }
 
     const loginCard = q('#loginCard');
     const logoutBtn = q('#logout');
@@ -193,7 +204,7 @@ export class Auth {
 
     // Dispatch event
     document.dispatchEvent(new CustomEvent('authChanged', {
-      detail: { authenticated, displayName }
+      detail: { authenticated, displayName, userId: this.userId, isAdmin: this.isAdmin }
     }));
   }
 

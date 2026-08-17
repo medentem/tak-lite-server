@@ -7,6 +7,7 @@
 import { logger } from '../../utils/logger.js';
 import { q } from '../../utils/dom.js';
 import { MenuManager } from './MenuManager.js';
+import { clampDonutMenuPosition } from './menuPosition.js';
 
 const SHAPES = [
   { type: 'circle', iconClass: 'shape-circle', label: 'Circle' },
@@ -66,8 +67,9 @@ export class ShapeMenu {
   }
 
   positionMenu(point) {
-    this.shapeMenu.style.left = (point.x - 100) + 'px';
-    this.shapeMenu.style.top = (point.y - 100) + 'px';
+    const { left, top } = clampDonutMenuPosition(point);
+    this.shapeMenu.style.left = left + 'px';
+    this.shapeMenu.style.top = top + 'px';
     this.shapeMenu.style.position = 'absolute';
   }
 

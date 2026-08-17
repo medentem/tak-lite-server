@@ -171,6 +171,7 @@ export const MAP_EVENTS = {
   // Location events
   LOCATION_UPDATED: 'location:updated',
   LOCATIONS_LOADED: 'locations:loaded',
+  USER_LOCATION_UPDATED: 'user_location:updated',
   
   // Team events
   TEAM_SELECTED: 'team:selected',

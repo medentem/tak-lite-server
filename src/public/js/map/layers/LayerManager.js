@@ -362,6 +362,34 @@ export class LayerManager {
     
     this.layers.set(layerId, { type: 'circle', category: 'location' });
     logger.debug(`Added layer: ${layerId}`);
+
+    this.addLocationHitLayer(LAYER_CONFIG.locationHitLayer);
+  }
+
+  /**
+   * Larger invisible hit target for peer dots (easier to tap on phones)
+   */
+  addLocationHitLayer(layerId) {
+    if (this.map.getLayer(layerId)) {
+      logger.debug(`Layer ${layerId} already exists`);
+      return;
+    }
+
+    this.map.addLayer({
+      id: layerId,
+      type: 'circle',
+      source: LAYER_CONFIG.sources.locations,
+      paint: {
+        'circle-radius': 18,
+        'circle-color': 'rgba(0,0,0,0)',
+        'circle-opacity': 0,
+        'circle-stroke-width': 0
+      },
+      filter: ['>=', ['zoom'], DISPLAY_CONFIG.minLocationZoomLevel]
+    });
+
+    this.layers.set(layerId, { type: 'circle', category: 'location' });
+    logger.debug(`Added layer: ${layerId}`);
   }
 
   /**

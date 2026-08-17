@@ -47,6 +47,7 @@ import {
   DATA_LIMITS
 } from './config/mapConfig.js';
 import { websocketService } from './services/websocket.js';
+import { auth } from './auth.js';
 
 // Import map components
 import {
@@ -67,6 +68,7 @@ import {
   MAP_EVENTS,
   LongPressHandler,
   LocationManager,
+  UserLocationManager,
   TeamManager,
   MapWebSocketManager,
   MapDataLoader,
@@ -91,6 +93,7 @@ class AdminMap {
     this.dataLoader = null; // Will be initialized after map is created
     this.annotationManager = null; // Will be initialized after map is created
     this.locationManager = null; // Will be initialized after map is created
+    this.userLocationManager = null;
     this.teamManager = null; // Will be initialized after map is created
     this.threatManager = null; // Will be initialized after map is created
     this.messageManager = null; // Will be initialized after map is created
@@ -138,6 +141,11 @@ class AdminMap {
     
     this.state.subscribe('currentTeamId', (value) => {
       this.loadMapData();
+      this.userLocationManager?.updateShareAvailability();
+    });
+
+    this.state.subscribe('currentDrawingTool', (tool) => {
+      this.setDrawingHudHidden(!!tool);
     });
     
     // Listen to event bus events
@@ -237,6 +245,8 @@ class AdminMap {
     if (!this.teamManager) return;
     await this.teamManager.loadTeams();
     this.state.setTeams(this.teamManager.getTeams());
+    this.locationManager?.setCurrentUserId(auth.userId);
+    this.userLocationManager?.updateShareAvailability();
   }
   
   async initializeMap() {
@@ -249,6 +259,17 @@ class AdminMap {
     this.annotationManager = this.dataLoader.getAnnotationManager();
     this.locationManager = this.dataLoader.getLocationManager();
     this.teamManager = this.dataLoader.getTeamManager();
+    if (this.locationManager) {
+      this.locationManager.setCurrentUserId(auth.userId);
+    }
+
+    this.userLocationManager = new UserLocationManager(this.map, this.eventBus, {
+      getCurrentTeamId: () => this.state.getCurrentTeamId(),
+      getTeams: () => this.teamManager?.getTeams() || [],
+      getUserId: () => auth.userId,
+      getIsAdmin: () => !!auth.isAdmin,
+      showFeedback: (msg, duration) => this.showFeedback(msg, duration)
+    });
     
     // Initialize threat and message managers
     this.threatManager = new ThreatManager(this.map, this.eventBus);
@@ -267,9 +288,11 @@ class AdminMap {
       
       // Initialize UI components
       this.popupManager = new PopupManager(this.map, this.annotationManager.getAnnotations());
+      this.popupManager.getUserLocation = () => this.userLocationManager?.getLngLat() || null;
       this.timerPillOverlay = new TimerPillOverlay(this.map, 'map_container');
       this.timerPillOverlay.attach();
       this.fanMenu = new FanMenu('fan_menu', this.map, this.menuManager);
+      this.fanMenu.getUserLocation = () => this.userLocationManager?.getLngLat() || null;
       this.colorMenu = new ColorMenu('color_menu', this.menuManager);
       this.shapeMenu = new ShapeMenu('shape_menu', this.menuManager);
       
@@ -336,6 +359,8 @@ class AdminMap {
         this.initializeAnnotationUI();
         this.setupMapInteractionHandlers();
         this.setupMapMovementHandlers();
+        this.userLocationManager?.start();
+        this.userLocationManager?.bindShareButton();
         
         // Initialize threat and message visualization
         if (this.threatManager) {
@@ -511,6 +536,7 @@ class AdminMap {
     
     // Add all layers
     this.layerManager.addAllLayers();
+    this.userLocationManager?.ensureLayers();
     
     // Add click handlers
     this.setupClickHandlers();
@@ -553,8 +579,9 @@ class AdminMap {
       this.showAnnotationPopup(feature, e.lngLat);
     });
     
-    // Location click handler
-    this.map.on('click', LAYER_CONFIG.locationLayer, (e) => {
+    // Location click handler (larger invisible hit layer for mobile taps)
+    const locationClickLayer = LAYER_CONFIG.locationHitLayer || LAYER_CONFIG.locationLayer;
+    this.map.on('click', locationClickLayer, (e) => {
       const feature = e.features[0];
       this.showLocationPopup(feature, e.lngLat);
     });
@@ -565,7 +592,8 @@ class AdminMap {
       LAYER_CONFIG.annotationLayers.line,
       LAYER_CONFIG.annotationLayers.area,
       LAYER_CONFIG.annotationLayers.polygon,
-      LAYER_CONFIG.locationLayer
+      LAYER_CONFIG.locationLayer,
+      locationClickLayer
     ];
     layerIds.forEach(layerId => {
       this.map.on('mouseenter', layerId, () => {
@@ -1622,7 +1650,7 @@ class AdminMap {
     this.state.setPendingAnnotation(null);
     this.eventBus.emit(MAP_EVENTS.DRAWING_STARTED, { type: 'line' });
     
-    this.showFeedback('Click to add more points, use check mark to finish or X to cancel', 5000);
+    this.showFeedback('Tap to add more points, then ✓ to finish or ✕ to cancel', 5000);
   }
   
   startAreaDrawing() {
@@ -1637,7 +1665,7 @@ class AdminMap {
     this.state.setPendingAnnotation(null);
     this.eventBus.emit(MAP_EVENTS.DRAWING_STARTED, { type: 'area' });
     
-    this.showFeedback('Drag to adjust radius, click check mark to finish or X to cancel', 5000);
+    this.showFeedback('Drag to set radius, then ✓ to finish or ✕ to cancel', 5000);
   }
   
   
@@ -1708,6 +1736,8 @@ class AdminMap {
         );
       });
     }
+
+    this.userLocationManager?.bindShareButton();
     
     // Clear all annotations button
     const clearAllBtn = q('#map_clear_all');
@@ -1716,6 +1746,15 @@ class AdminMap {
         this.clearAllAnnotations();
       });
     }
+
+    document.addEventListener('authChanged', (e) => {
+      const userId = e.detail?.userId ?? auth.userId;
+      this.locationManager?.setCurrentUserId(userId);
+      if (e.detail?.authenticated) {
+        this.userLocationManager?.updateShareAvailability();
+        this.updateMapData();
+      }
+    });
 
     // Layers collapse/expand (mobile: button toggles Annotations/Locations checkboxes)
     const layersBtn = q('#map_control_layers_btn');
@@ -2489,8 +2528,18 @@ class AdminMap {
     }
   }
 
+  setDrawingHudHidden(hidden) {
+    const pills = q('#mobileHudPills');
+    if (!pills) return;
+    pills.classList.toggle('drawing-active', hidden);
+  }
+
   // Cleanup method to prevent memory leaks
   cleanup() {
+    if (this.userLocationManager) {
+      this.userLocationManager.stop();
+    }
+    
     // Disconnect WebSocket listeners
     if (this.webSocketManager) {
       this.webSocketManager.disconnect();

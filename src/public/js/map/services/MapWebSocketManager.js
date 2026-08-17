@@ -85,6 +85,7 @@ export class MapWebSocketManager {
     window.socket.on('admin:annotation_delete', annotationDeleteHandler);
     window.socket.on('admin:annotation_bulk_delete', annotationBulkDeleteHandler);
     window.socket.on('admin:location_update', locationUpdateHandler);
+    window.socket.on('location:update', locationUpdateHandler);
     window.socket.on('admin:sync_activity', syncActivityHandler);
     
     // Store handlers for cleanup
@@ -92,6 +93,7 @@ export class MapWebSocketManager {
     this.listeners.set('admin:annotation_delete', annotationDeleteHandler);
     this.listeners.set('admin:annotation_bulk_delete', annotationBulkDeleteHandler);
     this.listeners.set('admin:location_update', locationUpdateHandler);
+    this.listeners.set('location:update', locationUpdateHandler);
     this.listeners.set('admin:sync_activity', syncActivityHandler);
     
     this.isConnected = true;

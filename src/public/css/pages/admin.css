@@ -366,6 +366,17 @@ body.dashboard-visible .container #dash {
   border-color: rgba(59, 130, 246, 0.5);
 }
 
+.map-control-btn.active {
+  background: rgba(33, 150, 243, 0.35);
+  border-color: rgba(33, 150, 243, 0.8);
+  color: #93c5fd;
+}
+
+.map-control-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .map-control-btn.danger {
   color: #ef4444;
 }
@@ -1153,6 +1164,53 @@ body.dashboard-visible .container #dash {
   opacity: 1;
 }
 
+/* Drawing finish/cancel toolbar — bottom of map so it is not covered by chrome */
+.map-drawing-controls {
+  position: absolute;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+}
+
+.map-drawing-control {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 20px;
+  font-weight: bold;
+  padding: 0;
+  line-height: 1;
+}
+
+.map-drawing-control-finish {
+  background: #4CAF50;
+}
+
+.map-drawing-control-finish.disabled,
+.map-drawing-control-finish:disabled {
+  background: #6b7280;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.map-drawing-control-cancel {
+  background: #F44336;
+}
+
 /* --- Mobile: top bar and drawer (only visible on small screens when authenticated) --- */
 .mobile-top-bar {
   display: none;
@@ -1160,10 +1218,10 @@ body.dashboard-visible .container #dash {
   top: 0;
   left: 0;
   right: 0;
-  height: 48px;
+  height: calc(48px + env(safe-area-inset-top, 0px));
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
+  padding: env(safe-area-inset-top, 0px) 12px 0 12px;
   background: rgba(11, 18, 32, 0.98);
   border-bottom: 1px solid rgba(31, 42, 68, 0.5);
   backdrop-filter: blur(12px);
@@ -1371,9 +1429,9 @@ body.dashboard-visible .container #dash {
     display: none !important;
   }
 
-  /* Non-dashboard pages: content starts below the fixed 48px top bar */
+  /* Non-dashboard pages: content starts below the fixed top bar */
   body.authenticated .container {
-    padding-top: calc(48px + 16px);
+    padding-top: calc(48px + env(safe-area-inset-top, 0px) + 16px);
   }
 
   body.dashboard-visible .container {
@@ -1391,7 +1449,7 @@ body.dashboard-visible .container #dash {
 
   body.dashboard-visible .dashboard-status-bar {
     position: absolute;
-    top: 48px;
+    top: calc(48px + env(safe-area-inset-top, 0px));
     left: 0;
     right: 0;
     flex-direction: row;
@@ -1433,13 +1491,17 @@ body.dashboard-visible .container #dash {
 
   /* Map controls below status bar (top bar 48px + status bar ~70px when wrapped) */
   body.dashboard-visible .map-controls-overlay {
-    top: 130px;
+    top: calc(130px + env(safe-area-inset-top, 0px));
     right: 8px;
     left: auto;
     padding: 0;
     margin: 0;
     background: transparent;
     border-radius: 0;
+  }
+
+  body.dashboard-visible .map-interaction-feedback {
+    top: calc(48px + env(safe-area-inset-top, 0px) + 8px);
   }
 
   /* Collapse Annotations/Locations filters on mobile; expand via "Layers" button */
@@ -1519,6 +1581,11 @@ body.dashboard-visible .container #dash {
 
   body.dashboard-visible .mobile-hud-pills:not(.hidden) {
     display: flex !important;
+  }
+
+  body.dashboard-visible .mobile-hud-pills.drawing-active,
+  body.dashboard-visible .mobile-hud-pills.drawing-active:not(.hidden) {
+    display: none !important;
   }
 
   .mobile-hud-pill {

@@ -131,7 +131,8 @@ export class MapBoundsManager {
         
         this.map.fitBounds(bounds, { 
           padding: DISPLAY_CONFIG.fitBoundsPadding, 
-          duration: 1000 
+          duration: 1000,
+          maxZoom: 14
         });
         logger.debug(`Centered map on ${allFeatures.length} valid coordinates`);
       } catch (error) {

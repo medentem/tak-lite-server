@@ -18,6 +18,7 @@ export class LocationManager {
     this.map = map;
     this.eventBus = eventBus;
     this.locations = [];
+    this.currentUserId = null;
   }
 
   /**
@@ -62,6 +63,7 @@ export class LocationManager {
    * @param {Object} data - Location update data
    */
   updateLocation(data) {
+    if (!data?.userId) return;
     const existingIndex = this.locations.findIndex(l => l.user_id === data.userId);
     
     if (existingIndex >= 0) {
@@ -72,7 +74,9 @@ export class LocationManager {
         longitude: data.longitude,
         altitude: data.altitude,
         accuracy: data.accuracy,
-        timestamp: data.timestamp
+        timestamp: data.timestamp,
+        user_status: data.user_status || data.userStatus || this.locations[existingIndex].user_status,
+        user_name: data.user_name || this.locations[existingIndex].user_name
       };
     } else {
       // Add new location with user info from the event data
@@ -88,7 +92,7 @@ export class LocationManager {
         created_at: new Date().toISOString(),
         user_name: data.user_name || 'Unknown User',
         user_email: data.user_email ?? '',
-        user_status: data.user_status || 'GREEN'
+        user_status: data.user_status || data.userStatus || 'GREEN'
       };
       this.locations.unshift(newLocation); // Add to beginning of array
     }
@@ -110,6 +114,12 @@ export class LocationManager {
     const stalenessThresholdMs = DISPLAY_CONFIG.stalenessThresholdMs;
     
     return this.locations
+      .filter((location) => {
+        if (this.currentUserId && location.user_id === this.currentUserId) {
+          return false;
+        }
+        return true;
+      })
       .map(location => {
         const locationCoords = extractCoordinates(location);
         if (!locationCoords) {
@@ -169,6 +179,14 @@ export class LocationManager {
     }
     
     logger.debug(`Updated map with ${locationFeatures.length} locations`);
+  }
+
+  /**
+   * Exclude the local user from the peer layer (shown as the blue puck instead).
+   * @param {string|null} userId
+   */
+  setCurrentUserId(userId) {
+    this.currentUserId = userId || null;
   }
 
   /**

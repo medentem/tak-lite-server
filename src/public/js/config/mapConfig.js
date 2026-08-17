@@ -99,7 +99,8 @@ export const API_ENDPOINTS = {
   annotationsById: (id) => `/api/admin/map/annotations/${id}`,
   annotationsBulkDelete: '/api/admin/map/annotations/bulk-delete',
   locations: '/api/admin/map/locations',
-  locationsLatest: '/api/admin/map/locations/latest'
+  locationsLatest: '/api/admin/map/locations/latest',
+  syncLocation: '/api/sync/location'
 };
 
 /**
@@ -125,6 +126,9 @@ export const LAYER_CONFIG = {
   
   /** Location layer ID */
   locationLayer: 'locations',
+  locationHitLayer: 'locations-hit',
+  userLocationLayer: 'user-location',
+  userLocationAccuracyLayer: 'user-location-accuracy',
   
   /** Temporary drawing layer IDs */
   tempLayers: {
@@ -143,6 +147,8 @@ export const LAYER_CONFIG = {
     annotationsArea: 'annotations-area',
     annotationsPolygon: 'annotations-polygon',
     locations: 'locations',
+    userLocation: 'user-location',
+    userLocationAccuracy: 'user-location-accuracy',
     tempArea: 'temp-area',
     tempLine: 'temp-line',
     monitorAreas: 'monitor-areas'
@@ -224,9 +230,18 @@ export const TIMING = {
   
   /** Geolocation timeout */
   geolocationTimeout: 5000,
+
+  /** Geolocation watch timeout */
+  geolocationWatchTimeout: 10000,
   
   /** Geolocation maximum age */
   geolocationMaxAge: 300000, // 5 minutes
+
+  /** Minimum interval between shared location updates */
+  shareLocationMinIntervalMs: 5000,
+
+  /** Minimum movement before sharing another location update */
+  shareLocationMinDistanceMeters: 10,
   
   /** Default feedback duration */
   defaultFeedbackDuration: 3000,

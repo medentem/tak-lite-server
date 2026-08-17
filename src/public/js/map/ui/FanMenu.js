@@ -7,6 +7,9 @@ import { logger } from '../../utils/logger.js';
 import { q } from '../../utils/dom.js';
 import { MenuManager } from './MenuManager.js';
 import { TIMING } from '../../config/mapConfig.js';
+import { formatDistance } from '../../utils/formatting.js';
+import { haversineDistance } from '../../utils/geography.js';
+import { clampDonutMenuPosition } from './menuPosition.js';
 
 export class FanMenu {
   /**
@@ -21,6 +24,7 @@ export class FanMenu {
     this.menuManager = menuManager;
     this.fanMenu = q(`#${elementId}`);
     this.onOptionSelected = null; // Callback for option selection
+    this.getUserLocation = null;
   }
 
   /**
@@ -103,8 +107,9 @@ export class FanMenu {
    * Position menu at point
    */
   positionMenu(point) {
-    this.fanMenu.style.left = (point.x - 100) + 'px'; // Center the donut ring (200px diameter)
-    this.fanMenu.style.top = (point.y - 100) + 'px';
+    const { left, top } = clampDonutMenuPosition(point);
+    this.fanMenu.style.left = left + 'px';
+    this.fanMenu.style.top = top + 'px';
     this.fanMenu.style.position = 'absolute';
   }
 
@@ -120,8 +125,13 @@ export class FanMenu {
     }
     
     if (distanceEl) {
-      // For now, just show a placeholder distance
-      distanceEl.textContent = '0.0 mi away';
+      const userLoc = this.getUserLocation?.();
+      if (userLoc) {
+        const meters = haversineDistance(userLoc.lat, userLoc.lng, lngLat.lat, lngLat.lng);
+        distanceEl.textContent = `${formatDistance(meters)} away`;
+      } else {
+        distanceEl.textContent = '';
+      }
     }
   }
 

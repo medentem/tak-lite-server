@@ -5,7 +5,7 @@
 
 import { logger } from '../../utils/logger.js';
 import { formatAge, escapeHtml, capitalizeFirst, formatDistance, formatArea, getStatusDescription } from '../../utils/formatting.js';
-import { calculateLineLength, calculateCircleArea, calculatePolygonArea } from '../../utils/geography.js';
+import { calculateLineLength, calculateCircleArea, calculatePolygonArea, haversineDistance } from '../../utils/geography.js';
 import { TIMING } from '../../config/mapConfig.js';
 
 function isGuidLike(value) {
@@ -24,6 +24,7 @@ export class PopupManager {
     this.annotations = annotations;
     this.currentPopup = null;
     this.ageUpdateInterval = null;
+    this.getUserLocation = null;
   }
 
   /**
@@ -309,8 +310,9 @@ export class PopupManager {
    * Calculate distance from user location (placeholder)
    */
   calculateDistanceFromUser(lngLat) {
-    // For now, return null since we don't have user location in admin interface
-    return null;
+    const userLoc = this.getUserLocation?.();
+    if (!userLoc || !lngLat) return null;
+    return haversineDistance(userLoc.lat, userLoc.lng, lngLat.lat, lngLat.lng);
   }
 
   /**

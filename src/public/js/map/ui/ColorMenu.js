@@ -7,6 +7,7 @@ import { logger } from '../../utils/logger.js';
 import { q } from '../../utils/dom.js';
 import { MenuManager } from './MenuManager.js';
 import { COLORS, TIMING } from '../../config/mapConfig.js';
+import { clampDonutMenuPosition } from './menuPosition.js';
 
 export class ColorMenu {
   /**
@@ -86,8 +87,9 @@ export class ColorMenu {
    * Position menu at point
    */
   positionMenu(point) {
-    this.colorMenu.style.left = (point.x - 100) + 'px';
-    this.colorMenu.style.top = (point.y - 100) + 'px';
+    const { left, top } = clampDonutMenuPosition(point);
+    this.colorMenu.style.left = left + 'px';
+    this.colorMenu.style.top = top + 'px';
     this.colorMenu.style.position = 'absolute';
   }
 

@@ -7,6 +7,7 @@ import { DrawingTool } from './DrawingTool.js';
 import { logger } from '../../utils/logger.js';
 import { getColorHex, LAYER_CONFIG, INTERACTION_CONFIG } from '../../config/mapConfig.js';
 import { pixelsToMeters as pixelsToMetersUtil, generateCirclePolygon } from '../../utils/geography.js';
+import { DrawingControls } from '../ui/DrawingControls.js';
 
 export class AreaDrawingTool extends DrawingTool {
   /**
@@ -19,6 +20,8 @@ export class AreaDrawingTool extends DrawingTool {
     this.tempAreaCenter = null;
     this.tempAreaRadius = 0;
     this.tempAreaRadiusPixels = 0;
+    this.drawingControls = null;
+    this._dragPanWasEnabled = true;
   }
 
   /**
@@ -36,7 +39,10 @@ export class AreaDrawingTool extends DrawingTool {
       lngLat.lat
     );
     this.createTempAreaFeature();
+    this.createAreaControlIcons();
     this.setupAreaDrawingHandlers();
+    this._dragPanWasEnabled = this.map.dragPan.isEnabled();
+    this.map.dragPan.disable();
   }
 
   /**
@@ -189,13 +195,10 @@ export class AreaDrawingTool extends DrawingTool {
     
     this.areaClickHandler = (e) => {
       if (!this.isActive) return;
-      if (e.originalEvent) {
-        e.originalEvent.preventDefault();
-        e.originalEvent.stopPropagation();
+      if (e.originalEvent && e.originalEvent.target.closest('.map-drawing-controls')) {
+        return;
       }
-      if (this.options.onFinish) {
-        this.options.onFinish(this.finish());
-      }
+      // Radius is set by drag; finish with the check button (click would fire on finger-up on mobile)
     };
     
     this.areaRightClickHandler = (e) => {
@@ -225,6 +228,43 @@ export class AreaDrawingTool extends DrawingTool {
     this.registerHandler('click', this.areaClickHandler, 'map');
     this.registerHandler('contextmenu', this.areaRightClickHandler, 'map');
     this.registerHandler('keydown', this.areaEscapeHandler, 'document');
+
+    this._canvasTouchMove = (ev) => {
+      if (!this.isActive || !this.tempAreaCenter || !this.map) return;
+      if (ev.touches && ev.touches.length > 0) {
+        ev.preventDefault();
+        const rect = this.map.getCanvas().getBoundingClientRect();
+        const touch = ev.touches[0];
+        const point = { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+        this.updateRadius(point);
+      }
+    };
+    this.map.getCanvas().addEventListener('touchmove', this._canvasTouchMove, { passive: false });
+  }
+
+  createAreaControlIcons() {
+    this.removeAreaControlIcons();
+    this.drawingControls = new DrawingControls({
+      finishEnabled: true,
+      onFinish: () => {
+        if (this.options.onFinish) {
+          this.options.onFinish(this.finish());
+        }
+      },
+      onCancel: () => {
+        if (this.options.onCancel) {
+          this.options.onCancel();
+        }
+        this.cancel();
+      }
+    });
+  }
+
+  removeAreaControlIcons() {
+    if (this.drawingControls) {
+      this.drawingControls.remove();
+      this.drawingControls = null;
+    }
   }
 
   /**
@@ -233,6 +273,14 @@ export class AreaDrawingTool extends DrawingTool {
   cleanup() {
     super.cleanup();
     this.removeTempAreaFeature();
+    this.removeAreaControlIcons();
+    if (this._canvasTouchMove && this.map) {
+      this.map.getCanvas().removeEventListener('touchmove', this._canvasTouchMove);
+      this._canvasTouchMove = null;
+    }
+    if (this.map && this._dragPanWasEnabled) {
+      this.map.dragPan.enable();
+    }
     this.tempAreaCenter = null;
     this.tempAreaRadius = 0;
     this.tempAreaRadiusPixels = 0;

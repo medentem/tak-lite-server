@@ -166,6 +166,9 @@ class WebSocketService {
     this.socket.on('admin:location_update', (data) => {
       this.emit('location_update', data);
     });
+    this.socket.on('location:update', (data) => {
+      this.emit('location_update', data);
+    });
 
     this.socket.on('admin:message_received', (data) => {
       this.emit('message_received', data);

@@ -6,7 +6,7 @@
 import { DrawingTool } from './DrawingTool.js';
 import { logger } from '../../utils/logger.js';
 import { getColorHex, LAYER_CONFIG, INTERACTION_CONFIG } from '../../config/mapConfig.js';
-import { q } from '../../utils/dom.js';
+import { DrawingControls } from '../ui/DrawingControls.js';
 
 export class LineDrawingTool extends DrawingTool {
   /**
@@ -17,7 +17,7 @@ export class LineDrawingTool extends DrawingTool {
   constructor(map, options = {}) {
     super(map, options);
     this.tempLinePoints = [];
-    this.lineControlIcons = null;
+    this.drawingControls = null;
   }
 
   /**
@@ -41,6 +41,7 @@ export class LineDrawingTool extends DrawingTool {
     if (!this.isActive) return;
     this.tempLinePoints.push(lngLat);
     this.createTempLineFeature();
+    this.drawingControls?.setFinishEnabled(this.tempLinePoints.length >= 2);
   }
 
   /**
@@ -184,7 +185,7 @@ export class LineDrawingTool extends DrawingTool {
     this.lineClickHandler = (e) => {
       if (!this.isActive) return;
 
-      if (e.originalEvent && e.originalEvent.target.closest('.line-control-icons')) {
+      if (e.originalEvent && e.originalEvent.target.closest('.map-drawing-controls')) {
         return;
       }
 
@@ -230,92 +231,29 @@ export class LineDrawingTool extends DrawingTool {
    */
   createLineControlIcons() {
     this.removeLineControlIcons();
-    
-    this.lineControlIcons = document.createElement('div');
-    this.lineControlIcons.className = 'line-control-icons';
-    this.lineControlIcons.style.cssText = `
-      position: absolute;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 1000;
-      display: flex;
-      gap: 10px;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 10px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-    `;
-    
-    // Check mark icon
-    const checkIcon = document.createElement('div');
-    checkIcon.className = 'line-control-check';
-    checkIcon.innerHTML = '✓';
-    checkIcon.style.cssText = `
-      width: 40px;
-      height: 40px;
-      background: #4CAF50;
-      color: white;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-size: 20px;
-      font-weight: bold;
-      transition: all 0.2s ease;
-    `;
-    
-    // Cancel icon
-    const cancelIcon = document.createElement('div');
-    cancelIcon.className = 'line-control-cancel';
-    cancelIcon.innerHTML = '✕';
-    cancelIcon.style.cssText = `
-      width: 40px;
-      height: 40px;
-      background: #F44336;
-      color: white;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-size: 20px;
-      font-weight: bold;
-      transition: all 0.2s ease;
-    `;
-    
-    checkIcon.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (this.options.onFinish) {
-        this.options.onFinish(this.finish());
+    this.drawingControls = new DrawingControls({
+      finishEnabled: this.tempLinePoints.length >= 2,
+      onFinish: () => {
+        if (this.options.onFinish) {
+          this.options.onFinish(this.finish());
+        }
+      },
+      onCancel: () => {
+        if (this.options.onCancel) {
+          this.options.onCancel();
+        }
+        this.cancel();
       }
     });
-    
-    cancelIcon.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (this.options.onCancel) {
-        this.options.onCancel();
-      }
-      this.cancel();
-    });
-    
-    this.lineControlIcons.appendChild(checkIcon);
-    this.lineControlIcons.appendChild(cancelIcon);
-    
-    const mapContainer = q('#map_container');
-    if (mapContainer) {
-      mapContainer.appendChild(this.lineControlIcons);
-    }
   }
 
   /**
    * Remove line control icons
    */
   removeLineControlIcons() {
-    if (this.lineControlIcons) {
-      this.lineControlIcons.remove();
-      this.lineControlIcons = null;
+    if (this.drawingControls) {
+      this.drawingControls.remove();
+      this.drawingControls = null;
     }
   }
 
