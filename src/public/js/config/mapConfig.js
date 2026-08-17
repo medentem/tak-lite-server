@@ -228,14 +228,14 @@ export const TIMING = {
   /** Sync activity refresh delay */
   syncActivityRefreshDelay: 400,
   
-  /** Geolocation timeout */
-  geolocationTimeout: 5000,
+  /** Geolocation timeout for a one-shot fix */
+  geolocationTimeout: 15000,
 
-  /** Geolocation watch timeout */
-  geolocationWatchTimeout: 10000,
-  
-  /** Geolocation maximum age */
+  /** Cached-position age allowed for the initial puck / auto-center */
   geolocationMaxAge: 300000, // 5 minutes
+
+  /** Watch updates may reuse a recent fix rather than waiting on GPS */
+  geolocationWatchMaxAge: 15000,
 
   /** Minimum interval between shared location updates */
   shareLocationMinIntervalMs: 5000,

@@ -1143,10 +1143,10 @@ body.dashboard-visible .container #dash {
   pointer-events: auto;
 }
 
-/* Map Interaction Feedback */
+/* Map Interaction Feedback — hosted on #dash so it stacks above the status bar */
 .map-interaction-feedback {
   position: absolute;
-  top: 20px;
+  top: 56px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.8);
@@ -1154,10 +1154,49 @@ body.dashboard-visible .container #dash {
   padding: 12px 20px;
   border-radius: 8px;
   font-size: 14px;
-  z-index: 1000;
+  z-index: 200;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.3s ease;
+  max-width: calc(100% - 24px);
+  text-align: center;
+}
+
+.user-location-marker {
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+}
+
+.user-location-marker-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  background: #2196F3;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+}
+
+.user-location-marker-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  background: rgba(33, 150, 243, 0.4);
+  animation: user-location-pulse 2s ease-out infinite;
+}
+
+@keyframes user-location-pulse {
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(2.6); opacity: 0; }
 }
 
 .map-interaction-feedback.visible {
@@ -1502,6 +1541,7 @@ body.dashboard-visible .container #dash {
 
   body.dashboard-visible .map-interaction-feedback {
     top: calc(48px + env(safe-area-inset-top, 0px) + 8px);
+    z-index: 200;
   }
 
   /* Collapse Annotations/Locations filters on mobile; expand via "Layers" button */

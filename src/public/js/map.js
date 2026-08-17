@@ -278,7 +278,9 @@ class AdminMap {
     // Initialize layer and rendering managers
     this.layerManager = new LayerManager(this.map);
     this.iconManager = new IconManager(this.map);
-    this.boundsManager = new MapBoundsManager(this.map);
+    this.boundsManager = new MapBoundsManager(this.map, {
+      onUserPosition: (position) => this.userLocationManager?.handlePosition(position)
+    });
     
     // Initialize WebSocket manager
     this.webSocketManager = new MapWebSocketManager(this.eventBus, () => {

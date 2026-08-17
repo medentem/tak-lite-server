@@ -8,7 +8,7 @@ import { logger } from '../../utils/logger.js';
 import { post } from '../../utils/api.js';
 import { getItem, setItem } from '../../utils/storage.js';
 import { haversineDistance, generateCirclePolygon } from '../../utils/geography.js';
-import { LAYER_CONFIG, DISPLAY_CONFIG, TIMING, API_ENDPOINTS } from '../../config/mapConfig.js';
+import { LAYER_CONFIG, TIMING, API_ENDPOINTS } from '../../config/mapConfig.js';
 import { websocketService } from '../../services/websocket.js';
 import { MAP_EVENTS } from '../events/EventBus.js';
 import { q } from '../../utils/dom.js';
@@ -45,6 +45,9 @@ export class UserLocationManager {
     this.joinedTeamIds = new Set();
     this._pageHandler = null;
     this._socketHandler = null;
+    this.marker = null;
+    this._markerOnMap = false;
+    this._retryTimer = null;
   }
 
   /**
@@ -86,6 +89,7 @@ export class UserLocationManager {
 
   stop() {
     this.stopWatching();
+    this.removeMarker();
     if (this._pageHandler) {
       document.removeEventListener('pageChanged', this._pageHandler);
       this._pageHandler = null;
@@ -98,25 +102,69 @@ export class UserLocationManager {
   }
 
   startWatching() {
-    if (this.watchId != null) return;
     if (!navigator.geolocation) {
       logger.debug('Geolocation not available');
       return;
     }
 
+    // Immediate cached/coarse fix so the puck appears even if watch is slow.
+    this.requestCurrentPosition(true);
+
+    if (this.watchId != null) return;
+
+    // Do not set timeout on watchPosition — Safari/Chrome treat a timeout as
+    // fatal and stop delivering updates, which leaves no blue dot.
     this.watchId = navigator.geolocation.watchPosition(
       (position) => this.handlePosition(position),
+      (error) => this.handleWatchError(error),
+      {
+        enableHighAccuracy: true,
+        maximumAge: TIMING.geolocationWatchMaxAge ?? 15000
+      }
+    );
+  }
+
+  requestCurrentPosition(highAccuracy = true) {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (position) => this.handlePosition(position),
       (error) => {
+        if (error.code === error.TIMEOUT && highAccuracy) {
+          this.requestCurrentPosition(false);
+          return;
+        }
         if (error.code !== error.PERMISSION_DENIED) {
-          logger.debug('Geolocation watch error:', error.message);
+          logger.debug('Geolocation current position error:', error.message);
+          this.scheduleRetry();
         }
       },
       {
-        enableHighAccuracy: true,
-        timeout: TIMING.geolocationWatchTimeout ?? 10000,
-        maximumAge: 5000
+        enableHighAccuracy: highAccuracy,
+        timeout: highAccuracy ? 20000 : 10000,
+        maximumAge: TIMING.geolocationMaxAge ?? 300000
       }
     );
+  }
+
+  handleWatchError(error) {
+    if (error.code === error.TIMEOUT) {
+      this.requestCurrentPosition(false);
+      return;
+    }
+    if (error.code !== error.PERMISSION_DENIED) {
+      logger.debug('Geolocation watch error:', error.message);
+      this.scheduleRetry();
+    }
+  }
+
+  scheduleRetry() {
+    if (this._retryTimer || this.lngLat) return;
+    this._retryTimer = setTimeout(() => {
+      this._retryTimer = null;
+      if (!this.lngLat) {
+        this.requestCurrentPosition(false);
+      }
+    }, 4000);
   }
 
   stopWatching() {
@@ -124,6 +172,10 @@ export class UserLocationManager {
       navigator.geolocation.clearWatch(this.watchId);
     }
     this.watchId = null;
+    if (this._retryTimer) {
+      clearTimeout(this._retryTimer);
+      this._retryTimer = null;
+    }
   }
 
   handlePosition(position) {
@@ -144,17 +196,11 @@ export class UserLocationManager {
   }
 
   ensureLayers() {
-    if (!this.map || !this.map.isStyleLoaded()) return;
+    if (!this.map || !this.map.isStyleLoaded()) return false;
 
     const sources = LAYER_CONFIG.sources;
     if (!this.map.getSource(sources.userLocationAccuracy)) {
       this.map.addSource(sources.userLocationAccuracy, {
-        type: 'geojson',
-        data: EMPTY_FC
-      });
-    }
-    if (!this.map.getSource(sources.userLocation)) {
-      this.map.addSource(sources.userLocation, {
         type: 'geojson',
         data: EMPTY_FC
       });
@@ -172,57 +218,68 @@ export class UserLocationManager {
       });
     }
 
-    if (!this.map.getLayer(LAYER_CONFIG.userLocationLayer)) {
-      this.map.addLayer({
-        id: LAYER_CONFIG.userLocationLayer,
-        type: 'circle',
-        source: sources.userLocation,
-        paint: {
-          'circle-radius': 7,
-          'circle-color': '#2196F3',
-          'circle-stroke-width': 3,
-          'circle-stroke-color': '#FFFFFF'
-        }
-      });
-    }
+    this.syncAccuracySource();
+    return true;
+  }
 
-    this.updateMap();
+  ensureMarker() {
+    if (this.marker || typeof maplibregl === 'undefined') return;
+    const el = document.createElement('div');
+    el.className = 'user-location-marker';
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = '<span class="user-location-marker-pulse"></span><span class="user-location-marker-dot"></span>';
+    this.marker = new maplibregl.Marker({
+      element: el,
+      anchor: 'center',
+      pitchAlignment: 'viewport',
+      rotationAlignment: 'viewport'
+    });
+  }
+
+  updateMarker() {
+    if (!this.map || !this.lngLat) return;
+    this.ensureMarker();
+    if (!this.marker) return;
+    this.marker.setLngLat([this.lngLat.lng, this.lngLat.lat]);
+    if (!this._markerOnMap) {
+      this.marker.addTo(this.map);
+      this._markerOnMap = true;
+    }
+  }
+
+  removeMarker() {
+    if (this.marker) {
+      this.marker.remove();
+      this.marker = null;
+    }
+    this._markerOnMap = false;
+  }
+
+  syncAccuracySource() {
+    if (!this.map || !this.lngLat) return;
+    const accSource = this.map.getSource(LAYER_CONFIG.sources.userLocationAccuracy);
+    if (!accSource) return;
+
+    const radius = this.accuracy && this.accuracy > 0 ? this.accuracy : 0;
+    if (radius >= 8) {
+      const ring = generateCirclePolygon(this.lngLat.lng, this.lngLat.lat, radius);
+      accSource.setData({
+        type: 'FeatureCollection',
+        features: [{
+          type: 'Feature',
+          geometry: { type: 'Polygon', coordinates: [ring] },
+          properties: {}
+        }]
+      });
+    } else {
+      accSource.setData(EMPTY_FC);
+    }
   }
 
   updateMap() {
     if (!this.map || !this.lngLat) return;
-    const puckSource = this.map.getSource(LAYER_CONFIG.sources.userLocation);
-    const accSource = this.map.getSource(LAYER_CONFIG.sources.userLocationAccuracy);
-    if (!puckSource) return;
-
-    puckSource.setData({
-      type: 'FeatureCollection',
-      features: [{
-        type: 'Feature',
-        geometry: {
-          type: 'Point',
-          coordinates: [this.lngLat.lng, this.lngLat.lat]
-        },
-        properties: {}
-      }]
-    });
-
-    if (accSource) {
-      const radius = this.accuracy && this.accuracy > 0 ? this.accuracy : 0;
-      if (radius >= 8) {
-        const ring = generateCirclePolygon(this.lngLat.lng, this.lngLat.lat, radius);
-        accSource.setData({
-          type: 'FeatureCollection',
-          features: [{
-            type: 'Feature',
-            geometry: { type: 'Polygon', coordinates: [ring] },
-            properties: {}
-          }]
-        });
-      } else {
-        accSource.setData(EMPTY_FC);
-      }
-    }
+    this.updateMarker();
+    this.ensureLayers();
   }
 
   /**

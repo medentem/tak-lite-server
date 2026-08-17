@@ -11,9 +11,12 @@ export class MapBoundsManager {
   /**
    * Create a map bounds manager
    * @param {maplibregl.Map} map - Map instance
+   * @param {Object} [options]
+   * @param {(position: GeolocationPosition) => void} [options.onUserPosition]
    */
-  constructor(map) {
+  constructor(map, options = {}) {
     this.map = map;
+    this.onUserPosition = options.onUserPosition || null;
   }
 
   /**
@@ -32,6 +35,9 @@ export class MapBoundsManager {
           (position) => {
             const { latitude, longitude } = position.coords;
             logger.debug('Centering map on user location:', latitude, longitude);
+            if (this.onUserPosition) {
+              this.onUserPosition(position);
+            }
             this.map.flyTo({
               center: [longitude, latitude],
               zoom: DISPLAY_CONFIG.userLocationZoom,

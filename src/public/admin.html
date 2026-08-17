@@ -340,11 +340,6 @@
             <div id="shape_menu" class="shape-menu">
               <!-- Shape options will be dynamically added here -->
             </div>
-            
-            <!-- Map Interaction Feedback -->
-            <div id="map_feedback" class="map-interaction-feedback">
-              <!-- Feedback messages will be shown here -->
-            </div>
           </div>
 
           <!-- Mobile: compact pills that open a bottom sheet (only visible on small screens) -->
@@ -434,6 +429,11 @@
             <input type="text" id="command-palette-input" class="command-palette-input" placeholder="Type a command or search...">
           </div>
           <div id="command-palette-results" class="command-palette-results"></div>
+        </div>
+
+        <!-- Map toasts: sibling of the status bar so they are not trapped under it -->
+        <div id="map_feedback" class="map-interaction-feedback">
+          <!-- Feedback messages will be shown here -->
         </div>
       </div>
     </div>
